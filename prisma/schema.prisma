@@ -1,0 +1,20 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Your first model: Student Account
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  fullName     String
+  studentId    String?
+  passwordHash String
+  verified     Boolean  @default(false)
+  tokenBalance Int      @default(50)
+  createdAt    DateTime @default(now())
+}
