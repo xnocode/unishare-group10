@@ -1,0 +1,480 @@
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600..800&family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap');
+
+/* UniShare Landing Page Styles */
+
+:root {
+  --brand: #0B5D5E;
+  --brand-dark: #073c3d;
+  --ink: #12201f;
+  --muted: #4a5b59;
+  --tint: #e6f0ef;
+  --line: #12201f;
+  --ph: #e4ebe8;
+  --teal: var(--brand);
+}
+
+.unishare-landing {
+  --brand: #0B5D5E;
+  --brand-dark: #073c3d;
+  --ink: #12201f;
+  --muted: #4a5b59;
+  --tint: #e6f0ef;
+  --line: #12201f;
+  --ph: #e4ebe8;
+  --teal: var(--brand);
+
+  font-family: 'DM Sans', var(--font-dm-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: var(--ink);
+  background: #ffffff;
+  line-height: 1.5;
+  width: 100%;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.unishare-landing * {
+  box-sizing: border-box;
+}
+
+.unishare-landing .wrap {
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 0 28px;
+}
+
+.unishare-landing a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.unishare-landing a:focus-visible,
+.unishare-landing button:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 3px;
+}
+
+.unishare-landing h1,
+.unishare-landing h2,
+.unishare-landing h3,
+.unishare-landing .logo {
+  font-family: 'Bricolage Grotesque', var(--font-bricolage), sans-serif !important;
+  line-height: 1.05;
+  margin: 0;
+}
+
+/* Nav */
+.unishare-landing nav {
+  border-bottom: 2px solid var(--ink);
+}
+
+.unishare-landing nav .wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 72px;
+}
+
+.unishare-landing .logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: 'Bricolage Grotesque', var(--font-bricolage), sans-serif !important;
+  font-weight: 800;
+  font-size: 24px;
+  text-decoration: none;
+}
+
+.unishare-landing .logo svg {
+  width: 32px;
+  height: 32px;
+}
+
+.unishare-landing .nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.unishare-landing .link {
+  font-weight: 500;
+  text-decoration: none;
+  color: var(--brand);
+}
+
+.unishare-landing .link:hover {
+  color: var(--brand-dark);
+  text-decoration: underline;
+}
+
+.unishare-landing .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 48px;
+  padding: 0 24px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 16px;
+  text-decoration: none;
+  border: 2px solid var(--brand);
+  background: var(--brand);
+  color: #ffffff;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+  font-family: 'DM Sans', var(--font-dm-sans), system-ui, sans-serif;
+}
+
+.unishare-landing .btn:hover {
+  background: var(--brand-dark);
+  border-color: var(--brand-dark);
+}
+
+.unishare-landing .btn.ghost {
+  background: #ffffff;
+  color: var(--brand);
+}
+
+.unishare-landing .btn.ghost:hover {
+  background: var(--tint);
+}
+
+.unishare-landing .btn.sm {
+  height: 40px;
+  padding: 0 18px;
+  font-size: 15px;
+}
+
+/* Hero */
+.unishare-landing .hero .wrap {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 56px;
+  align-items: center;
+  padding-top: 64px;
+  padding-bottom: 72px;
+}
+
+.unishare-landing .hero h1 {
+  font-weight: 800;
+  font-size: clamp(44px, 5.6vw, 72px);
+  margin-bottom: 20px;
+  letter-spacing: -0.02em;
+  font-family: 'Bricolage Grotesque', var(--font-bricolage), sans-serif !important;
+}
+
+.unishare-landing .hero h1 span {
+  color: var(--brand);
+}
+
+.unishare-landing .hero p {
+  font-size: 19px;
+  color: var(--muted);
+  max-width: 480px;
+  margin: 0 0 28px;
+  line-height: 1.5;
+  font-family: 'DM Sans', var(--font-dm-sans), system-ui, sans-serif;
+}
+
+.unishare-landing .cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.unishare-landing .hero small {
+  display: block;
+  margin-top: 16px;
+  font-size: 14px;
+  color: #5a6b69;
+  font-family: 'DM Sans', var(--font-dm-sans), system-ui, sans-serif;
+}
+
+.unishare-landing .photo {
+  position: relative;
+  justify-self: end;
+  width: 100%;
+  max-width: 440px;
+}
+
+.unishare-landing .photo img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  object-position: 50% 15%;
+  border: 2px solid var(--ink);
+  border-radius: 200px 200px 16px 16px;
+  box-shadow: 10px 10px 0 var(--brand);
+}
+
+/* Share Section */
+.unishare-landing .share {
+  border-top: 2px solid var(--ink);
+}
+
+.unishare-landing .share .wrap {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto auto 1fr;
+}
+
+.unishare-landing .share .col {
+  padding: 56px 40px 56px 0;
+  display: grid;
+  grid-row: span 3;
+  grid-template-rows: subgrid;
+  align-content: start;
+}
+
+.unishare-landing .share .col + .col {
+  padding: 56px 0 56px 40px;
+  border-left: 2px solid var(--ink);
+}
+
+.unishare-landing .share h2 {
+  font-size: 30px;
+  margin-bottom: 10px;
+  font-family: 'Bricolage Grotesque', var(--font-bricolage), sans-serif !important;
+}
+
+.unishare-landing .share p {
+  margin: 0 0 24px;
+  color: var(--muted);
+  max-width: 420px;
+  font-size: 15.5px;
+  font-family: 'DM Sans', var(--font-dm-sans), system-ui, sans-serif;
+}
+
+.unishare-landing .items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  max-width: 520px;
+}
+
+.unishare-landing .items li {
+  position: relative;
+  aspect-ratio: 1;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--tint);
+}
+
+.unishare-landing .items img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.unishare-landing .items.rides {
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: 1fr;
+}
+
+.unishare-landing .items.rides li {
+  aspect-ratio: auto;
+  min-height: 260px;
+}
+
+.unishare-landing .items span {
+  white-space: nowrap;
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  padding: 3px 10px;
+  background: #ffffff;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+  font-family: 'DM Sans', var(--font-dm-sans), system-ui, sans-serif;
+}
+
+/* How It Works Section */
+.unishare-landing .how {
+  border-top: 2px solid var(--ink);
+}
+
+.unishare-landing .how .wrap {
+  padding-top: 72px;
+  padding-bottom: 80px;
+}
+
+.unishare-landing .how-head {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  align-items: end;
+  margin-bottom: 36px;
+}
+
+.unishare-landing .how h2 {
+  font-size: 38px;
+  font-family: 'Bricolage Grotesque', var(--font-bricolage), sans-serif !important;
+}
+
+.unishare-landing .how .lead {
+  margin: 0;
+  color: var(--muted);
+  font-size: 17px;
+  max-width: 460px;
+  font-family: 'DM Sans', var(--font-dm-sans), system-ui, sans-serif;
+}
+
+.unishare-landing .how ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border: 2px solid var(--ink);
+  border-radius: 16px;
+  box-shadow: 8px 8px 0 var(--brand);
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.unishare-landing .how li {
+  padding: 28px 28px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.unishare-landing .how li + li {
+  border-left: 2px solid var(--ink);
+}
+
+.unishare-landing .how .top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.unishare-landing .how .num {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--brand);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 18px;
+  font-family: 'DM Sans', var(--font-dm-sans), system-ui, sans-serif;
+}
+
+.unishare-landing .how .top svg {
+  width: 44px;
+  height: 44px;
+}
+
+.unishare-landing .how h3 {
+  font-size: 22px;
+  line-height: 1.15;
+  font-family: 'Bricolage Grotesque', var(--font-bricolage), sans-serif !important;
+}
+
+.unishare-landing .how li p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 15.5px;
+  font-family: 'DM Sans', var(--font-dm-sans), system-ui, sans-serif;
+}
+
+/* Final Section */
+.unishare-landing .final {
+  border-top: 2px solid var(--ink);
+}
+
+.unishare-landing .final .wrap {
+  padding-top: 72px;
+  padding-bottom: 72px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.unishare-landing .final h2 {
+  font-size: 40px;
+  max-width: 560px;
+  font-family: 'Bricolage Grotesque', var(--font-bricolage), sans-serif !important;
+}
+
+/* Footer */
+.unishare-landing footer {
+  border-top: 2px solid var(--ink);
+  font-size: 14px;
+  color: #5a6b69;
+  font-family: 'DM Sans', var(--font-dm-sans), system-ui, sans-serif;
+}
+
+.unishare-landing footer .wrap {
+  padding-top: 20px;
+  padding-bottom: 20px;
+}
+
+/* Responsive */
+@media (max-width: 1100px) {
+  .unishare-landing .items span {
+    font-size: 12px;
+    padding: 2px 8px;
+    left: 6px;
+    bottom: 6px;
+  }
+}
+
+@media (max-width: 860px) {
+  .unishare-landing .hero .wrap {
+    grid-template-columns: 1fr;
+    gap: 40px;
+    padding-top: 40px;
+    padding-bottom: 56px;
+  }
+  .unishare-landing .photo {
+    justify-self: center;
+    max-width: 380px;
+  }
+  .unishare-landing .share .wrap {
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+  }
+  .unishare-landing .share .col,
+  .unishare-landing .share .col + .col {
+    padding: 40px 0;
+    border-left: 0;
+    display: block;
+    grid-row: auto;
+  }
+  .unishare-landing .share .col + .col {
+    border-top: 2px solid var(--ink);
+  }
+  .unishare-landing .how-head {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .unishare-landing .how ol {
+    grid-template-columns: 1fr;
+  }
+  .unishare-landing .how li + li {
+    border-left: 0;
+    border-top: 2px solid var(--ink);
+  }
+  .unishare-landing .items {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .unishare-landing .items.rides li {
+    aspect-ratio: 3 / 4;
+    min-height: 0;
+  }
+}
