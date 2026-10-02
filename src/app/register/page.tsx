@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import "../auth.css";
 
 export default function RegisterPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -66,8 +68,11 @@ export default function RegisterPage() {
       return;
     }
 
-    // Success response matching the sample flow
+    // Success response matching the sample flow and navigate to Step 2
     setSuccessMessage(`Next: we’ll send a 6-digit code to ${trimmedEmail}.`);
+    setTimeout(() => {
+      router.push(`/confirm-email?email=${encodeURIComponent(trimmedEmail)}`);
+    }, 600);
   };
 
   return (

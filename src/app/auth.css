@@ -522,3 +522,185 @@
     display: none;
   }
 }
+
+/* Confirm Email specific additions */
+.unishare-auth .steps .done {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.unishare-auth .steps .done span {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+
+.unishare-auth .badge {
+  width: 80px;
+  height: 80px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  background: var(--tint);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 28px;
+}
+
+.unishare-auth .badge svg {
+  width: 38px;
+  height: 38px;
+  stroke: var(--brand);
+  fill: none;
+  stroke-width: 1.8;
+}
+
+.unishare-auth .next-box {
+  border-top: 1.5px solid var(--line);
+  margin-top: 36px;
+  padding-top: 26px;
+  max-width: 440px;
+}
+
+.unishare-auth .next-box .eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--brand);
+  text-transform: uppercase;
+}
+
+.unishare-auth .next-box h3 {
+  font-family: var(--head);
+  font-size: 20px;
+  font-weight: 700;
+  margin: 10px 0 8px;
+  color: var(--ink);
+}
+
+.unishare-auth .next-box p {
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.unishare-auth .card .sent {
+  color: var(--muted);
+  font-size: 15px;
+  margin-top: 8px;
+}
+
+.unishare-auth .card .email-target {
+  font-weight: 700;
+  font-size: 16px;
+  margin-top: 4px;
+  color: var(--ink);
+}
+
+.unishare-auth .card .diff-link {
+  display: inline-block;
+  color: var(--brand);
+  font-size: 14px;
+  font-weight: 600;
+  margin-top: 6px;
+  cursor: pointer;
+}
+
+.unishare-auth .card .diff-link:hover {
+  text-decoration: underline;
+}
+
+.unishare-auth .codes {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.unishare-auth .codes input {
+  width: 100%;
+  max-width: 60px;
+  height: 58px;
+  text-align: center;
+  font-family: var(--body);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--ink);
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  outline: none;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.unishare-auth .codes input:focus {
+  border-color: var(--brand);
+  background: var(--tint);
+  box-shadow: 0 0 0 3px rgba(11, 93, 94, 0.15);
+}
+
+.unishare-auth .codes input::placeholder {
+  color: var(--muted);
+  opacity: 0.5;
+}
+
+.unishare-auth .resend-btn {
+  display: block;
+  text-align: center;
+  color: var(--brand);
+  font-weight: 700;
+  font-size: 14px;
+  margin-top: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  width: 100%;
+}
+
+.unishare-auth .resend-btn:hover {
+  text-decoration: underline;
+}
+
+.unishare-auth .private-banner {
+  display: flex;
+  gap: 14px;
+  background: var(--tint);
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-top: 24px;
+  align-items: flex-start;
+}
+
+.unishare-auth .private-banner svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  stroke: var(--brand);
+  fill: none;
+  stroke-width: 2;
+  margin-top: 2px;
+}
+
+.unishare-auth .private-banner strong {
+  display: block;
+  color: var(--brand);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.unishare-auth .private-banner p {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 4px;
+  line-height: 1.45;
+}
+
+@media (max-width: 480px) {
+  .unishare-auth .codes {
+    gap: 6px;
+  }
+  .unishare-auth .codes input {
+    height: 48px;
+    font-size: 20px;
+  }
+}
