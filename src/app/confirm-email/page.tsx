@@ -93,7 +93,10 @@ function ConfirmEmailContent() {
     setIsVerifying(true);
     setTimeout(() => {
       setIsVerifying(false);
-      setInfoMsg("Email confirmed successfully! Next: Step 3 Student verification.");
+      setInfoMsg("Email confirmed successfully! Proceeding to Step 3 Student verification...");
+      setTimeout(() => {
+        router.push(`/student-verification?email=${encodeURIComponent(email)}`);
+      }, 500);
     }, 600);
   };
 
@@ -316,3 +319,4 @@ export default function ConfirmEmailPage() {
     </Suspense>
   );
 }
+
