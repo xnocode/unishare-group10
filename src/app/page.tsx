@@ -27,7 +27,7 @@ export default function Home() {
             <Link className="link" href="#">
               Log in
             </Link>
-            <Link className="btn sm" href="#">
+            <Link className="btn sm" href="/register">
               Create account
             </Link>
           </div>
@@ -52,7 +52,7 @@ export default function Home() {
               outsiders.
             </p>
             <div className="cta">
-              <Link className="btn" href="#">
+              <Link className="btn" href="/register">
                 Create account
               </Link>
               <Link className="btn ghost" href="#">
@@ -240,7 +240,7 @@ export default function Home() {
         <div className="wrap">
           <h2>Ready to see what your campus has on the shelf?</h2>
           <div className="cta">
-            <Link className="btn" href="#">
+            <Link className="btn" href="/register">
               Create account
             </Link>
             <Link className="btn ghost" href="#">

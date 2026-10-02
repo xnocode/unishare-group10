@@ -1,0 +1,524 @@
+/* UniShare Auth / Register Styles */
+.unishare-auth {
+  --bg: #ffffff;
+  --ink: #12201f;
+  --muted: #4a5b59;
+  --brand: #0b5d5e;
+  --brand-ink: #ffffff;
+  --field: #f5f8f7;
+  --line: #12201f;
+  --soft: #bfc5c4;
+  --err: #b3261e;
+  --head: 'Bricolage Grotesque', var(--font-bricolage), 'DM Sans', system-ui, sans-serif;
+  --body: 'DM Sans', var(--font-dm-sans), system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 16px;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+
+.unishare-auth *,
+.unishare-auth *::before,
+.unishare-auth *::after {
+  box-sizing: inherit;
+}
+
+.unishare-auth a {
+  color: var(--brand);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.unishare-auth a:hover {
+  text-decoration: underline;
+}
+
+.unishare-auth .wrap {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* Header */
+.unishare-auth header {
+  border-bottom: 2px solid var(--line);
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 20;
+}
+
+.unishare-auth header .wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 62px;
+}
+
+.unishare-auth .logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--head);
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.unishare-auth .logo:hover {
+  text-decoration: none;
+}
+
+.unishare-auth .logo svg {
+  color: var(--brand);
+}
+
+.unishare-auth nav {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.unishare-auth nav a.nav-link {
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.unishare-auth .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--brand);
+  color: var(--brand-ink);
+  border: 0;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 15px;
+  font-family: var(--body);
+  padding: 11px 20px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: filter 0.15s ease;
+}
+
+.unishare-auth .btn:hover {
+  text-decoration: none;
+  filter: brightness(1.08);
+}
+
+.unishare-auth .btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.unishare-auth .btn-lg {
+  width: 100%;
+  height: 44px;
+}
+
+/* Progress Steps */
+.unishare-auth .steps {
+  display: flex;
+  gap: 40px;
+  list-style: none;
+  margin: 36px 0 0;
+  padding: 0;
+  font-size: 14px;
+  color: var(--muted);
+  flex-wrap: wrap;
+}
+
+.unishare-auth .steps li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.unishare-auth .steps span {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1.5px solid var(--soft);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.unishare-auth .steps em {
+  font-style: normal;
+}
+
+.unishare-auth .steps .on {
+  color: var(--brand);
+  font-weight: 600;
+}
+
+.unishare-auth .steps .on span {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--brand-ink);
+}
+
+/* Main Grid */
+.unishare-auth main {
+  flex: 1;
+}
+
+.unishare-auth main .grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 90px;
+  margin: 44px 0 64px;
+  align-items: start;
+}
+
+.unishare-auth .kicker {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--brand);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin: 0 0 20px;
+}
+
+.unishare-auth h1 {
+  font-family: var(--head);
+  font-weight: 700;
+  font-size: clamp(36px, 5vw, 46px);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin: 0 0 28px;
+  color: var(--ink);
+}
+
+.unishare-auth h1 em {
+  font-style: normal;
+  color: var(--brand);
+}
+
+.unishare-auth .lead {
+  color: var(--muted);
+  max-width: 420px;
+  margin: 0 0 32px;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+/* Panel */
+.unishare-auth .panel {
+  border: 1.5px solid var(--line);
+  border-radius: 16px;
+  padding: 24px;
+  background: var(--field);
+}
+
+.unishare-auth .panel h2 {
+  font-family: var(--head);
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 12px;
+  color: var(--ink);
+}
+
+.unishare-auth .panel p {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.unishare-auth .panel ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.unishare-auth .panel li {
+  display: flex;
+  gap: 12px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink);
+  align-items: flex-start;
+}
+
+.unishare-auth .panel li b {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--brand);
+  color: var(--brand-ink);
+  font-size: 12px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+
+.unishare-auth .note {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 20px;
+}
+
+/* Card */
+.unishare-auth .card {
+  position: relative;
+  background: var(--bg);
+  border: 1.5px solid var(--line);
+  border-radius: 20px;
+  padding: 28px;
+  box-shadow: 8px 8px 0 var(--brand);
+}
+
+.unishare-auth .card h2 {
+  font-family: var(--head);
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  margin: 0 0 14px;
+  color: var(--ink);
+}
+
+.unishare-auth .card .sub {
+  color: var(--muted);
+  margin: 0 0 26px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.unishare-auth label.l {
+  display: block;
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 8px;
+  color: var(--ink);
+}
+
+.unishare-auth .field {
+  position: relative;
+  margin-bottom: 6px;
+}
+
+.unishare-auth .field input {
+  width: 100%;
+  height: 42px;
+  background: var(--field);
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  padding: 0 44px 0 14px;
+  font: 400 15px var(--body);
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.unishare-auth .field input:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(11, 93, 94, 0.15);
+}
+
+.unishare-auth .field input::placeholder {
+  color: var(--muted);
+  opacity: 0.75;
+}
+
+.unishare-auth .field .ic {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  background: none;
+  border: 0;
+  color: var(--ink);
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 0;
+}
+
+.unishare-auth .field .ic:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.unishare-auth .field .ic.static {
+  pointer-events: none;
+  right: 12px;
+  color: var(--muted);
+}
+
+.unishare-auth .hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0 0 20px;
+  min-height: 18px;
+}
+
+.unishare-auth .hint.error {
+  color: var(--err);
+  font-weight: 500;
+}
+
+.unishare-auth .agree {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 12.5px;
+  color: var(--muted);
+  margin: 4px 0 22px;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.unishare-auth .agree input {
+  appearance: none;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border: 1.5px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  outline: none;
+  transition: background-color 0.15s ease;
+}
+
+.unishare-auth .agree input:checked {
+  background: var(--brand);
+  border-color: var(--brand);
+}
+
+.unishare-auth .agree input:checked::after {
+  content: "";
+  width: 9px;
+  height: 5px;
+  border: 2px solid var(--brand-ink);
+  border-top: 0;
+  border-right: 0;
+  transform: rotate(-45deg) translate(1px, -1px);
+}
+
+.unishare-auth .agree a {
+  font-weight: 700;
+  color: var(--brand);
+}
+
+.unishare-auth .center {
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--muted);
+  margin: 16px 0 0;
+}
+
+.unishare-auth .center.big {
+  font-size: 14px;
+  margin-top: 22px;
+}
+
+.unishare-auth .center.big a {
+  font-weight: 700;
+  color: var(--brand);
+}
+
+.unishare-auth .ok {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--field);
+  border: 1.5px solid var(--brand);
+  font-size: 14px;
+  color: var(--brand);
+  font-weight: 600;
+}
+
+.unishare-auth .err-banner {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #fff3f2;
+  border: 1.5px solid var(--err);
+  font-size: 14px;
+  color: var(--err);
+  font-weight: 500;
+}
+
+/* Footer */
+.unishare-auth footer {
+  border-top: 2px solid var(--line);
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: auto;
+  background: var(--bg);
+}
+
+.unishare-auth footer .wrap {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 56px;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.unishare-auth footer nav {
+  gap: 28px;
+}
+
+.unishare-auth footer nav a {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.unishare-auth footer nav a:hover {
+  color: var(--ink);
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .unishare-auth main .grid {
+    grid-template-columns: 1fr;
+    gap: 40px;
+    margin: 32px 0 48px;
+  }
+  .unishare-auth .steps {
+    gap: 16px 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  .unishare-auth .wrap {
+    padding: 0 16px;
+  }
+  .unishare-auth .card {
+    padding: 20px;
+    box-shadow: 5px 5px 0 var(--brand);
+  }
+  .unishare-auth nav {
+    gap: 14px;
+  }
+  .unishare-auth .steps li:not(.on) em {
+    display: none;
+  }
+}
