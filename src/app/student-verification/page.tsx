@@ -72,6 +72,15 @@ function StudentVerificationContent() {
     setTimeout(() => {
       setIsSubmitting(false);
       setSubmitMsg("Verification details submitted successfully! Moving to Review Pending...");
+      setTimeout(() => {
+        router.push(
+          `/verification-pending?name=${encodeURIComponent(
+            fullName
+          )}&email=${encodeURIComponent(email)}&university=${encodeURIComponent(
+            university
+          )}&studentId=${encodeURIComponent(studentId)}`
+        );
+      }, 500);
     }, 600);
   };
 
@@ -474,3 +483,4 @@ export default function StudentVerificationPage() {
     </Suspense>
   );
 }
+
