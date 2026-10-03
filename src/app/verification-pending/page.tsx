@@ -260,3 +260,4 @@ export default function VerificationPendingPage() {
     </Suspense>
   );
 }
+

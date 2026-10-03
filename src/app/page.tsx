@@ -24,7 +24,7 @@ export default function Home() {
             UniShare
           </Link>
           <div className="nav-actions">
-            <Link className="link" href="#">
+            <Link className="link" href="/login">
               Log in
             </Link>
             <Link className="btn sm" href="/register">
@@ -55,7 +55,7 @@ export default function Home() {
               <Link className="btn" href="/register">
                 Create account
               </Link>
-              <Link className="btn ghost" href="#">
+              <Link className="btn ghost" href="/login">
                 Log in
               </Link>
             </div>
@@ -243,7 +243,7 @@ export default function Home() {
             <Link className="btn" href="/register">
               Create account
             </Link>
-            <Link className="btn ghost" href="#">
+            <Link className="btn ghost" href="/login">
               Log in
             </Link>
           </div>
