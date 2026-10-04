@@ -261,7 +261,7 @@ export default function LoginPage() {
                   />
                   <span>Keep me logged in</span>
                 </label>
-                <Link href="#" className="forgot-link">
+                <Link href="/forgot-password" className="forgot-link">
                   Forgot password?
                 </Link>
               </div>
@@ -336,3 +336,4 @@ export default function LoginPage() {
     </div>
   );
 }
+
