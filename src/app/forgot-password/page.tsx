@@ -157,7 +157,18 @@ export default function ForgotPasswordPage() {
 
               {successMsg && (
                 <div className="ok" role="status" style={{ marginTop: "14px" }}>
-                  {successMsg}
+                  <p>{successMsg}</p>
+                  <Link
+                    href={`/reset-password?email=${encodeURIComponent(email)}`}
+                    style={{
+                      display: "inline-block",
+                      marginTop: "8px",
+                      textDecoration: "underline",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Open reset password page (Demo) →
+                  </Link>
                 </div>
               )}
 
@@ -200,3 +211,4 @@ export default function ForgotPasswordPage() {
     </div>
   );
 }
+

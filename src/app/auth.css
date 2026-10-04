@@ -1473,3 +1473,59 @@
   font-weight: 700;
   color: var(--brand);
 }
+
+/* Reset password rules checklist */
+.unishare-auth .rules {
+  list-style: none;
+  margin: 10px 0 0;
+  display: grid;
+  gap: 6px;
+  padding: 0;
+}
+
+.unishare-auth .rules li {
+  font-size: 13.5px;
+  color: #7b8886;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: color 0.15s ease;
+}
+
+.unishare-auth .rules li svg {
+  flex-shrink: 0;
+}
+
+.unishare-auth .rules li .tick {
+  opacity: 0.35;
+  transition: opacity 0.15s ease;
+}
+
+.unishare-auth .rules li.ok {
+  color: var(--brand);
+  font-weight: 500;
+}
+
+.unishare-auth .rules li.ok .tick {
+  opacity: 1;
+  stroke: var(--brand);
+}
+
+.unishare-auth .match-status {
+  font-size: 13.5px;
+  color: #7b8886;
+  margin-top: 8px;
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.unishare-auth .match-status.ok {
+  color: var(--brand);
+  font-weight: 500;
+}
+
+.unishare-auth .match-status.no {
+  color: var(--err);
+}
