@@ -287,14 +287,14 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
             </a>
           </nav>
           <div className="rt">
-            <button
+            <Link
               className="bell"
               aria-label="Notifications"
-              onClick={() => triggerToast("You have 3 unread updates")}
+              href="/notifications"
             >
               <SvgIcon name="bell" size={20} />
               <i />
-            </button>
+            </Link>
             <a
               className="sos"
               href="#"
@@ -388,7 +388,7 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
             <h2>Dashboard tools</h2>
             <p>Search, notifications, wallet and activity in one place.</p>
           </div>
-          <Link className="more" href="#">
+          <Link className="more" href="/notifications">
             View all activity <SvgIcon name="arrow" size={14} />
           </Link>
         </div>
@@ -417,7 +417,7 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
                 <b>Notifications</b>
                 <small>3 unread updates</small>
               </div>
-              <span className="tag">New</span>
+              <Link className="tag" href="/notifications">New</Link>
             </div>
             <div className="li">
               <span className="ck">

@@ -1,0 +1,447 @@
+/* Notifications Page Styles */
+.notifications-page {
+  --ink: #10201c;
+  --teal: #0b5a52;
+  --teal-soft: #e2eeeb;
+  --unread-bg: #f4f7f6;
+  --muted: #4a5a56;
+  --line: #d9e1df;
+
+  font-family: "Figtree", "DM Sans", system-ui, -apple-system, sans-serif;
+  color: var(--ink);
+  background: #fff;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.notifications-page a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.notifications-page button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* Header */
+.notifications-page .header-nav {
+  border-bottom: 2px solid var(--ink);
+  height: 79px;
+  background: #fff;
+}
+
+.notifications-page .header-inner {
+  max-width: 1440px;
+  margin: 0 auto;
+  height: 100%;
+  padding: 0 64px 0 70px;
+  display: flex;
+  align-items: center;
+}
+
+.notifications-page .logo {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  width: 296px;
+}
+
+.notifications-page .logo svg {
+  width: 24px;
+  height: 24px;
+}
+
+.notifications-page nav.main-nav {
+  display: flex;
+  gap: 22px;
+  flex: 1;
+}
+
+.notifications-page nav.main-nav a {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink);
+  transition: color 0.15s;
+}
+
+.notifications-page nav.main-nav a:hover {
+  color: var(--teal);
+}
+
+.notifications-page .header-right {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.notifications-page .bell-link {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  color: var(--teal);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.notifications-page .bell-link svg {
+  width: 17px;
+  height: 17px;
+}
+
+.notifications-page .sos-link {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--teal);
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.notifications-page .sos-link svg {
+  width: 17px;
+  height: 17px;
+}
+
+.notifications-page .avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1.5px solid var(--teal);
+  background: var(--teal-soft);
+  color: var(--teal);
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notifications-page .user {
+  line-height: 1.25;
+  margin-left: -8px;
+}
+
+.notifications-page .user .name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.notifications-page .user .sub {
+  font-size: 12.5px;
+  color: var(--teal);
+}
+
+.notifications-page .chev {
+  width: 14px;
+  height: 14px;
+  color: var(--teal);
+  margin-left: 6px;
+}
+
+/* Main */
+.notifications-page main {
+  width: 100%;
+  max-width: 1104px;
+  margin: 0 auto;
+  padding-top: 29px;
+  flex: 1;
+}
+
+.notifications-page .crumbs {
+  font-size: 13px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notifications-page .crumbs a:hover {
+  color: var(--teal);
+}
+
+.notifications-page .eyebrow {
+  margin-top: 33px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: var(--teal);
+  text-transform: uppercase;
+}
+
+.notifications-page .title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.notifications-page h1 {
+  font-size: 42px;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  margin-top: 10px;
+}
+
+.notifications-page .subtitle {
+  margin-top: 13px;
+  font-size: 16px;
+  color: var(--muted);
+}
+
+.notifications-page .mark-all {
+  height: 46px;
+  padding: 0 17px;
+  border: 1.5px solid var(--teal);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--teal);
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  transition: all 0.15s;
+}
+
+.notifications-page .mark-all:hover {
+  background: var(--teal-soft);
+}
+
+.notifications-page .mark-all svg {
+  width: 17px;
+  height: 17px;
+}
+
+.notifications-page .tabs {
+  margin-top: 41px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 29px;
+}
+
+.notifications-page .tab {
+  background: none;
+  border: none;
+  padding: 0 0 12px;
+  font-size: 14.5px;
+  font-weight: 500;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: all 0.15s;
+}
+
+.notifications-page .tab.active {
+  color: var(--teal);
+  font-weight: 600;
+  border-bottom-color: var(--teal);
+}
+
+.notifications-page .section-head {
+  margin-top: 28px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.notifications-page h2 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+
+.notifications-page .count-pill {
+  background: var(--teal-soft);
+  color: var(--teal);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 999px;
+}
+
+.notifications-page .list {
+  margin-top: 18px;
+  border: 1.5px solid var(--ink);
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.notifications-page .item {
+  display: flex;
+  gap: 20px;
+  padding: 20px 19px 20px 19px;
+  border-top: 1px solid var(--line);
+  background: #fff;
+}
+
+.notifications-page .item:first-child {
+  border-top: none;
+}
+
+.notifications-page .item.unread {
+  background: var(--unread-bg);
+}
+
+.notifications-page .icon {
+  width: 42px;
+  height: 42px;
+  flex: none;
+  border-radius: 12px;
+  background: var(--teal-soft);
+  color: var(--teal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notifications-page .icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.notifications-page .body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  row-gap: 0;
+}
+
+.notifications-page .body h3 {
+  font-size: 14.5px;
+  font-weight: 600;
+  padding-top: 2px;
+}
+
+.notifications-page .badge {
+  justify-self: end;
+  background: var(--teal-soft);
+  color: var(--teal);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 11px;
+  border-radius: 999px;
+  margin-top: -6px;
+}
+
+.notifications-page .body p {
+  grid-column: 1 / -1;
+  margin-top: 13px;
+  font-size: 13.5px;
+  color: #2c3b37;
+  line-height: 1.45;
+}
+
+.notifications-page .meta {
+  margin-top: 13px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.notifications-page .action {
+  margin-top: 13px;
+  justify-self: end;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--teal);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.notifications-page .action:hover {
+  text-decoration: underline;
+}
+
+.notifications-page .empty-state {
+  padding: 40px 20px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.notifications-page .load-more {
+  margin: 17px 0 48px;
+  height: 46px;
+  padding: 0 17px;
+  border: 1.5px solid var(--teal);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--teal);
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+
+.notifications-page .load-more:hover {
+  background: var(--teal-soft);
+}
+
+/* Footer */
+.notifications-page footer {
+  border-top: 2px solid var(--ink);
+  height: 66px;
+  margin-top: auto;
+}
+
+.notifications-page .footer-inner {
+  max-width: 1104px;
+  margin: 0 auto;
+  height: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.notifications-page .footer-inner nav {
+  display: flex;
+  flex: none;
+  gap: 24px;
+}
+
+.notifications-page .footer-inner nav a {
+  font-weight: 600;
+  color: var(--teal);
+}
+
+@media (max-width: 1100px) {
+  .notifications-page nav.main-nav {
+    display: none;
+  }
+  .notifications-page .header-inner {
+    padding: 0 20px;
+  }
+  .notifications-page .logo {
+    flex: 1;
+  }
+  .notifications-page main,
+  .notifications-page .footer-inner {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+}
+
+@media (max-width: 640px) {
+  .notifications-page .title-row {
+    flex-direction: column;
+    gap: 16px;
+  }
+  .notifications-page h1 {
+    font-size: 32px;
+  }
+  .notifications-page .user,
+  .notifications-page .chev {
+    display: none;
+  }
+  .notifications-page .item {
+    gap: 14px;
+    padding: 16px;
+  }
+}
+
