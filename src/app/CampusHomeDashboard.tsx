@@ -190,6 +190,7 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
   const [toastMsg, setToastMsg] = useState("");
   const [showToast, setShowToast] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
 
   const pickupAreas = useMemo(() => {
     const set = new Set<string>();
@@ -251,7 +252,7 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
       {/* Top Navbar */}
       <header className="top">
         <div className="wrap">
-          <Link className="logo" href="/">
+          <Link className="logo" href="/home">
             <svg
               width="20"
               height="14"
@@ -267,15 +268,23 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
             UniShare
           </Link>
           <nav className="menu" aria-label="Main">
-            <Link className="on" href="/">
+            <Link className="on" href="/home">
               Home
             </Link>
             <Link href="/marketplace">Marketplace</Link>
-            <Link href="#">My products</Link>
-            <Link href="#">My rentals</Link>
-            <Link href="#">Rides</Link>
-            <Link href="#">Wallet</Link>
-            <Link href="#">Favorites</Link>
+            <Link href="/marketplace">My products</Link>
+            <a href="#rentals">My rentals</a>
+            <a href="#rides">Rides</a>
+            <Link href="/wallet">Wallet</Link>
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                triggerToast("Showing saved favorite items");
+              }}
+            >
+              Favorites
+            </a>
           </nav>
           <div className="rt">
             <button
@@ -297,11 +306,15 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
               <SvgIcon name="shield" size={18} />
               <span>SOS</span>
             </a>
-            <div className="me" onClick={handleLogoutClick} title="Click to log out">
+            <div
+              className="me"
+              onClick={() => setShowProfileModal(true)}
+              title="Click to view profile & options"
+            >
               <span className="av">FR</span>
               <div>
                 <b>Farhana Rahman</b>
-                <small>My profile</small>
+                <small>My profile ▾</small>
               </div>
             </div>
           </div>
@@ -370,7 +383,7 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
         </div>
 
         {/* Dashboard Tools */}
-        <div className="sh">
+        <div className="sh" id="dashboard">
           <div>
             <h2>Dashboard tools</h2>
             <p>Search, notifications, wallet and activity in one place.</p>
@@ -444,7 +457,7 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
                 <b>Wallet Access</b>
                 <small>Open wallet</small>
               </div>
-              <Link className="tag" href="#">
+              <Link className="tag" href="/wallet">
                 Open wallet
               </Link>
             </div>
@@ -483,7 +496,7 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
         </div>
 
         {/* Recommended Products */}
-        <div className="sh">
+        <div className="sh" id="marketplace">
           <div>
             <h2>Recommended Products</h2>
             <p>A little borrowing goes a long way. Find your everyday essentials.</p>
@@ -617,7 +630,7 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
         </div>
 
         {/* Upcoming Ride Card */}
-        <div className="wide">
+        <div className="wide" id="rides">
           <div className="wh">
             <span className="ic">
               <SvgIcon name="car" size={18} />
@@ -671,7 +684,7 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
         </div>
 
         {/* Active Rental Card */}
-        <div className="wide">
+        <div className="wide" id="rentals">
           <div className="wh">
             <span className="ic">
               <SvgIcon name="box" size={18} />
@@ -788,6 +801,164 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
           </span>
         </div>
       </footer>
+
+      {/* Student Profile Modal */}
+      {showProfileModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0, 0, 0, 0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100,
+            padding: "20px",
+          }}
+          onClick={() => setShowProfileModal(false)}
+        >
+          <div
+            style={{
+              background: "#ffffff",
+              border: "1.5px solid var(--line)",
+              borderRadius: "16px",
+              width: "100%",
+              maxWidth: "440px",
+              padding: "24px",
+              boxShadow: "0 12px 30px rgba(0,0,0,0.15)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "14px",
+                marginBottom: "16px",
+              }}
+            >
+              <div
+                style={{
+                  width: "48px",
+                  height: "48px",
+                  borderRadius: "50%",
+                  background: "var(--mint)",
+                  border: "1.5px solid var(--teal)",
+                  color: "var(--teal)",
+                  fontWeight: 700,
+                  fontSize: "18px",
+                  display: "grid",
+                  placeItems: "center",
+                }}
+              >
+                FR
+              </div>
+              <div>
+                <b style={{ fontSize: "17px", display: "block" }}>
+                  Farhana Rahman
+                </b>
+                <small style={{ color: "var(--muted)", fontSize: "12px" }}>
+                  farhana@std.du.ac.bd
+                </small>
+                <div
+                  style={{
+                    fontSize: "11px",
+                    color: "var(--teal)",
+                    fontWeight: 700,
+                    marginTop: "2px",
+                  }}
+                >
+                  University of Dhaka · Verified Student 🛡️
+                </div>
+              </div>
+            </div>
+
+            {/* Profile Info Details */}
+            <div
+              style={{
+                background: "var(--mint)",
+                borderRadius: "10px",
+                padding: "14px 16px",
+                marginBottom: "16px",
+                fontSize: "12.5px",
+                lineHeight: "1.6",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                <span style={{ color: "var(--muted)" }}>Student ID:</span>
+                <b>2021-DU-8491</b>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                <span style={{ color: "var(--muted)" }}>Department:</span>
+                <b>Computer Science & Eng.</b>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                <span style={{ color: "var(--muted)" }}>Campus Status:</span>
+                <b style={{ color: "var(--teal)" }}>Verified Member ✓</b>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ color: "var(--muted)" }}>Member Since:</span>
+                <b>October 2026</b>
+              </div>
+            </div>
+
+            {/* Campus Activity Summary */}
+            <div
+              style={{
+                border: "1px solid var(--hair)",
+                borderRadius: "10px",
+                padding: "12px 16px",
+                marginBottom: "20px",
+                fontSize: "12px",
+                color: "var(--muted)",
+              }}
+            >
+              <b style={{ color: "var(--ink)", display: "block", marginBottom: "6px" }}>
+                Campus Activity Overview
+              </b>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                <span>Active Rentals:</span>
+                <span style={{ color: "var(--ink)", fontWeight: 600 }}>1 item (Scientific calculator)</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>Live Listings:</span>
+                <span style={{ color: "var(--ink)", fontWeight: 600 }}>2 items (Canon EOS 200D)</span>
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <button
+                className="btn"
+                style={{
+                  borderColor: "var(--hair)",
+                  color: "var(--muted)",
+                  fontSize: "12px",
+                }}
+                onClick={() => setShowProfileModal(false)}
+              >
+                Close
+              </button>
+              <button
+                className="btn"
+                style={{
+                  borderColor: "#c0392b",
+                  color: "#c0392b",
+                  fontSize: "12px",
+                }}
+                onClick={handleLogoutClick}
+              >
+                Log out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast Notification */}
       <div

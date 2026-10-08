@@ -47,7 +47,7 @@ export default function LoginPage() {
 
     setTimeout(() => {
       setIsLoggingIn(false);
-      let destination = "/";
+      let destination = "/home";
       if (typeof window !== "undefined") {
         const params = new URLSearchParams(window.location.search);
         const redir = params.get("redirect");
@@ -59,6 +59,8 @@ export default function LoginPage() {
       setSuccessMsg(
         destination === "/marketplace"
           ? "Logged in successfully! Redirecting to campus shelf..."
+          : destination === "/wallet"
+          ? "Logged in successfully! Redirecting to campus wallet..."
           : "Logged in successfully! Redirecting to campus home..."
       );
 
