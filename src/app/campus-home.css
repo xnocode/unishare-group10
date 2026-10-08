@@ -1,0 +1,1019 @@
+/* UniShare Campus Home Dashboard */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+
+.unishare-campus-home {
+  --ink: #161b1a;
+  --teal: #0d6b63;
+  --muted: #4b5553;
+  --line: #161b1a;
+  --field: #f5f7f6;
+  --soft: #8a9391;
+  --mint: #e9f2ef;
+  --hair: #d5dcda;
+  --img-calc: url(/images/landing/calculator.jpeg);
+  --img-ball: url(/images/landing/football.jpeg);
+  --img-chg: url(/images/landing/laptop-charger.jpeg);
+  --img-pods: url(/images/landing/airpods.jpeg);
+
+  font-family: "DM Sans", system-ui, -apple-system, sans-serif;
+  color: var(--ink);
+  background: #ffffff;
+  line-height: 1.45;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.unishare-campus-home *,
+.unishare-campus-home *::before,
+.unishare-campus-home *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.unishare-campus-home a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.unishare-campus-home button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.unishare-campus-home .wrap {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 24px;
+  width: 100%;
+}
+
+.unishare-campus-home svg {
+  flex-shrink: 0;
+}
+
+/* Nav */
+.unishare-campus-home .top {
+  border-bottom: 1px solid var(--line);
+  background: #ffffff;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.unishare-campus-home .top .wrap {
+  display: flex;
+  align-items: center;
+  height: 60px;
+  gap: 20px;
+}
+
+.unishare-campus-home .logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--ink);
+}
+
+.unishare-campus-home .menu {
+  display: flex;
+  gap: 13px;
+  min-width: 0;
+  height: 100%;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.unishare-campus-home .menu::-webkit-scrollbar {
+  display: none;
+}
+
+.unishare-campus-home .menu a {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  margin-top: 2px;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.unishare-campus-home .menu a.on {
+  color: var(--teal);
+  border-color: var(--teal);
+  font-weight: 600;
+}
+
+.unishare-campus-home .menu a:hover {
+  color: var(--teal);
+}
+
+.unishare-campus-home .rt {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.unishare-campus-home .bell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 0;
+  color: var(--ink);
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.unishare-campus-home .bell:hover {
+  background: var(--field);
+}
+
+.unishare-campus-home .bell i {
+  position: absolute;
+  top: 4px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--teal);
+}
+
+.unishare-campus-home .sos {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 700;
+  color: var(--teal);
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.unishare-campus-home .sos:hover {
+  background: var(--mint);
+}
+
+.unishare-campus-home .me {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+
+.unishare-campus-home .me:hover {
+  background: var(--field);
+}
+
+.unishare-campus-home .av {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1.5px solid var(--teal);
+  background: var(--mint);
+  color: var(--teal);
+  font-weight: 600;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.unishare-campus-home .me b {
+  display: block;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.unishare-campus-home .me small {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* Hero */
+.unishare-campus-home .eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  color: var(--teal);
+  text-transform: uppercase;
+  margin-top: 28px;
+}
+
+.unishare-campus-home .hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.unishare-campus-home h1 {
+  font-size: 34px;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  margin-top: 6px;
+}
+
+.unishare-campus-home .sub {
+  font-size: 14px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+.unishare-campus-home .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 14px;
+  border: 1.5px solid var(--teal);
+  color: var(--teal);
+  background: #ffffff;
+  transition: filter 0.15s, background 0.15s;
+}
+
+.unishare-campus-home .btn.solid {
+  background: var(--teal);
+  color: #ffffff;
+}
+
+.unishare-campus-home .btn:hover {
+  filter: brightness(.95);
+}
+
+.unishare-campus-home .acts {
+  display: flex;
+  gap: 10px;
+}
+
+.unishare-campus-home .band {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--mint);
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin-top: 22px;
+  color: var(--teal);
+}
+
+.unishare-campus-home .band div {
+  flex: 1;
+}
+
+.unishare-campus-home .band b {
+  display: block;
+  font-size: 14px;
+}
+
+.unishare-campus-home .band p {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.unishare-campus-home .band span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Stats */
+.unishare-campus-home .stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.unishare-campus-home .stat {
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  padding: 16px 16px 14px;
+  background: #ffffff;
+}
+
+.unishare-campus-home .stat small {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.unishare-campus-home .stat strong {
+  display: block;
+  font-size: 26px;
+  margin: 14px 0 14px;
+  line-height: 1;
+}
+
+.unishare-campus-home .stat p {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* Section Header */
+.unishare-campus-home .sh {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  margin-top: 40px;
+}
+
+.unishare-campus-home h2 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+}
+
+.unishare-campus-home .sh p {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.unishare-campus-home .more {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--teal);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.unishare-campus-home .more:hover {
+  text-decoration: underline;
+}
+
+/* Search */
+.unishare-campus-home .search {
+  position: relative;
+  margin-top: 16px;
+}
+
+.unishare-campus-home .search input {
+  width: 100%;
+  height: 42px;
+  border: 1px solid var(--hair);
+  border-radius: 8px;
+  padding: 0 14px 0 40px;
+  font: inherit;
+  font-size: 13px;
+  background: #ffffff;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.unishare-campus-home .search input:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(13, 107, 99, .15);
+}
+
+.unishare-campus-home .search svg {
+  position: absolute;
+  left: 14px;
+  top: 13px;
+  color: var(--muted);
+}
+
+/* Tools / Panels */
+.unishare-campus-home .tools {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 14px;
+  margin-top: 16px;
+  align-items: start;
+}
+
+.unishare-campus-home .panel {
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: #ffffff;
+}
+
+.unishare-campus-home .ph {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.unishare-campus-home .ic {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: var(--mint);
+  color: var(--teal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.unishare-campus-home .ph b {
+  display: block;
+  font-size: 13px;
+}
+
+.unishare-campus-home .ph small {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.unishare-campus-home .ph .tag {
+  margin-left: auto;
+}
+
+.unishare-campus-home .tag {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--teal);
+  background: var(--mint);
+  border-radius: 99px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+.unishare-campus-home .li {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.unishare-campus-home .li .ck {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--mint);
+  color: var(--teal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+}
+
+.unishare-campus-home .li b {
+  display: block;
+  font-size: 12.5px;
+  line-height: 1.3;
+}
+
+.unishare-campus-home .li p {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.unishare-campus-home .wal .ph {
+  justify-content: flex-start;
+}
+
+/* Filters */
+.unishare-campus-home .filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.unishare-campus-home .sel {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.unishare-campus-home .sel select {
+  height: 32px;
+  border: 1px solid var(--hair);
+  border-radius: 8px;
+  padding: 0 26px 0 28px;
+  font: inherit;
+  font-size: 12px;
+  background: #ffffff;
+  color: var(--ink);
+  outline: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+.unishare-campus-home .sel svg:first-child {
+  position: absolute;
+  left: 9px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.unishare-campus-home .sel svg:last-child {
+  position: absolute;
+  right: 8px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.unishare-campus-home .pillbtn {
+  height: 32px;
+  border-radius: 99px;
+  border: 0;
+  background: var(--mint);
+  color: var(--teal);
+  font-weight: 600;
+  font-size: 11.5px;
+  padding: 0 14px;
+  transition: all 0.15s;
+}
+
+.unishare-campus-home .pillbtn.off {
+  background: #ffffff;
+  border: 1px solid var(--hair);
+  color: var(--muted);
+}
+
+.unishare-campus-home .fl-sp {
+  flex: 1;
+}
+
+/* Category Chips */
+.unishare-campus-home .chips {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.unishare-campus-home .chip {
+  border: 1px solid var(--hair);
+  border-radius: 99px;
+  background: #ffffff;
+  height: 30px;
+  padding: 0 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink);
+  transition: all 0.15s;
+}
+
+.unishare-campus-home .chip:hover {
+  border-color: var(--teal);
+}
+
+.unishare-campus-home .chip.on {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* Product Grid */
+.unishare-campus-home .grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.unishare-campus-home .pc {
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.unishare-campus-home .pc:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
+}
+
+.unishare-campus-home .pim {
+  height: 120px;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  background-color: var(--field);
+}
+
+.unishare-campus-home .av-t {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: #ffffff;
+  border-radius: 99px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ink);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+.unishare-campus-home .heart {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--teal);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  transition: transform 0.15s;
+}
+
+.unishare-campus-home .heart:hover {
+  transform: scale(1.1);
+}
+
+.unishare-campus-home .heart.on svg {
+  fill: var(--teal);
+}
+
+.unishare-campus-home .pb {
+  padding: 12px 12px 12px;
+  border-top: 1.5px solid var(--line);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.unishare-campus-home .pb small {
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+.unishare-campus-home .pb h3 {
+  font-size: 13px;
+  font-weight: 700;
+  margin: 2px 0 6px;
+  line-height: 1.3;
+}
+
+.unishare-campus-home .pr {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.unishare-campus-home .pr b {
+  color: var(--teal);
+  font-size: 19px;
+  margin-right: 3px;
+}
+
+.unishare-campus-home .loc {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+.unishare-campus-home .ow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  margin-top: auto;
+  padding-top: 10px;
+}
+
+.unishare-campus-home .ow .mini {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--mint);
+  font-size: 8px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--teal);
+}
+
+.unishare-campus-home .ow svg {
+  margin-left: auto;
+  color: var(--teal);
+}
+
+.unishare-campus-home .empty {
+  grid-column: 1 / -1;
+  border: 1.5px dashed var(--hair);
+  border-radius: 12px;
+  padding: 36px 20px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* Cards (Ride & Rental) */
+.unishare-campus-home .wide {
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin-top: 22px;
+  background: #ffffff;
+}
+
+.unishare-campus-home .wh {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.unishare-campus-home .wh b {
+  display: block;
+  font-size: 14px;
+}
+
+.unishare-campus-home .wh small {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.unishare-campus-home .wh .tag {
+  margin-left: auto;
+}
+
+.unishare-campus-home .route {
+  margin-top: 14px;
+  display: grid;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.unishare-campus-home .route div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.unishare-campus-home .route svg {
+  color: var(--teal);
+}
+
+.unishare-campus-home .meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--hair);
+  padding: 14px 0 10px;
+  margin-top: 6px;
+}
+
+.unishare-campus-home .foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  margin-top: 10px;
+}
+
+.unishare-campus-home .foot .more {
+  font-size: 12.5px;
+}
+
+.unishare-campus-home .rent {
+  display: grid;
+  grid-template-columns: 190px 1fr;
+  gap: 18px;
+  margin-top: 14px;
+}
+
+.unishare-campus-home .rim {
+  height: 112px;
+  border-radius: 8px;
+  background: var(--img-calc) center/cover;
+  position: relative;
+  border: 1px solid var(--hair);
+}
+
+.unishare-campus-home .rent h3 {
+  font-size: 16px;
+  margin: 2px 0 4px;
+}
+
+.unishare-campus-home .rent small {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.unishare-campus-home .rsum {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 12px;
+}
+
+/* Campus Corner */
+.unishare-campus-home .corner {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.unishare-campus-home .cc {
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  padding: 18px 20px;
+  background: #f5f7f6;
+}
+
+.unishare-campus-home .cc h3 {
+  font-size: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.unishare-campus-home .cc h3 svg {
+  color: var(--teal);
+}
+
+.unishare-campus-home .cc .row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.unishare-campus-home .cc b {
+  font-size: 12.5px;
+}
+
+.unishare-campus-home .cc p,
+.unishare-campus-home .cc small {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.unishare-campus-home .cc .more {
+  margin-top: 14px;
+  font-size: 12.5px;
+}
+
+/* Sharing Guide */
+.unishare-campus-home .guide {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  font-size: 12px;
+  color: var(--muted);
+  margin: 26px 0 40px;
+  flex-wrap: wrap;
+  text-align: center;
+}
+
+.unishare-campus-home .guide a {
+  color: var(--teal);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Footer */
+.unishare-campus-home footer {
+  border-top: 1px solid var(--line);
+  padding: 22px 0 max(22px, env(safe-area-inset-bottom, 0px));
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-top: auto;
+}
+
+.unishare-campus-home footer .wrap {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.unishare-campus-home footer a {
+  font-weight: 600;
+  color: var(--ink);
+  margin-left: 20px;
+  transition: color 0.15s;
+}
+
+.unishare-campus-home footer a:hover {
+  color: var(--teal);
+}
+
+/* Toast */
+.unishare-campus-home .toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--ink);
+  color: #ffffff;
+  font-size: 13px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s, transform 0.25s;
+  z-index: 50;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.unishare-campus-home .toast.on {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Responsive */
+@media(max-width: 900px) {
+  .unishare-campus-home .grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .unishare-campus-home .stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .unishare-campus-home .tools {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media(max-width: 640px) {
+  .unishare-campus-home .wrap {
+    padding: 0 16px;
+  }
+  .unishare-campus-home .top .wrap {
+    gap: 12px;
+  }
+  .unishare-campus-home .me div,
+  .unishare-campus-home .sos span {
+    display: none;
+  }
+  .unishare-campus-home .logo {
+    font-size: 16px;
+  }
+  .unishare-campus-home h1 {
+    font-size: 28px;
+  }
+  .unishare-campus-home .acts {
+    width: 100%;
+  }
+  .unishare-campus-home .acts .btn {
+    flex: 1;
+  }
+  .unishare-campus-home .band span {
+    display: none;
+  }
+  .unishare-campus-home .rent {
+    grid-template-columns: 1fr;
+  }
+  .unishare-campus-home .corner {
+    grid-template-columns: 1fr;
+  }
+  .unishare-campus-home .fl-sp {
+    display: none;
+  }
+  .unishare-campus-home .sh {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .unishare-campus-home .wh .tag {
+    white-space: normal;
+  }
+}
+
+@media(max-width: 420px) {
+  .unishare-campus-home .grid {
+    grid-template-columns: 1fr;
+  }
+}
+

@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import "../auth.css";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("farhana@std.du.ac.bd");
   const [password, setPassword] = useState("password123");
   const [showPassword, setShowPassword] = useState(false);
@@ -27,7 +29,27 @@ export default function LoginPage() {
     setIsLoggingIn(true);
     setTimeout(() => {
       setIsLoggingIn(false);
-      setSuccessMsg("Logged in successfully! Redirecting to campus shelf...");
+      setSuccessMsg("Logged in successfully! Redirecting to campus home...");
+
+      try {
+        localStorage.setItem("unishare_logged_in", "true");
+        localStorage.setItem(
+          "unishare_user",
+          JSON.stringify({
+            name: "Farhana Rahman",
+            email: email.trim(),
+            initials: "FR",
+            university: "University of Dhaka",
+          })
+        );
+        document.cookie = "unishare_logged_in=true; path=/; max-age=86400";
+      } catch (err) {
+        console.error(err);
+      }
+
+      setTimeout(() => {
+        router.push("/");
+      }, 400);
     }, 600);
   };
 

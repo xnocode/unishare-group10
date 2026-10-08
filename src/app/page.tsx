@@ -1,13 +1,50 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import "./landing.css";
+import CampusHomeDashboard from "./CampusHomeDashboard";
 
 export default function Home() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+    setHasMounted(true);
+    try {
+      const loggedIn =
+        localStorage.getItem("unishare_logged_in") === "true" ||
+        document.cookie.includes("unishare_logged_in=true") ||
+        (typeof window !== "undefined" &&
+          new URLSearchParams(window.location.search).get("view") === "campus");
+      setIsLoggedIn(loggedIn);
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  const handleLogout = () => {
+    try {
+      localStorage.removeItem("unishare_logged_in");
+      localStorage.removeItem("unishare_user");
+      document.cookie = "unishare_logged_in=; path=/; max-age=0";
+    } catch (e) {
+      console.error(e);
+    }
+    setIsLoggedIn(false);
+  };
+
+  // If user is logged in, show the Campus Home Dashboard!
+  if (hasMounted && isLoggedIn) {
+    return <CampusHomeDashboard onLogout={handleLogout} />;
+  }
+
   return (
     <main className="unishare-landing">
       {/* Navigation */}
       <nav>
         <div className="wrap">
-          <Link className="logo" href="#">
+          <Link className="logo" href="/">
             <svg
               viewBox="0 0 32 32"
               fill="none"
