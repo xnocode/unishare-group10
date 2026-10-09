@@ -27,30 +27,45 @@ export default function LoginPage() {
     }
 
     setIsLoggingIn(true);
+    const userProfile = {
+      name: email.toLowerCase().includes("farhana") ? "Farhana Rahman" : "DU Student",
+      email: email.trim(),
+      initials: email.toLowerCase().includes("farhana") ? "FR" : "DU",
+      university: "University of Dhaka",
+      verified: true,
+      tokenBalance: 420,
+    };
+
+    try {
+      localStorage.setItem("unishare_logged_in", "true");
+      localStorage.setItem("unishare_user", JSON.stringify(userProfile));
+      document.cookie = "unishare_logged_in=true; path=/; max-age=86400";
+      document.cookie = `unishare_token=verified_token_${Date.now()}; path=/; max-age=604800; SameSite=Lax`;
+    } catch (err) {
+      console.error(err);
+    }
+
     setTimeout(() => {
       setIsLoggingIn(false);
-      setSuccessMsg("Logged in successfully! Redirecting to campus home...");
-
-      try {
-        localStorage.setItem("unishare_logged_in", "true");
-        localStorage.setItem(
-          "unishare_user",
-          JSON.stringify({
-            name: "Farhana Rahman",
-            email: email.trim(),
-            initials: "FR",
-            university: "University of Dhaka",
-          })
-        );
-        document.cookie = "unishare_logged_in=true; path=/; max-age=86400";
-      } catch (err) {
-        console.error(err);
+      let destination = "/";
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        const redir = params.get("redirect");
+        if (redir && redir.startsWith("/")) {
+          destination = redir;
+        }
       }
 
+      setSuccessMsg(
+        destination === "/marketplace"
+          ? "Logged in successfully! Redirecting to campus shelf..."
+          : "Logged in successfully! Redirecting to campus home..."
+      );
+
       setTimeout(() => {
-        router.push("/");
+        router.push(destination);
       }, 400);
-    }, 600);
+    }, 500);
   };
 
   return (

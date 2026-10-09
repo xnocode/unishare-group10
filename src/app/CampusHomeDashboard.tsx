@@ -270,7 +270,7 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
             <Link className="on" href="/">
               Home
             </Link>
-            <Link href="#">Marketplace</Link>
+            <Link href="/marketplace">Marketplace</Link>
             <Link href="#">My products</Link>
             <Link href="#">My rentals</Link>
             <Link href="#">Rides</Link>
@@ -488,7 +488,7 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
             <h2>Recommended Products</h2>
             <p>A little borrowing goes a long way. Find your everyday essentials.</p>
           </div>
-          <Link className="more" href="#">
+          <Link className="more" href="/marketplace">
             View all items <SvgIcon name="arrow" size={14} />
           </Link>
         </div>
