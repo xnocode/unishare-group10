@@ -5,135 +5,14 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import {
+  DEFAULT_ITEMS,
+  CATEGORIES,
+  PICKUP_AREAS,
+  MarketplaceItem,
+  UserProfile,
+} from './marketplace-data';
 import './marketplace.css';
-
-interface MarketplaceItem {
-  id: string;
-  name: string;
-  category: string;
-  price: number;
-  deposit: number;
-  area: string;
-  owner: string;
-  initials: string;
-  image: string;
-  available: boolean;
-  description?: string;
-}
-
-interface UserProfile {
-  name: string;
-  email: string;
-  initials: string;
-  university: string;
-  verified: boolean;
-  department?: string;
-  studentId?: string;
-  tokenBalance?: number;
-}
-
-const DEFAULT_ITEMS: MarketplaceItem[] = [
-  {
-    id: '1',
-    name: 'Scientific calculator',
-    category: 'Calculators',
-    price: 40,
-    deposit: 100,
-    area: 'Science Library',
-    owner: 'Nafis Ahmed',
-    initials: 'NA',
-    image: '/images/landing/calculator.jpeg',
-    available: true,
-    description: 'Casio fx-991EX ClassWiz. Ideal for engineering, physics, and calculus exams.',
-  },
-  {
-    id: '2',
-    name: 'Match-day football',
-    category: 'Footballs',
-    price: 60,
-    deposit: 100,
-    area: 'DU Central Field',
-    owner: 'Sakib Hasan',
-    initials: 'SH',
-    image: '/images/landing/football.jpeg',
-    available: true,
-    description: 'FIFA standard size 5 match ball. Excellent grip, pumped and ready for match-day.',
-  },
-  {
-    id: '3',
-    name: 'Laptop charger · 65W',
-    category: 'Laptop chargers',
-    price: 50,
-    deposit: 100,
-    area: 'TSC',
-    owner: 'Maliha Islam',
-    initials: 'MI',
-    image: '/images/landing/laptop-charger.jpeg',
-    available: true,
-    description: 'Type-C 65W fast charger compatible with MacBook, Dell XPS, HP, Asus and Lenovo.',
-  },
-  {
-    id: '4',
-    name: 'AirPods with charging case',
-    category: 'AirPods',
-    price: 80,
-    deposit: 150,
-    area: 'Arts Building',
-    owner: 'Rafiul Karim',
-    initials: 'RK',
-    image: '/images/landing/airpods.jpeg',
-    available: true,
-    description: 'Noise-cancelling wireless earbuds with sanitized silicone tips and full charge.',
-  },
-  {
-    id: '5',
-    name: 'Phone charger · 45W',
-    category: 'Phone chargers',
-    price: 25,
-    deposit: 50,
-    area: 'Curzon Hall',
-    owner: 'Nusrat Jahan',
-    initials: 'NJ',
-    image: '/images/landing/phone-charger.jpeg',
-    available: true,
-    description: 'Fast dual-port USB-C & USB-A wall adapter with braided charging cable.',
-  },
-  {
-    id: '6',
-    name: 'Wired earphones',
-    category: 'Earphones',
-    price: 20,
-    deposit: 50,
-    area: 'Central Library',
-    owner: 'Tanvir Ahmed',
-    initials: 'TA',
-    image: '/images/landing/earphones.jpeg',
-    available: true,
-    description: '3.5mm jack with built-in mic. Crisp audio for online lectures and quiet study halls.',
-  },
-];
-
-const CATEGORIES = [
-  'All items',
-  'Calculators',
-  'Footballs',
-  'Laptop chargers',
-  'Phone chargers',
-  'Earphones',
-  'AirPods',
-  'Cameras',
-];
-
-const PICKUP_AREAS = [
-  'Science Library',
-  'DU Central Field',
-  'TSC',
-  'Arts Building',
-  'Curzon Hall',
-  'Central Library',
-  'Shahidullah Hall',
-  'Mokarram Bhaban',
-];
 
 export default function MarketplacePage() {
   const router = useRouter();
@@ -159,8 +38,6 @@ export default function MarketplacePage() {
   const [recentlyViewed, setRecentlyViewed] = useState<string[]>([]);
 
   // Modals & Toast State
-  const [activeItemModal, setActiveItemModal] = useState<MarketplaceItem | null>(null);
-  const [rentalDays, setRentalDays] = useState(1);
   const [showListItemModal, setShowListItemModal] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastVisible, setToastVisible] = useState(false);
@@ -182,7 +59,7 @@ export default function MarketplacePage() {
     }, 2400);
   };
 
-  // Auth Initialization on Client Mount
+  // Auth Initialization & LocalStorage on Client Mount
   useEffect(() => {
     try {
       const stored = localStorage.getItem('unishare_user');
@@ -206,6 +83,24 @@ export default function MarketplacePage() {
         };
         setUser(fallbackUser);
         localStorage.setItem('unishare_user', JSON.stringify(fallbackUser));
+      }
+
+      // Load saved favorites
+      const storedFavs = localStorage.getItem('unishare_favorites');
+      if (storedFavs) {
+        setFavorites(JSON.parse(storedFavs));
+      }
+
+      // Load recently viewed
+      const storedRecent = localStorage.getItem('unishare_recently_viewed');
+      if (storedRecent) {
+        setRecentlyViewed(JSON.parse(storedRecent));
+      }
+
+      // Load custom listed items
+      const storedItems = localStorage.getItem('unishare_marketplace_items');
+      if (storedItems) {
+        setItems(JSON.parse(storedItems));
       }
     } catch (e) {
       console.error(e);
@@ -252,25 +147,28 @@ export default function MarketplacePage() {
     if (e) e.stopPropagation();
     setFavorites((prev) => {
       const updated = { ...prev, [itemName]: !prev[itemName] };
+      try {
+        localStorage.setItem('unishare_favorites', JSON.stringify(updated));
+      } catch (err) {
+        console.error(err);
+      }
       showToast(updated[itemName] ? `Added "${itemName}" to Favorites` : `Removed from Favorites`);
       return updated;
     });
   };
 
-  // Open Item Detail
+  // Open Item Detail - Direct move to product details page
   const handleOpenItem = (item: MarketplaceItem) => {
-    setActiveItemModal(item);
-    setRentalDays(1);
+    try {
+      const storedRecent = localStorage.getItem('unishare_recently_viewed');
+      const list: string[] = storedRecent ? JSON.parse(storedRecent) : [];
+      const updated = [item.name, ...list.filter((n) => n !== item.name)].slice(0, 10);
+      localStorage.setItem('unishare_recently_viewed', JSON.stringify(updated));
+    } catch (e) {
+      console.error(e);
+    }
     setRecentlyViewed((prev) => [item.name, ...prev.filter((n) => n !== item.name)]);
-  };
-
-  // Submit Borrow Request
-  const handleBorrowRequest = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!activeItemModal) return;
-    const totalTokens = activeItemModal.price * rentalDays;
-    showToast(`Borrow request sent to ${activeItemModal.owner}! (${totalTokens} tokens)`);
-    setActiveItemModal(null);
+    router.push(`/product-details/${item.id}`);
   };
 
   // Submit New Listing
@@ -292,7 +190,15 @@ export default function MarketplacePage() {
       description: newItemDesc.trim() || 'Listed by verified DU student.',
     };
 
-    setItems((prev) => [newItem, ...prev]);
+    setItems((prev) => {
+      const updated = [newItem, ...prev];
+      try {
+        localStorage.setItem('unishare_marketplace_items', JSON.stringify(updated));
+      } catch (err) {
+        console.error(err);
+      }
+      return updated;
+    });
     setShowListItemModal(false);
     setNewItemName('');
     setNewItemDesc('');
@@ -884,100 +790,6 @@ export default function MarketplacePage() {
           </span>
         </div>
       </footer>
-
-      {/* Item Details & Borrow Request Modal */}
-      {activeItemModal && (
-        <div className="unishare-modal-overlay" onClick={() => setActiveItemModal(null)}>
-          <div className="unishare-modal-card" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              className="close-btn"
-              onClick={() => setActiveItemModal(null)}
-              aria-label="Close"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-
-            <div style={{ position: 'relative', height: 160, borderRadius: 10, overflow: 'hidden', marginBottom: 16, border: '1.5px solid var(--line)' }}>
-              <Image
-                src={activeItemModal.image}
-                alt={activeItemModal.name}
-                fill
-                sizes="(max-width: 600px) 100vw, 480px"
-                style={{ objectFit: 'cover' }}
-              />
-              <span className="avail-pill" style={{ top: 10, left: 10 }}>Available on Campus</span>
-            </div>
-
-            <div className="kicker" style={{ marginTop: 0 }}>{activeItemModal.category}</div>
-            <h2>{activeItemModal.name}</h2>
-            <p className="modal-sub">{activeItemModal.description}</p>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', background: 'var(--field)', borderRadius: 10, border: '1.5px solid var(--line)', marginBottom: 16 }}>
-              <span style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--tint)', color: 'var(--brand)', display: 'grid', placeItems: 'center', fontWeight: 700, border: '1.5px solid var(--brand)' }}>
-                {activeItemModal.initials}
-              </span>
-              <div>
-                <strong style={{ display: 'block', fontSize: 13.5 }}>{activeItemModal.owner}</strong>
-                <small style={{ color: 'var(--muted)', fontSize: 12 }}>Verified DU Student · Pickup at {activeItemModal.area}</small>
-              </div>
-            </div>
-
-            <form onSubmit={handleBorrowRequest}>
-              <div className="form-group">
-                <label>Rental Duration (Days)</label>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                  <button
-                    type="button"
-                    className="btn outline"
-                    style={{ padding: '6px 14px', fontSize: 16, height: 38 }}
-                    onClick={() => setRentalDays(Math.max(1, rentalDays - 1))}
-                  >
-                    -
-                  </button>
-                  <span style={{ fontWeight: 800, fontSize: 16, minWidth: 40, textAlign: 'center' }}>
-                    {rentalDays} {rentalDays === 1 ? 'day' : 'days'}
-                  </span>
-                  <button
-                    type="button"
-                    className="btn outline"
-                    style={{ padding: '6px 14px', fontSize: 16, height: 38 }}
-                    onClick={() => setRentalDays(Math.min(14, rentalDays + 1))}
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-
-              <div className="calc-box">
-                <div className="calc-row">
-                  <span>Daily Rate</span>
-                  <b>{activeItemModal.price} tokens / day</b>
-                </div>
-                <div className="calc-row">
-                  <span>Refundable Deposit</span>
-                  <b>{activeItemModal.deposit} tokens</b>
-                </div>
-                <div className="calc-row final">
-                  <span>Total Tokens Required</span>
-                  <b>{activeItemModal.price * rentalDays + activeItemModal.deposit} tokens</b>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="btn"
-                style={{ width: '100%', height: 46, fontSize: 15 }}
-              >
-                Request to Borrow
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* "List an item" Modal */}
       {showListItemModal && (
