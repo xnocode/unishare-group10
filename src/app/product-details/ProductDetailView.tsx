@@ -242,92 +242,118 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
       <header className="top">
         <div className="wrap">
           <Link href="/" className="logo">
-            <svg width="22" height="14" viewBox="0 0 22 14" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true">
+            <svg
+              width="22"
+              height="14"
+              viewBox="0 0 22 14"
+              fill="none"
+              stroke="#0B5D5E"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
               <circle cx="6.5" cy="7" r="4.5" />
               <circle cx="15.5" cy="7" r="4.5" />
             </svg>
             <span>UniShare</span>
           </Link>
 
-          <nav className="nav-menu" aria-label="Main navigation">
-            <Link href="/home">Home</Link>
-            <Link href="/marketplace" className="active">
+          <nav className="menu" aria-label="Main Navigation">
+            <Link href="/">Home</Link>
+            <Link className="on" href="/marketplace">
               Marketplace
             </Link>
             <Link href="/my-products">My products</Link>
-            <Link href="#rentals">My rentals</Link>
-            <Link href="#rides">Rides</Link>
+            <a href="#rentals" onClick={(e) => { e.preventDefault(); showToast('My rentals: 0 active rentals.'); }}>
+              My rentals
+            </a>
+            <Link href="/rides">Rides</Link>
             <Link href="/wallet">Wallet</Link>
-            <Link href="#favorites">Favorites</Link>
+            <Link href="/marketplace">Favorites</Link>
           </nav>
 
           <div className="rt">
-            <button type="button" className="bell-btn" aria-label="Notifications" onClick={() => showToast('No new notifications')}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            {/* Notification Bell */}
+            <button
+              type="button"
+              className="bell-btn"
+              aria-label="Notifications"
+              onClick={() => showToast('Notifications: Student verification status is 100% active.')}
+            >
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 21h4" />
               </svg>
-              <i className="dot" />
+              <span className="dot" />
             </button>
 
-            <Link href="#sos" className="sos-btn" onClick={(e) => { e.preventDefault(); showToast('Campus SOS: Campus Security 01700-000000'); }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+            {/* SOS Safety Button */}
+            <button
+              type="button"
+              className="sos-btn"
+              onClick={() => showToast('DU Campus Safety Hotline: 01700-000000 · Proctor Office')}
+              title="DU Campus Safety Hotline"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                 <path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6l8-3z" />
+                <path d="M9 12l2 2 4-4" />
               </svg>
               <span>SOS</span>
-            </Link>
+            </button>
 
+            {/* User Profile Pill */}
             <div style={{ position: 'relative' }}>
-              <button
-                type="button"
-                className="user-chip"
+              <div
+                className="me-pill"
                 onClick={() => setShowProfileMenu(!showProfileMenu)}
+                role="button"
+                tabIndex={0}
                 aria-expanded={showProfileMenu}
                 aria-label="User profile menu"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    setShowProfileMenu(!showProfileMenu);
+                  }
+                }}
               >
-                <span className="user-avatar">{user?.initials || 'FR'}</span>
-                <div className="user-meta">
-                  <strong>{user?.name || 'Farhana Rahman'}</strong>
+                <span className="av">{user?.initials || 'FR'}</span>
+                <div>
+                  <b>{user?.name || 'Farhana Rahman'}</b>
                   <small>My profile</small>
                 </div>
-              </button>
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  style={{ color: 'var(--muted)', marginLeft: 2 }}
+                >
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </div>
 
               {showProfileMenu && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    right: 0,
-                    top: 'calc(100% + 8px)',
-                    width: 220,
-                    background: '#ffffff',
-                    border: '1.5px solid var(--line)',
-                    borderRadius: 10,
-                    boxShadow: '0 4px 16px rgba(18, 32, 31, 0.1)',
-                    zIndex: 100,
-                    padding: 8,
-                  }}
-                >
-                  <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--hair)' }}>
-                    <div style={{ fontWeight: 700, fontSize: 13.5 }}>{user?.name}</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{user?.email}</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--brand)', fontWeight: 600, marginTop: 4 }}>
-                      Balance: {user?.tokenBalance ?? 420} tokens
+                <div className="profile-popover">
+                  <div className="user-meta">
+                    <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--ink)' }}>
+                      {user?.name || 'Farhana Rahman'}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>
+                      {user?.email || 'farhana@std.du.ac.bd'}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: 'var(--brand)', fontWeight: 700, marginTop: 4 }}>
+                      Wallet: {user?.tokenBalance ?? 420} tokens
                     </div>
                   </div>
+                  <Link href="/marketplace" onClick={() => setShowProfileMenu(false)}>
+                    Browse items
+                  </Link>
                   <button
                     type="button"
                     onClick={handleLogout}
-                    style={{
-                      width: '100%',
-                      textAlign: 'left',
-                      padding: '8px 10px',
-                      background: 'none',
-                      border: 'none',
-                      fontSize: 13,
-                      color: 'var(--red, #b91c1c)',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      borderRadius: 6,
-                    }}
+                    style={{ color: 'var(--red, #b91c1c)' }}
                   >
                     Log out
                   </button>
