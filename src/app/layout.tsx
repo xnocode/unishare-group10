@@ -22,7 +22,11 @@ export const metadata: Metadata = {
     "Rent cameras, calculators, laptops and more from students of your own university. Verified with your university email, never open to outsiders.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
     <html
       lang="en"

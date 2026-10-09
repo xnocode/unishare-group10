@@ -65,6 +65,12 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
 
   // Determine the active item
   const item: MarketplaceItem = useMemo(() => {
+    let targetId = productId;
+    if (!targetId && typeof window !== 'undefined') {
+      const q = new URLSearchParams(window.location.search).get('id');
+      if (q) targetId = q;
+    }
+
     // Check custom listed items in localStorage
     if (typeof window !== 'undefined') {
       try {
@@ -72,7 +78,7 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
         if (custom) {
           const parsed = JSON.parse(custom) as MarketplaceItem[];
           const match = parsed.find(
-            (it) => it.id === productId || it.name.toLowerCase().replace(/[^a-z0-9]/g, '-').includes((productId || '').toLowerCase())
+            (it) => it.id === targetId || it.name.toLowerCase().replace(/[^a-z0-9]/g, '-').includes((targetId || '').toLowerCase())
           );
           if (match) return match;
         }
@@ -81,12 +87,12 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
       }
     }
 
-    if (productId) {
-      const direct = DEFAULT_ITEMS.find((it) => it.id === productId);
+    if (targetId) {
+      const direct = DEFAULT_ITEMS.find((it) => it.id === targetId);
       if (direct) return direct;
 
       const slugMatch = DEFAULT_ITEMS.find((it) =>
-        it.name.toLowerCase().replace(/[^a-z0-9]/g, '-').includes(productId.toLowerCase())
+        it.name.toLowerCase().replace(/[^a-z0-9]/g, '-').includes((targetId || '').toLowerCase())
       );
       if (slugMatch) return slugMatch;
     }
@@ -623,3 +629,4 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
     </div>
   );
 }
+
