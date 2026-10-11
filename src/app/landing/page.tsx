@@ -137,20 +137,24 @@ export default function LandingPage() {
             </p>
             <ul className="items rides">
               <li>
-                <img
-                  src="/images/landing/car-ride.jpeg"
-                  alt="Phone showing a Ride Share booking next to a white car on a Dhaka street"
-                  style={{ objectPosition: "0% 50%" }}
-                />
-                <span>Car ride</span>
+                <Link href="/rides" style={{ display: "contents", color: "inherit" }}>
+                  <img
+                    src="/images/landing/car-ride.jpeg"
+                    alt="Phone showing a Ride Share booking next to a white car on a Dhaka street"
+                    style={{ objectPosition: "0% 50%" }}
+                  />
+                  <span>Car ride</span>
+                </Link>
               </li>
               <li>
-                <img
-                  src="/images/landing/rickshaw.jpeg"
-                  alt="A student with a backpack talking to a rickshaw puller while a passenger steps out of a painted rickshaw"
-                  style={{ objectPosition: "28% 50%" }}
-                />
-                <span>Rickshaw</span>
+                <Link href="/rides" style={{ display: "contents", color: "inherit" }}>
+                  <img
+                    src="/images/landing/rickshaw.jpeg"
+                    alt="A student with a backpack talking to a rickshaw puller while a passenger steps out of a painted rickshaw"
+                    style={{ objectPosition: "28% 50%" }}
+                  />
+                  <span>Rickshaw</span>
+                </Link>
               </li>
             </ul>
           </div>

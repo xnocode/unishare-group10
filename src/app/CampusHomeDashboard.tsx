@@ -274,7 +274,7 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
             <Link href="/marketplace">Marketplace</Link>
             <Link href="/marketplace">My products</Link>
             <a href="#rentals">My rentals</a>
-            <a href="#rides">Rides</a>
+            <Link href="/rides">Rides</Link>
             <Link href="/wallet">Wallet</Link>
             <a
               href="#"
@@ -334,7 +334,7 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
               <SvgIcon name="plus" size={16} />
               List an item
             </Link>
-            <Link className="btn" href="#">
+            <Link className="btn" href="/rides">
               <SvgIcon name="car" size={16} />
               Offer a ride
             </Link>
@@ -677,7 +677,7 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
               Arif Hossain{" "}
               <SvgIcon name="check" size={12} style={{ color: "var(--teal)" }} />
             </span>
-            <Link className="more" href="#">
+            <Link className="more" href="/rides">
               Details <SvgIcon name="arrow" size={14} />
             </Link>
           </div>

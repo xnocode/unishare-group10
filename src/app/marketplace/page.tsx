@@ -354,9 +354,9 @@ export default function MarketplacePage() {
             <a href="#" onClick={(e) => { e.preventDefault(); showToast('My rentals: 0 active rentals.'); }}>
               My rentals
             </a>
-            <a href="#" onClick={(e) => { e.preventDefault(); showToast('Campus Rides: Opening for DU students soon.'); }}>
+            <Link href="/rides">
               Rides
-            </a>
+            </Link>
             <a href="#" onClick={(e) => { e.preventDefault(); showToast(`Token Wallet: ${user?.tokenBalance || 420} tokens available`); }}>
               Wallet
             </a>
