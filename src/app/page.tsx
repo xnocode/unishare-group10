@@ -5,9 +5,90 @@ import Link from "next/link";
 import "./landing.css";
 import CampusHomeDashboard from "./CampusHomeDashboard";
 
+const RIDE_ALERTS = [
+  {
+    badge: "Ride Share",
+    title: "Dhanmondi → Campus",
+    meta: "Leaves 8:30 AM · 1 seat left",
+  },
+  {
+    badge: "Rickshaw Share",
+    title: "Shahbagh → Campus",
+    meta: "Split fare · 25 tokens",
+  },
+  {
+    badge: "Ride Alert",
+    title: "Uttara → Campus Gate",
+    meta: "Today 8:00 AM · Verified ✓",
+  },
+];
+
+const SHELF_ALERTS = [
+  {
+    badge: "Campus Shelf",
+    title: "Scientific Calculator",
+    meta: "20 tokens/day · Library meetup",
+  },
+  {
+    badge: "Campus Shelf",
+    title: "65W Laptop Charger",
+    meta: "35 tokens/day · Academic Bldg",
+  },
+  {
+    badge: "New Request",
+    title: "Canon EOS 200D",
+    meta: "120 tokens/day · Zero cash",
+  },
+];
+
+function useCrossfadeCycle(
+  length: number,
+  intervalMs: number,
+  initialDelayMs: number,
+  paused: boolean
+) {
+  const [index, setIndex] = useState(0);
+  const [fading, setFading] = useState(false);
+
+  useEffect(() => {
+    if (paused || length <= 1) return;
+
+    let intervalTimer: ReturnType<typeof setInterval> | null = null;
+    let fadeTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const triggerAdvance = () => {
+      setFading(true);
+      fadeTimer = setTimeout(() => {
+        setIndex((prev) => (prev + 1) % length);
+        setFading(false);
+      }, 280);
+    };
+
+    const startDelay = setTimeout(() => {
+      triggerAdvance();
+      intervalTimer = setInterval(triggerAdvance, intervalMs);
+    }, initialDelayMs);
+
+    return () => {
+      clearTimeout(startDelay);
+      if (intervalTimer) clearInterval(intervalTimer);
+      if (fadeTimer) clearTimeout(fadeTimer);
+    };
+  }, [length, intervalMs, initialDelayMs, paused]);
+
+  return { index, fading };
+}
+
 export default function Home() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [hasMounted, setHasMounted] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [ridePaused, setRidePaused] = useState(false);
+  const [shelfPaused, setShelfPaused] = useState(false);
+
+  const rideCycle = useCrossfadeCycle(RIDE_ALERTS.length, 7000, 6000, ridePaused);
+  const shelfCycle = useCrossfadeCycle(SHELF_ALERTS.length, 7000, 9500, shelfPaused);
 
   useEffect(() => {
     setHasMounted(true);
@@ -18,9 +99,33 @@ export default function Home() {
         (typeof window !== "undefined" &&
           new URLSearchParams(window.location.search).get("view") === "campus");
       setIsLoggedIn(loggedIn);
+
+      const savedTheme = localStorage.getItem("unishare_theme");
+      if (savedTheme === "dark" || savedTheme === "light") {
+        setTheme(savedTheme);
+      }
     } catch (e) {
       console.error(e);
     }
+  }, []);
+
+  const toggleTheme = () => {
+    const next = theme === "light" ? "dark" : "light";
+    setTheme(next);
+    try {
+      localStorage.setItem("unishare_theme", next);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    const onScroll = () => {
+      setIsScrolled(window.scrollY > 12);
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   const handleLogout = () => {
@@ -40,10 +145,10 @@ export default function Home() {
   }
 
   return (
-    <main className="unishare-landing">
-      {/* Navigation */}
-      <nav>
-        <div className="wrap">
+    <main className={`unishare-landing ${theme === "dark" ? "dark" : ""}`}>
+      {/* Floating Sticky Pill Navigation */}
+      <div className={`nav-float ${isScrolled ? "scrolled" : ""}`}>
+        <nav className="nav-pill" aria-label="Primary navigation">
           <Link className="logo" href="/">
             <svg
               viewBox="0 0 32 32"
@@ -60,16 +165,74 @@ export default function Home() {
             </svg>
             UniShare
           </Link>
+
+          <div className="nav-mid">
+            <a className="nav-item" href="#features">
+              Features
+            </a>
+            <a className="nav-item" href="#how">
+              How it works
+            </a>
+            <Link className="nav-item" href="/marketplace">
+              Marketplace
+            </Link>
+            <Link className="nav-item" href="/rides">
+              Rides
+            </Link>
+          </div>
+
           <div className="nav-actions">
+            <button
+              type="button"
+              className="theme-toggle"
+              onClick={toggleTheme}
+              aria-label={
+                theme === "dark" ? "Switch to light mode" : "Switch to dark mode"
+              }
+              title={
+                theme === "dark" ? "Switch to light mode" : "Switch to dark mode"
+              }
+            >
+              {theme === "dark" ? (
+                <svg
+                  width="17"
+                  height="17"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.1"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="4" />
+                  <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+                </svg>
+              ) : (
+                <svg
+                  width="17"
+                  height="17"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.1"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+                </svg>
+              )}
+            </button>
             <Link className="link" href="/login">
               Log in
             </Link>
-            <Link className="btn sm" href="/register">
+            <Link className="btn sm pill-cta" href="/register">
               Create account
             </Link>
           </div>
-        </div>
-      </nav>
+        </nav>
+      </div>
 
       {/* Hero Section */}
       <header className="hero">
@@ -102,12 +265,90 @@ export default function Home() {
               src="/images/landing/hero-student.jpeg"
               alt="A smiling UniShare student in a red kameez with a white shawl, hands open in welcome, standing in a green campus garden"
             />
+
+            {/* Top-Right: Ride Notification Card */}
+            <div
+              className="hero-float-note top-right"
+              aria-label="Campus ride availability"
+              onMouseEnter={() => setRidePaused(true)}
+              onMouseLeave={() => setRidePaused(false)}
+            >
+              <div
+                className={`hero-note-inner ${
+                  rideCycle.fading ? "is-fading" : ""
+                }`}
+              >
+                <span className="hero-note-ic ride" aria-hidden="true">
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.1"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1 .4-1 1v7c0 .6.4 1 1 1h2" />
+                    <circle cx="7" cy="17" r="2" />
+                    <circle cx="17" cy="17" r="2" />
+                  </svg>
+                </span>
+                <div className="hero-note-body">
+                  <span className="hero-note-kicker">
+                    <span className="hero-note-dot" aria-hidden="true" />
+                    {RIDE_ALERTS[rideCycle.index].badge}
+                  </span>
+                  <b>{RIDE_ALERTS[rideCycle.index].title}</b>
+                  <small>{RIDE_ALERTS[rideCycle.index].meta}</small>
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom-Left: Shelf Item Notification Card */}
+            <div
+              className="hero-float-note bottom-left"
+              aria-label="Campus shelf item"
+              onMouseEnter={() => setShelfPaused(true)}
+              onMouseLeave={() => setShelfPaused(false)}
+            >
+              <div
+                className={`hero-note-inner ${
+                  shelfCycle.fading ? "is-fading" : ""
+                }`}
+              >
+                <span className="hero-note-ic shelf" aria-hidden="true">
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.1"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
+                    <path d="M3 6h18" />
+                    <path d="M16 10a4 4 0 0 1-8 0" />
+                  </svg>
+                </span>
+                <div className="hero-note-body">
+                  <span className="hero-note-kicker">
+                    <span className="hero-note-dot" aria-hidden="true" />
+                    {SHELF_ALERTS[shelfCycle.index].badge}
+                  </span>
+                  <b>{SHELF_ALERTS[shelfCycle.index].title}</b>
+                  <small>{SHELF_ALERTS[shelfCycle.index].meta}</small>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </header>
 
       {/* What You Can Share */}
-      <section className="share" aria-label="What you can share">
+      <section className="share" id="features" aria-label="What you can share">
         <div className="wrap">
           <div className="col">
             <h2>Rent what you need for a day</h2>
@@ -278,7 +519,12 @@ export default function Home() {
       {/* Final Call to Action */}
       <section className="final">
         <div className="wrap">
-          <h2>Ready to see what your campus has on the shelf?</h2>
+          <div>
+            <h2>Ready to see what your campus has on the shelf?</h2>
+            <p style={{ color: "var(--muted)", marginTop: "10px", fontSize: "16px" }}>
+              Join verified students already sharing equipment, calculators, and daily rides on campus.
+            </p>
+          </div>
           <div className="cta">
             <Link className="btn" href="/register">
               Create account
@@ -290,10 +536,80 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Footer */}
+      {/* Comprehensive Footer */}
       <footer>
         <div className="wrap">
-          UniShare. Made for university students in Bangladesh.
+          <div className="ft-main">
+            {/* Brand & Mission */}
+            <div className="ft-brand">
+              <Link className="logo" href="/">
+                <svg
+                  viewBox="0 0 32 32"
+                  fill="none"
+                  stroke="#0B5D5E"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                  style={{ width: "24px", height: "24px" }}
+                >
+                  <circle cx="11" cy="16" r="5" />
+                  <circle cx="21" cy="16" r="5" />
+                  <path d="M16 11.5v9" />
+                </svg>
+                UniShare
+              </Link>
+              <p>
+                The verified peer-to-peer sharing and campus mobility network made exclusively for university students in Bangladesh.
+              </p>
+            </div>
+
+            {/* Column 2: Platform */}
+            <div className="ft-col">
+              <h4>Platform</h4>
+              <ul>
+                <li><Link href="/marketplace">Marketplace Shelf</Link></li>
+                <li><Link href="/rides">Campus Ride Share</Link></li>
+                <li><Link href="/wallet">Token Wallet</Link></li>
+                <li><Link href="/home">Student Dashboard</Link></li>
+                <li><Link href="/register">Join UniShare</Link></li>
+              </ul>
+            </div>
+
+            {/* Column 3: Trust & Safety */}
+            <div className="ft-col">
+              <h4>Trust & Safety</h4>
+              <ul>
+                <li><Link href="/student-verification">Student Verification</Link></li>
+                <li><Link href="/confirm-email">Institutional Email Check</Link></li>
+                <li><Link href="/notifications">Activity Updates</Link></li>
+                <li><a href="#how">How Verification Works</a></li>
+                <li><span style={{ fontSize: "13px", color: "var(--muted)" }}>Safe On-Campus Meetups</span></li>
+              </ul>
+            </div>
+
+            {/* Column 4: Support & Legal */}
+            <div className="ft-col">
+              <h4>Support & Legal</h4>
+              <ul>
+                <li><Link href="/login">Student Log In</Link></li>
+                <li><Link href="/reset-password">Account Recovery</Link></li>
+                <li><a href="mailto:support@unishare.online">Campus Support</a></li>
+                <li><a href="#terms">Terms of Service</a></li>
+                <li><a href="#privacy">Privacy Policy</a></li>
+              </ul>
+            </div>
+          </div>
+
+          {/* Bottom Bar */}
+          <div className="ft-bottom">
+            <span>
+              UniShare. Made for university students in Bangladesh.
+            </span>
+            <div className="ft-bottom-links">
+              <span>Peer-to-Peer Network</span>
+            </div>
+          </div>
         </div>
       </footer>
     </main>

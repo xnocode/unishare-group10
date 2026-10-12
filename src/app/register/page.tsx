@@ -8,6 +8,7 @@ import "../auth.css";
 export default function RegisterPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [agreed, setAgreed] = useState(false);
@@ -16,6 +17,7 @@ export default function RegisterPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [emailError, setEmailError] = useState("");
+  const [phoneError, setPhoneError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [confirmPasswordError, setConfirmPasswordError] = useState("");
   const [bannerError, setBannerError] = useState("");
@@ -27,6 +29,7 @@ export default function RegisterPage() {
     setBannerError("");
 
     const trimmedEmail = email.trim();
+    const normalizedPhone = phone.trim().replace(/[\s()-]/g, "");
     let isValid = true;
 
     // Email validation
@@ -36,6 +39,17 @@ export default function RegisterPage() {
       isValid = false;
     } else {
       setEmailError("");
+    }
+
+    // Bangladesh mobile phone validation (e.g. 01712345678 or +8801712345678)
+    const phoneRegex = /^(?:\+?88)?01[3-9]\d{8}$/;
+    if (!phoneRegex.test(normalizedPhone)) {
+      setPhoneError(
+        "Enter a valid Bangladesh phone number (e.g. 01712345678)."
+      );
+      isValid = false;
+    } else {
+      setPhoneError("");
     }
 
     // Password validation: at least 8 chars, must include letter and number
@@ -71,7 +85,11 @@ export default function RegisterPage() {
     // Success response matching the sample flow and navigate to Step 2
     setSuccessMessage(`Next: we’ll send a 6-digit code to ${trimmedEmail}.`);
     setTimeout(() => {
-      router.push(`/confirm-email?email=${encodeURIComponent(trimmedEmail)}`);
+      router.push(
+        `/confirm-email?email=${encodeURIComponent(
+          trimmedEmail
+        )}&phone=${encodeURIComponent(normalizedPhone)}`
+      );
     }, 600);
   };
 
@@ -219,6 +237,43 @@ export default function RegisterPage() {
               </div>
               <p className={`hint ${emailError ? "error" : ""}`}>
                 {emailError || "Use the email address issued by your university."}
+              </p>
+
+              {/* Phone Number */}
+              <label className="l" htmlFor="phone">
+                Phone number
+              </label>
+              <div className="field">
+                <input
+                  id="phone"
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => {
+                    setPhone(e.target.value);
+                    if (phoneError) setPhoneError("");
+                  }}
+                  placeholder="01XXXXXXXXX"
+                  autoComplete="tel"
+                  required
+                />
+                <span className="ic static" aria-hidden="true">
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                  </svg>
+                </span>
+              </div>
+              <p className={`hint ${phoneError ? "error" : ""}`}>
+                {phoneError ||
+                  "Active mobile number for campus handover & ride coordination."}
               </p>
 
               {/* Password */}
