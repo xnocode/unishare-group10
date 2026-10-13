@@ -10,7 +10,6 @@ function StudentVerificationContent() {
   const router = useRouter();
 
   const emailParam = searchParams.get("email");
-  const phoneParam = searchParams.get("phone");
   const email = emailParam ? decodeURIComponent(emailParam) : "farhana@std.du.ac.bd";
 
   // Form State
@@ -74,14 +73,13 @@ function StudentVerificationContent() {
       setIsSubmitting(false);
       setSubmitMsg("Verification details submitted successfully! Moving to Review Pending...");
       setTimeout(() => {
-        const nextQuery = new URLSearchParams({
-          name: fullName,
-          email,
-          university,
-          studentId,
-        });
-        if (phoneParam) nextQuery.set("phone", phoneParam);
-        router.push(`/verification-pending?${nextQuery.toString()}`);
+        router.push(
+          `/verification-pending?name=${encodeURIComponent(
+            fullName
+          )}&email=${encodeURIComponent(email)}&university=${encodeURIComponent(
+            university
+          )}&studentId=${encodeURIComponent(studentId)}`
+        );
       }, 500);
     }, 600);
   };

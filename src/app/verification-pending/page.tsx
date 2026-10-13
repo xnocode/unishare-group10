@@ -10,7 +10,6 @@ function VerificationPendingContent() {
 
   const nameParam = searchParams.get("name") || "Farhana Rahman";
   const emailParam = searchParams.get("email") || "farhana@std.du.ac.bd";
-  const phoneParam = searchParams.get("phone") || "+880 1712-345678";
   const universityParam = searchParams.get("university") || "University of Dhaka";
   const studentIdParam = searchParams.get("studentId") || "2023-114-028";
 
@@ -187,10 +186,6 @@ function VerificationPendingContent() {
             <div className="sub-row">
               <small>University email</small>
               <b>{emailParam}</b>
-            </div>
-            <div className="sub-row">
-              <small>Phone number</small>
-              <b>{phoneParam}</b>
             </div>
             <div className="sub-row">
               <small>Student ID</small>

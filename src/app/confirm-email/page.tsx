@@ -9,9 +9,8 @@ function ConfirmEmailContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  // Get email and phone from query params or fallback to the Figma mockup email
+  // Get email from query params or fallback to the Figma mockup email
   const emailParam = searchParams.get("email");
-  const phoneParam = searchParams.get("phone");
   const email = emailParam ? decodeURIComponent(emailParam) : "farhana@std.du.ac.bd";
 
   const [digits, setDigits] = useState<string[]>(["4", "8", "2", "", "", ""]);
@@ -96,9 +95,7 @@ function ConfirmEmailContent() {
       setIsVerifying(false);
       setInfoMsg("Email confirmed successfully! Proceeding to Step 3 Student verification...");
       setTimeout(() => {
-        const nextQuery = new URLSearchParams({ email });
-        if (phoneParam) nextQuery.set("phone", phoneParam);
-        router.push(`/student-verification?${nextQuery.toString()}`);
+        router.push(`/student-verification?email=${encodeURIComponent(email)}`);
       }, 500);
     }, 600);
   };
