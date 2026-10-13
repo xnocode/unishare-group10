@@ -64,15 +64,15 @@
 }
 
 .unishare-wallet .wrap {
-  max-width: 924px;
+  max-width: 1000px;
   margin: 0 auto;
-  padding: 0 20px;
+  padding: 0 24px;
   width: 100%;
 }
 
-/* Header */
+/* Header - Unified */
 .unishare-wallet header {
-  border-bottom: 2px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
   background: #ffffff;
   position: sticky;
   top: 0;
@@ -83,33 +83,35 @@
   display: flex;
   align-items: center;
   gap: 20px;
-  max-width: 1160px;
+  max-width: 1000px;
   margin: 0 auto;
-  padding: 14px 20px;
-  flex-wrap: wrap;
+  padding: 0 24px;
+  height: 60px;
 }
 
 .unishare-wallet .brand {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 700;
   color: var(--teal-ink);
 }
 
 .unishare-wallet .brand svg {
-  font-size: 26px;
+  width: 22px;
+  height: 22px;
 }
 
 .unishare-wallet nav {
   display: flex;
-  gap: 18px;
+  gap: 13px;
   flex: 1;
-  justify-content: center;
+  justify-content: flex-start;
   overflow-x: auto;
   scrollbar-width: none;
   min-width: 0;
+  height: 100%;
 }
 
 .unishare-wallet nav::-webkit-scrollbar {
@@ -117,7 +119,11 @@
 }
 
 .unishare-wallet nav a {
-  padding: 8px 0;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 2px;
+  margin-top: 2px;
   font-size: 14px;
   white-space: nowrap;
   border-bottom: 2px solid transparent;
@@ -132,7 +138,7 @@
 
 .unishare-wallet nav a.on {
   color: var(--teal-ink);
-  font-weight: 700;
+  font-weight: 600;
   border-color: var(--teal-ink);
 }
 

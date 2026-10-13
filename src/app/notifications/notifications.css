@@ -7,7 +7,7 @@
   --muted: #4a5a56;
   --line: #d9e1df;
 
-  font-family: "Figtree", "DM Sans", system-ui, -apple-system, sans-serif;
+  font-family: "DM Sans", system-ui, -apple-system, sans-serif;
   color: var(--ink);
   background: #fff;
   min-height: 100vh;
@@ -25,48 +25,60 @@
   cursor: pointer;
 }
 
-/* Header */
+/* Header - Unified */
 .notifications-page .header-nav {
-  border-bottom: 2px solid var(--ink);
-  height: 79px;
+  border-bottom: 1px solid var(--ink);
+  height: 60px;
   background: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 20;
 }
 
 .notifications-page .header-inner {
-  max-width: 1440px;
+  max-width: 1000px;
   margin: 0 auto;
   height: 100%;
-  padding: 0 64px 0 70px;
+  padding: 0 24px;
   display: flex;
   align-items: center;
+  gap: 20px;
 }
 
 .notifications-page .logo {
   display: flex;
   align-items: center;
-  gap: 14px;
-  font-size: 26px;
+  gap: 8px;
+  font-size: 18px;
   font-weight: 700;
-  letter-spacing: -0.3px;
-  width: 296px;
+  flex-shrink: 0;
 }
 
 .notifications-page .logo svg {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
 }
 
 .notifications-page nav.main-nav {
   display: flex;
-  gap: 22px;
+  gap: 13px;
   flex: 1;
+  height: 100%;
+  align-items: center;
 }
 
 .notifications-page nav.main-nav a {
-  font-size: 15px;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 2px;
+  margin-top: 2px;
+  border-bottom: 2px solid transparent;
+  font-size: 14px;
   font-weight: 500;
-  color: var(--ink);
+  color: var(--muted);
   transition: color 0.15s;
+  white-space: nowrap;
 }
 
 .notifications-page nav.main-nav a:hover {
@@ -76,7 +88,7 @@
 .notifications-page .header-right {
   display: flex;
   align-items: center;
-  gap: 22px;
+  gap: 14px;
 }
 
 .notifications-page .bell-link {
@@ -146,9 +158,9 @@
 /* Main */
 .notifications-page main {
   width: 100%;
-  max-width: 1104px;
+  max-width: 1000px;
   margin: 0 auto;
-  padding-top: 29px;
+  padding: 24px;
   flex: 1;
 }
 

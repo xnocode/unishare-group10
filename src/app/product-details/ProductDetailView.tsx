@@ -260,32 +260,25 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
           </Link>
 
           <nav className="menu" aria-label="Main Navigation">
-            <Link href="/">Home</Link>
+            <Link href="/home">Home</Link>
             <Link className="on" href="/marketplace">
               Marketplace
             </Link>
             <Link href="/my-products">My products</Link>
-            <a href="#rentals" onClick={(e) => { e.preventDefault(); showToast('My rentals: 0 active rentals.'); }}>
-              My rentals
-            </a>
+            <Link href="/home#rentals">My rentals</Link>
             <Link href="/rides">Rides</Link>
             <Link href="/wallet">Wallet</Link>
-            <Link href="/marketplace">Favorites</Link>
+            <Link href="#">Favorites</Link>
           </nav>
 
           <div className="rt">
             {/* Notification Bell */}
-            <button
-              type="button"
-              className="bell-btn"
-              aria-label="Notifications"
-              onClick={() => showToast('Notifications: Student verification status is 100% active.')}
-            >
+            <Link href="/notifications" className="bell-btn" aria-label="Notifications">
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 21h4" />
               </svg>
               <span className="dot" />
-            </button>
+            </Link>
 
             {/* SOS Safety Button */}
             <button

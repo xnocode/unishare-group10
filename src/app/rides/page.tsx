@@ -524,7 +524,7 @@ export default function RidesPage() {
       {/* Top Header - Faithful to Reference HTML and unishare.online */}
       <header>
         <div className="wrap">
-          <Link href="/" className="logo">
+          <Link href="/home" className="logo">
             <svg viewBox="0 0 24 24">
               <circle cx="8" cy="12" r="4" />
               <circle cx="16" cy="12" r="4" />
@@ -532,33 +532,32 @@ export default function RidesPage() {
             UniShare
           </Link>
           <nav>
-            <Link href="/">Home</Link>
+            <Link href="/home">Home</Link>
             <Link href="/marketplace">Marketplace</Link>
-            <Link href="#" onClick={(e) => { e.preventDefault(); showToast("My products: 0 active listings"); }}>
-              My products
-            </Link>
-            <Link href="#" onClick={(e) => { e.preventDefault(); showToast("My rentals: 0 active rentals"); }}>
-              My rentals
-            </Link>
+            <Link href="/my-products">My products</Link>
+            <Link href="/home#rentals">My rentals</Link>
             <Link href="/rides" className="on">
               Rides
             </Link>
-            <Link href="/wallet" onClick={(e) => { e.preventDefault(); showToast(`Token wallet balance: ${currentUser.tokenBalance} tokens`); }}>
-              Wallet
-            </Link>
+            <Link href="/wallet">Wallet</Link>
             <Link href="#" onClick={(e) => { e.preventDefault(); showToast("Favorites saved"); }}>
               Favorites
             </Link>
           </nav>
           <div className="right">
-            <svg
-              className="i"
-              viewBox="0 0 24 24"
-              style={{ width: "18px", height: "18px", cursor: "pointer" }}
-              onClick={() => showToast("No new notifications")}
+            <Link
+              href="/notifications"
+              className="bell-link"
+              aria-label="Notifications"
             >
-              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 20a2 2 0 0 0 4 0" />
-            </svg>
+              <svg
+                className="i"
+                viewBox="0 0 24 24"
+                style={{ width: "20px", height: "20px", cursor: "pointer" }}
+              >
+                <path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 20a2 2 0 0 0 4 0" />
+              </svg>
+            </Link>
             <span
               className="sos"
               onClick={() => showToast("Emergency SOS: Dhaka University Proctorial Team contacted.")}

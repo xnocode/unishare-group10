@@ -369,16 +369,16 @@ export default function MarketplacePage() {
 
           <div className="rt">
             {/* Notification Bell */}
-            <button
+            <Link
+              href="/notifications"
               className="bell-btn"
               aria-label="Notifications"
-              onClick={() => showToast('Notifications: Student verification status is 100% active.')}
             >
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 21h4" />
               </svg>
               <span className="dot" />
-            </button>
+            </Link>
 
             {/* SOS Safety Button */}
             <button

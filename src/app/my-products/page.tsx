@@ -342,41 +342,32 @@ export default function MyProductsPage() {
       )}
 
       {/* Header Navigation */}
-      <header className="nav">
-        <Link className="brand" href="/home">
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.4"
-          >
-            <circle cx="7" cy="12" r="4" />
-            <circle cx="17" cy="12" r="4" />
-          </svg>
-          UniShare
-        </Link>
-        <ul>
-          <li>
+      <header className="top">
+        <div className="wrap">
+          <Link className="logo" href="/home">
+            <svg
+              width="22"
+              height="14"
+              viewBox="0 0 22 14"
+              fill="none"
+              stroke="#0d6b63"
+              strokeWidth="2"
+              aria-hidden="true"
+            >
+              <circle cx="6" cy="7" r="4.5" />
+              <circle cx="14" cy="7" r="4.5" />
+            </svg>
+            UniShare
+          </Link>
+          <nav className="menu" aria-label="Main">
             <Link href="/home">Home</Link>
-          </li>
-          <li>
             <Link href="/marketplace">Marketplace</Link>
-          </li>
-          <li>
             <Link className="on" href="/my-products">
               My products
             </Link>
-          </li>
-          <li>
             <Link href="/home#rentals">My rentals</Link>
-          </li>
-          <li>
-            <Link href="/home#rides">Rides</Link>
-          </li>
-          <li>
+            <Link href="/rides">Rides</Link>
             <Link href="/wallet">Wallet</Link>
-          </li>
-          <li>
             <a
               href="#"
               onClick={(e) => {
@@ -386,63 +377,50 @@ export default function MyProductsPage() {
             >
               Favorites
             </a>
-          </li>
-        </ul>
-        <div className="nav-r">
-          <Link
-            className="bell"
-            href="/notifications"
-            aria-label="3 notifications"
-          >
-            <svg
-              className="i"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
+          </nav>
+          <div className="rt">
+            <Link
+              className="bell"
+              aria-label="Notifications"
+              href="/notifications"
             >
-              <path d="M6 17V11a6 6 0 0 1 12 0v6l1.5 2h-15zM10 21h4" />
-            </svg>
-            <sup>3</sup>
-          </Link>
-          <a
-            className="sos"
-            href="#"
-            onClick={(e) => {
-              e.preventDefault();
-              triggerToast("Emergency Campus SOS: Campus security contacted.");
-            }}
-          >
-            <svg
-              className="i"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinejoin="round"
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M6 8a6 6 0 1112 0c0 7 3 9 3 9H3s3-2 3-9" />
+                <path d="M10.3 21a1.9 1.9 0 003.4 0" />
+              </svg>
+              <i />
+            </Link>
+            <a
+              className="sos"
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                triggerToast("Emergency Campus SOS: Campus security contacted.");
+              }}
             >
-              <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" />
-              <path d="M9 12l2 2 4-4" strokeLinecap="round" />
-            </svg>
-            SOS
-          </a>
-          <div
-            className="user"
-            onClick={() => setShowProfileModal(true)}
-            title="View student profile"
-          >
-            <span className="avatar">FR</span>
-            <div>
-              <b>Farhana Rahman</b>
-              <small>My profile</small>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                <path d="M9 12l2 2 4-4" />
+              </svg>
+              <span>SOS</span>
+            </a>
+            <div
+              className="me"
+              onClick={() => setShowProfileModal(true)}
+              title="Click to view profile & options"
+            >
+              <span className="av">FR</span>
+              <div>
+                <b>Farhana Rahman</b>
+                <small>My profile ▾</small>
+              </div>
             </div>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main>
+      <main className="wrap">
         {/* Breadcrumb */}
         <nav className="crumbs" aria-label="Breadcrumb">
           <Link href="/home">Home</Link>

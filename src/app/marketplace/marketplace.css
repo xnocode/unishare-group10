@@ -52,16 +52,16 @@
 
 .unishare-marketplace .wrap {
   width: 100%;
-  max-width: 1140px;
+  max-width: 1000px;
   margin: 0 auto;
   padding: 0 24px;
 }
 
 /* ==========================================================================
-   Top Header & Navigation Bar
+   Top Header & Navigation Bar - Unified
    ========================================================================== */
 .unishare-marketplace header.top {
-  border-bottom: 2px solid var(--line);
+  border-bottom: 1px solid var(--line);
   position: sticky;
   top: 0;
   background: #ffffff;
@@ -72,19 +72,19 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 66px;
+  height: 60px;
   gap: 20px;
 }
 
 .unishare-marketplace .logo {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-family: var(--head);
-  font-weight: 800;
-  font-size: 22px;
+  gap: 8px;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 18px;
   color: var(--ink);
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
   text-decoration: none;
   flex-shrink: 0;
 }
@@ -95,23 +95,24 @@
 
 .unishare-marketplace .menu {
   display: flex;
-  gap: 22px;
+  gap: 13px;
   height: 100%;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   flex: 1;
 }
 
 .unishare-marketplace .menu a {
   display: flex;
   align-items: center;
-  font-size: 14.5px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 500;
   color: var(--muted);
   white-space: nowrap;
-  border-bottom: 3px solid transparent;
+  border-bottom: 2px solid transparent;
   height: 100%;
   padding: 0 2px;
+  margin-top: 2px;
   transition: all 0.15s ease;
 }
 
@@ -122,7 +123,7 @@
 .unishare-marketplace .menu a.on {
   color: var(--brand);
   border-color: var(--brand);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .unishare-marketplace .rt {
