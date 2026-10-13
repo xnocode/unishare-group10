@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import "./notifications.css";
 
 interface NotificationItem {
@@ -24,7 +25,7 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     body: "Nabila Sultana wants to rent your Canon EOS 200D from 19–21 October. Review the request before confirming.",
     meta: "Rental · 10 minutes ago",
     actionText: "Review request",
-    actionHref: "#",
+    actionHref: "/my-products",
   },
   {
     id: 2,
@@ -44,7 +45,7 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     body: "Your phone charger return was confirmed. The refundable deposit is back in your available balance.",
     meta: "Wallet · 1 hour ago",
     actionText: "View transaction",
-    actionHref: "#",
+    actionHref: "/wallet",
   },
   {
     id: 4,
@@ -74,7 +75,7 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     body: "120 tokens from your camera rental have been added to your wallet. Thank you for sharing on campus.",
     meta: "Wallet · 12 October · 6:40 PM",
     actionText: "View earnings",
-    actionHref: "#",
+    actionHref: "/wallet",
   },
 ];
 
@@ -126,8 +127,25 @@ function NotificationIcon({ type }: { type: NotificationItem["icon"] }) {
 }
 
 export default function NotificationsPage() {
+  const router = useRouter();
   const [items, setItems] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
   const [activeTab, setActiveTab] = useState<"all" | "unread">("all");
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    try {
+      const loggedIn =
+        localStorage.getItem("unishare_logged_in") === "true" ||
+        document.cookie.includes("unishare_logged_in=true");
+      if (!loggedIn) {
+        router.replace("/login?redirect=/notifications");
+      } else {
+        setIsAuthenticated(true);
+      }
+    } catch {
+      setIsAuthenticated(true);
+    }
+  }, [router]);
 
   const unreadCount = items.filter((item) => item.unread).length;
 
@@ -136,6 +154,24 @@ export default function NotificationsPage() {
   };
 
   const displayedItems = activeTab === "unread" ? items.filter((item) => item.unread) : items;
+
+  if (!isAuthenticated) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          background: "#fff",
+          fontFamily: "system-ui, sans-serif",
+          color: "#0b5a52",
+          fontWeight: 600,
+        }}
+      >
+        Checking campus authorization...
+      </div>
+    );
+  }
 
   return (
     <div className="notifications-page">
@@ -152,11 +188,11 @@ export default function NotificationsPage() {
 
           <nav className="main-nav" aria-label="Main">
             <Link href="/home">Home</Link>
-            <Link href="#">Marketplace</Link>
-            <Link href="#">My products</Link>
-            <Link href="#">My rentals</Link>
-            <Link href="#">Rides</Link>
-            <Link href="#">Wallet</Link>
+            <Link href="/marketplace">Marketplace</Link>
+            <Link href="/my-products">My products</Link>
+            <Link href="/home#rentals">My rentals</Link>
+            <Link href="/home#rides">Rides</Link>
+            <Link href="/wallet">Wallet</Link>
             <Link href="#">Favorites</Link>
           </nav>
 

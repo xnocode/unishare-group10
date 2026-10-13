@@ -344,22 +344,18 @@ export default function MarketplacePage() {
           </Link>
 
           <nav className="menu" aria-label="Main Navigation">
-            <Link href="/">Home</Link>
+            <Link href="/home">Home</Link>
             <Link className="on" href="/marketplace">
               Marketplace
             </Link>
-            <a href="#" onClick={(e) => { e.preventDefault(); showToast('My products: 0 active listings.'); }}>
-              My products
-            </a>
+            <Link href="/my-products">My products</Link>
             <a href="#" onClick={(e) => { e.preventDefault(); showToast('My rentals: 0 active rentals.'); }}>
               My rentals
             </a>
             <Link href="/rides">
               Rides
             </Link>
-            <a href="#" onClick={(e) => { e.preventDefault(); showToast(`Token Wallet: ${user?.tokenBalance || 420} tokens available`); }}>
-              Wallet
-            </a>
+            <Link href="/wallet">Wallet</Link>
             <a
               href="#"
               onClick={(e) => {

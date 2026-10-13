@@ -250,14 +250,14 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
           </Link>
 
           <nav className="nav-menu" aria-label="Main navigation">
-            <Link href="/">Home</Link>
+            <Link href="/home">Home</Link>
             <Link href="/marketplace" className="active">
               Marketplace
             </Link>
-            <Link href="#products">My products</Link>
+            <Link href="/my-products">My products</Link>
             <Link href="#rentals">My rentals</Link>
             <Link href="#rides">Rides</Link>
-            <Link href="#wallet">Wallet</Link>
+            <Link href="/wallet">Wallet</Link>
             <Link href="#favorites">Favorites</Link>
           </nav>
 

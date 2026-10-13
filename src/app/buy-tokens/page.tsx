@@ -126,7 +126,7 @@ export default function BuyTokensPage() {
           <div className="links">
             <Link href="/home">Home</Link>
             <Link href="/marketplace">Marketplace</Link>
-            <Link href="/marketplace">My products</Link>
+            <Link href="/my-products">My products</Link>
             <Link href="/home#rentals">My rentals</Link>
             <Link href="/home#rides">Rides</Link>
             <Link href="/wallet" className="active">

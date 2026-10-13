@@ -272,7 +272,7 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
               Home
             </Link>
             <Link href="/marketplace">Marketplace</Link>
-            <Link href="/marketplace">My products</Link>
+            <Link href="/my-products">My products</Link>
             <a href="#rentals">My rentals</a>
             <Link href="/rides">Rides</Link>
             <Link href="/wallet">Wallet</Link>
@@ -769,7 +769,7 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
               <p>1 pending request</p>
               <p>300 tokens deposit</p>
             </div>
-            <Link className="more" href="#">
+            <Link className="more" href="/my-products">
               Manage listings <SvgIcon name="arrow" size={14} />
             </Link>
           </div>

@@ -275,7 +275,7 @@ export default function WalletPage() {
           <nav aria-label="Main">
             <Link href="/home">Home</Link>
             <Link href="/marketplace">Marketplace</Link>
-            <Link href="/marketplace">My products</Link>
+            <Link href="/my-products">My products</Link>
             <Link href="/home#rentals">My rentals</Link>
             <Link href="/home#rides">Rides</Link>
             <Link className="on" href="/wallet" aria-current="page">
