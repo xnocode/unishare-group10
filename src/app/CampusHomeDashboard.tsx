@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import "./campus-home.css";
 
@@ -192,6 +192,17 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
   const [showToast, setShowToast] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
 
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("unishare_favorites");
+      if (stored) {
+        setFavorites(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
   const pickupAreas = useMemo(() => {
     const set = new Set<string>();
     ITEMS.forEach((item) => set.add(item.a));
@@ -208,7 +219,13 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
 
   const toggleFavorite = (itemName: string) => {
     const isFav = !favorites[itemName];
-    setFavorites((prev) => ({ ...prev, [itemName]: isFav }));
+    const updated = { ...favorites, [itemName]: isFav };
+    setFavorites(updated);
+    try {
+      localStorage.setItem("unishare_favorites", JSON.stringify(updated));
+    } catch (e) {
+      console.error(e);
+    }
     triggerToast(isFav ? "Added to Favorites" : "Removed from Favorites");
   };
 
@@ -276,15 +293,7 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
             <a href="#rentals">My rentals</a>
             <Link href="/rides">Rides</Link>
             <Link href="/wallet">Wallet</Link>
-            <a
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                triggerToast("Showing saved favorite items");
-              }}
-            >
-              Favorites
-            </a>
+            <Link href="/favorites">Favorites</Link>
           </nav>
           <div className="rt">
             <Link

@@ -540,9 +540,7 @@ export default function RidesPage() {
               Rides
             </Link>
             <Link href="/wallet">Wallet</Link>
-            <Link href="#" onClick={(e) => { e.preventDefault(); showToast("Favorites saved"); }}>
-              Favorites
-            </Link>
+            <Link href="/favorites">Favorites</Link>
           </nav>
           <div className="right">
             <Link

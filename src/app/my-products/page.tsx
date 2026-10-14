@@ -368,15 +368,7 @@ export default function MyProductsPage() {
             <Link href="/home#rentals">My rentals</Link>
             <Link href="/rides">Rides</Link>
             <Link href="/wallet">Wallet</Link>
-            <a
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                triggerToast("Showing saved favorite items");
-              }}
-            >
-              Favorites
-            </a>
+            <Link href="/favorites">Favorites</Link>
           </nav>
           <div className="rt">
             <Link

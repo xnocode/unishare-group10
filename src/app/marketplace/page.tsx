@@ -356,15 +356,7 @@ export default function MarketplacePage() {
               Rides
             </Link>
             <Link href="/wallet">Wallet</Link>
-            <a
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                setSelectedTab('fav');
-              }}
-            >
-              Favorites
-            </a>
+            <Link href="/favorites">Favorites</Link>
           </nav>
 
           <div className="rt">

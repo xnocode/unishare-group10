@@ -191,9 +191,9 @@ export default function NotificationsPage() {
             <Link href="/marketplace">Marketplace</Link>
             <Link href="/my-products">My products</Link>
             <Link href="/home#rentals">My rentals</Link>
-            <Link href="/home#rides">Rides</Link>
+            <Link href="/rides">Rides</Link>
             <Link href="/wallet">Wallet</Link>
-            <Link href="#">Favorites</Link>
+            <Link href="/favorites">Favorites</Link>
           </nav>
 
           <div className="header-right">

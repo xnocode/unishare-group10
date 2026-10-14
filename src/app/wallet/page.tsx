@@ -91,6 +91,11 @@ function WalletIcon({
         <path d="M5 12l5 5 9-10" />
       </>
     ),
+    heart: (
+      <>
+        <path d="M12 20s-7-4.4-7-10a4.2 4.2 0 0 1 7-3 4.2 4.2 0 0 1 7 3c0 5.6-7 10-7 10z" />
+      </>
+    ),
   };
 
   return (
@@ -174,6 +179,20 @@ export default function WalletPage() {
   const [transferAmount, setTransferAmount] = useState("50");
 
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [favoritesCount, setFavoritesCount] = useState<number>(2);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("unishare_favorites");
+      if (stored) {
+        const parsed: Record<string, boolean> = JSON.parse(stored);
+        const count = Object.values(parsed).filter(Boolean).length;
+        setFavoritesCount(count);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
 
   useEffect(() => {
     try {
@@ -281,7 +300,7 @@ export default function WalletPage() {
             <Link className="on" href="/wallet" aria-current="page">
               Wallet
             </Link>
-            <Link href="#">Favorites</Link>
+            <Link href="/favorites">Favorites</Link>
           </nav>
           <div className="right">
             <Link
@@ -437,6 +456,28 @@ export default function WalletPage() {
 
           {/* Sidebar */}
           <aside className="side">
+            {/* Connected Favorites Card */}
+            <div className="card promo" style={{ border: "2px solid var(--teal)", background: "#fbfdfc" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ color: "#e11d48", display: "inline-flex" }}>
+                    <WalletIcon name="heart" size={20} />
+                  </span>
+                  <b style={{ fontSize: "14px", color: "var(--ink)" }}>Favorites Connection</b>
+                </div>
+                <span className="badge" style={{ background: "#ffe4e6", color: "#be123c" }}>
+                  {favoritesCount} saved {favoritesCount === 1 ? "item" : "items"}
+                </span>
+              </div>
+              <h3 style={{ marginTop: "12px", marginBottom: "8px" }}>Saved Favorites & Readiness</h3>
+              <p>
+                Keep track of campus essentials you plan to borrow. Confirm your token balance covers rental rates and security deposits before meeting the owner.
+              </p>
+              <Link className="lnk" href="/favorites" style={{ color: "var(--teal)", fontWeight: 700 }}>
+                Manage Favorites ({favoritesCount}) →
+              </Link>
+            </div>
+
             <div className="card promo">
               <WalletIcon name="hand" size={24} className="big" />
               <h3>Made for campus sharing</h3>
@@ -444,7 +485,7 @@ export default function WalletPage() {
                 Rental rates, ride fares, deposits and transfers all use tokens.
                 Keep your next campus day covered.
               </p>
-              <Link className="lnk" href="/home#marketplace">
+              <Link className="lnk" href="/marketplace">
                 Explore campus items →
               </Link>
             </div>
