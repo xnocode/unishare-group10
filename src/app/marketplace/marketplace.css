@@ -133,81 +133,95 @@
   flex-shrink: 0;
 }
 
+.unishare-marketplace .bell,
 .unishare-marketplace .bell-btn {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   background: none;
-  border: 1.5px solid var(--line);
+  border: 0;
   color: var(--ink);
-  width: 38px;
-  height: 38px;
-  border-radius: 9px;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  transition: background 0.15s;
+  text-decoration: none;
 }
 
+.unishare-marketplace .bell:hover,
 .unishare-marketplace .bell-btn:hover {
-  background: var(--tint);
-  border-color: var(--brand);
+  background: var(--field, #f3f5f5);
 }
 
+.unishare-marketplace .bell i,
+.unishare-marketplace .bell .dot,
 .unishare-marketplace .bell-btn .dot {
   position: absolute;
-  top: 7px;
-  right: 7px;
+  top: 4px;
+  right: 5px;
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--brand);
-  border: 1.5px solid #fff;
+  background: var(--teal, #0d6b63);
+  border: 0;
 }
 
+.unishare-marketplace .sos,
 .unishare-marketplace .sos-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   font-weight: 700;
   font-size: 13px;
-  color: var(--brand);
-  background: var(--tint);
-  padding: 8px 14px;
-  border-radius: 8px;
-  border: 1.5px solid var(--brand);
-  transition: all 0.15s ease;
+  color: var(--teal, #0d6b63);
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 0;
+  background: none;
+  transition: background 0.15s;
+  text-decoration: none;
+  cursor: pointer;
 }
 
+.unishare-marketplace .sos:hover,
 .unishare-marketplace .sos-btn:hover {
-  background: #d8eaec;
-  filter: brightness(0.98);
+  background: var(--mint, #e8f2f0);
 }
 
+.unishare-marketplace .me,
 .unishare-marketplace .me-pill {
   position: relative;
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 4px 12px 4px 5px;
-  border-radius: 999px;
-  background: var(--field);
-  border: 1.5px solid var(--line);
   cursor: pointer;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  transition: background 0.15s;
   user-select: none;
 }
 
+.unishare-marketplace .me:hover,
 .unishare-marketplace .me-pill:hover {
-  border-color: var(--brand);
-  box-shadow: 2px 2px 0 var(--brand);
+  background: var(--field, #f3f5f5);
+  border-color: transparent;
+  box-shadow: none;
 }
 
+.unishare-marketplace .av,
+.unishare-marketplace .me .av,
 .unishare-marketplace .me-pill .av {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
-  background: var(--brand);
-  color: #ffffff;
-  font-weight: 700;
+  border: 1.5px solid var(--teal, #0d6b63);
+  background: var(--mint, #e8f2f0);
+  color: var(--teal, #0d6b63);
+  font-weight: 600;
   font-size: 12px;
   display: flex;
   align-items: center;
@@ -215,6 +229,7 @@
   flex-shrink: 0;
 }
 
+.unishare-marketplace .me b,
 .unishare-marketplace .me-pill b {
   display: block;
   font-size: 13px;
@@ -223,6 +238,7 @@
   font-weight: 700;
 }
 
+.unishare-marketplace .me small,
 .unishare-marketplace .me-pill small {
   font-size: 11px;
   color: var(--muted);

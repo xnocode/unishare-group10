@@ -162,9 +162,15 @@
   gap: 5px;
   font-weight: 700;
   color: var(--teal);
-  padding: 4px 8px;
-  border: 1px solid var(--hair);
+  padding: 6px 10px;
   border-radius: 6px;
+  border: 0;
+  background: none;
+  transition: background 0.15s;
+}
+
+.unishare-myproducts .sos:hover {
+  background: var(--mint, #e8f2f0);
 }
 
 .unishare-myproducts .me {
@@ -172,31 +178,42 @@
   align-items: center;
   gap: 9px;
   cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 8px;
+  transition: background 0.15s;
   user-select: none;
 }
 
+.unishare-myproducts .me:hover {
+  background: var(--field, #f3f5f5);
+}
+
 .unishare-myproducts .me .av {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
-  background: var(--teal-soft);
+  background: var(--mint, #e8f2f0);
   color: var(--teal);
-  display: grid;
-  place-items: center;
-  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
   font-size: 12px;
-  border: 1px solid var(--teal);
+  border: 1.5px solid var(--teal);
+  flex-shrink: 0;
 }
 
 .unishare-myproducts .me b {
   display: block;
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 1.2;
+  font-weight: 700;
+  color: var(--ink);
 }
 
 .unishare-myproducts .me small {
   display: block;
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--muted);
 }
 

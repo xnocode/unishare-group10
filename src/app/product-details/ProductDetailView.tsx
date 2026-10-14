@@ -241,22 +241,20 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
       {/* Top Navigation */}
       <header className="top">
         <div className="wrap">
-          <Link href="/" className="logo">
+          <Link href="/home" className="logo">
             <svg
-              width="22"
+              width="20"
               height="14"
-              viewBox="0 0 22 14"
+              viewBox="0 0 20 14"
               fill="none"
-              stroke="#0B5D5E"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+              stroke="#0d6b63"
+              strokeWidth="2"
               aria-hidden="true"
             >
-              <circle cx="6.5" cy="7" r="4.5" />
-              <circle cx="15.5" cy="7" r="4.5" />
+              <circle cx="6" cy="7" r="4.5" />
+              <circle cx="14" cy="7" r="4.5" />
             </svg>
-            <span>UniShare</span>
+            UniShare
           </Link>
 
           <nav className="menu" aria-label="Main Navigation">
@@ -273,58 +271,47 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
 
           <div className="rt">
             {/* Notification Bell */}
-            <Link href="/notifications" className="bell-btn" aria-label="Notifications">
-              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 21h4" />
+            <Link
+              href="/notifications"
+              className="bell"
+              aria-label="Notifications"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 8a6 6 0 1112 0c0 7 3 9 3 9H3s3-2 3-9" />
+                <path d="M10.3 21a1.9 1.9 0 003.4 0" />
               </svg>
-              <span className="dot" />
+              <i />
             </Link>
 
             {/* SOS Safety Button */}
-            <button
-              type="button"
-              className="sos-btn"
-              onClick={() => showToast('DU Campus Safety Hotline: 01700-000000 · Proctor Office')}
+            <a
+              className="sos"
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                showToast('Emergency Campus SOS: Dhaka University Proctorial Team contacted.');
+              }}
               title="DU Campus Safety Hotline"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                <path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6l8-3z" />
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                 <path d="M9 12l2 2 4-4" />
               </svg>
               <span>SOS</span>
-            </button>
+            </a>
 
-            {/* User Profile Pill */}
+            {/* User Profile */}
             <div style={{ position: 'relative' }}>
               <div
-                className="me-pill"
+                className="me"
                 onClick={() => setShowProfileMenu(!showProfileMenu)}
-                role="button"
-                tabIndex={0}
-                aria-expanded={showProfileMenu}
-                aria-label="User profile menu"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    setShowProfileMenu(!showProfileMenu);
-                  }
-                }}
+                title="Click to view profile & options"
               >
                 <span className="av">{user?.initials || 'FR'}</span>
                 <div>
                   <b>{user?.name || 'Farhana Rahman'}</b>
-                  <small>My profile</small>
+                  <small>My profile ▾</small>
                 </div>
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  style={{ color: 'var(--muted)', marginLeft: 2 }}
-                >
-                  <path d="M6 9l6 6 6-6" />
-                </svg>
               </div>
 
               {showProfileMenu && (

@@ -27,7 +27,7 @@
 
 /* Header - Unified */
 .notifications-page .header-nav {
-  border-bottom: 1px solid var(--ink);
+  border-bottom: 1px solid var(--line, #cfe0dc);
   height: 60px;
   background: #fff;
   position: sticky;
@@ -51,12 +51,12 @@
   gap: 8px;
   font-size: 18px;
   font-weight: 700;
+  color: var(--ink);
   flex-shrink: 0;
 }
 
 .notifications-page .logo svg {
-  width: 20px;
-  height: 20px;
+  flex-shrink: 0;
 }
 
 .notifications-page nav.main-nav {
@@ -77,7 +77,7 @@
   font-size: 14px;
   font-weight: 500;
   color: var(--muted);
-  transition: color 0.15s;
+  transition: color 0.15s, border-color 0.15s;
   white-space: nowrap;
 }
 
@@ -89,58 +89,101 @@
   display: flex;
   align-items: center;
   gap: 14px;
+  font-size: 13px;
 }
 
-.notifications-page .bell-link {
-  display: flex;
-  align-items: flex-start;
-  gap: 4px;
-  color: var(--teal);
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.notifications-page .bell-link svg {
-  width: 17px;
-  height: 17px;
-}
-
-.notifications-page .sos-link {
+.notifications-page .bell {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 7px;
+  justify-content: center;
+  background: none;
+  border: 0;
+  color: var(--ink);
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  transition: background 0.15s;
+  text-decoration: none;
+}
+
+.notifications-page .bell:hover {
+  background: var(--teal-soft, #eef5f3);
+}
+
+.notifications-page .bell i {
+  position: absolute;
+  top: 4px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--teal);
+}
+
+.notifications-page .sos {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   color: var(--teal);
   font-weight: 700;
-  font-size: 15px;
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 0;
+  background: none;
+  transition: background 0.15s;
+  text-decoration: none;
+  cursor: pointer;
 }
 
-.notifications-page .sos-link svg {
-  width: 17px;
-  height: 17px;
+.notifications-page .sos:hover {
+  background: var(--teal-soft, #eef5f3);
 }
 
-.notifications-page .avatar {
-  width: 36px;
-  height: 36px;
+.notifications-page .me {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 0;
+  background: none;
+  transition: background 0.15s;
+}
+
+.notifications-page .me:hover {
+  background: var(--teal-soft, #eef5f3);
+}
+
+.notifications-page .av {
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   border: 1.5px solid var(--teal);
-  background: var(--teal-soft);
+  background: var(--teal-soft, #eef5f3);
   color: var(--teal);
   font-size: 12px;
   font-weight: 600;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
-.notifications-page .user {
-  line-height: 1.25;
-  margin-left: -8px;
+.notifications-page .me b {
+  display: block;
+  font-size: 13px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: var(--ink);
 }
 
-.notifications-page .user .name {
-  font-size: 14px;
-  font-weight: 600;
+.notifications-page .me small {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
 }
 
 .notifications-page .user .sub {
