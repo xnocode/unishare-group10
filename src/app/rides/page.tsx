@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import AppNavbar from "../components/AppNavbar";
 import "./rides.css";
 
 // -------------------------------------------------------------
@@ -521,71 +522,15 @@ export default function RidesPage() {
 
   return (
     <div className="unishare-rides-page">
-      {/* Top Header */}
-      <header>
-        <div className="wrap">
-          <Link href="/home" className="logo">
-            <svg
-              width="20"
-              height="14"
-              viewBox="0 0 20 14"
-              fill="none"
-              stroke="#0d6b63"
-              strokeWidth="2"
-              aria-hidden="true"
-            >
-              <circle cx="6" cy="7" r="4.5" />
-              <circle cx="14" cy="7" r="4.5" />
-            </svg>
-            UniShare
-          </Link>
-          <nav className="menu" aria-label="Main Navigation">
-            <Link href="/home">Home</Link>
-            <Link href="/marketplace">Marketplace</Link>
-            <Link href="/my-products">My products</Link>
-            <Link href="/home#rentals">My rentals</Link>
-            <Link href="/rides" className="on">
-              Rides
-            </Link>
-            <Link href="/wallet">Wallet</Link>
-            <Link href="/favorites">Favorites</Link>
-          </nav>
-          <div className="rt">
-            <Link
-              href="/notifications"
-              className="bell"
-              aria-label="Notifications"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6 8a6 6 0 1112 0c0 7 3 9 3 9H3s3-2 3-9" />
-                <path d="M10.3 21a1.9 1.9 0 003.4 0" />
-              </svg>
-              <i />
-            </Link>
-            <a
-              className="sos"
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                showToast("Emergency SOS: Dhaka University Proctorial Team contacted.");
-              }}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                <path d="M9 12l2 2 4-4" />
-              </svg>
-              <span>SOS</span>
-            </a>
-            <div className="me" onClick={() => showToast(`Signed in: ${currentUser.name} (${currentUser.university})`)} title="Click to view profile & options">
-              <span className="av">{currentUser.initials}</span>
-              <div>
-                <b>{currentUser.name}</b>
-                <small>My profile ▾</small>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+      <AppNavbar
+        activeNav="rides"
+        user={currentUser}
+        onSos={() =>
+          showToast(
+            "Emergency SOS: Dhaka University Proctorial Team contacted."
+          )
+        }
+      />
 
       {/* Main Container */}
       <main className="wrap">

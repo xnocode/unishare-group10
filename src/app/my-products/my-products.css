@@ -50,173 +50,6 @@
   outline-offset: 2px;
 }
 
-/* Nav Bar - Unified with Campus Home (60px, 1000px container, 14px menu) */
-.unishare-myproducts .top {
-  border-bottom: 1px solid var(--line);
-  background: #ffffff;
-  position: sticky;
-  top: 0;
-  z-index: 20;
-}
-
-.unishare-myproducts .top .wrap {
-  display: flex;
-  align-items: center;
-  height: 60px;
-  gap: 20px;
-  max-width: 1000px;
-  margin: 0 auto;
-  padding: 0 24px;
-  width: 100%;
-}
-
-.unishare-myproducts .logo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 700;
-  font-size: 18px;
-  color: var(--ink);
-  flex-shrink: 0;
-}
-
-.unishare-myproducts .logo svg {
-  flex-shrink: 0;
-}
-
-.unishare-myproducts .menu {
-  display: flex;
-  gap: 13px;
-  min-width: 0;
-  height: 100%;
-  flex: 1;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.unishare-myproducts .menu::-webkit-scrollbar {
-  display: none;
-}
-
-.unishare-myproducts .menu a {
-  display: flex;
-  align-items: center;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--muted);
-  white-space: nowrap;
-  border-bottom: 2px solid transparent;
-  margin-top: 2px;
-  transition: color 0.15s, border-color 0.15s;
-}
-
-.unishare-myproducts .menu a.on {
-  color: var(--teal);
-  border-color: var(--teal);
-  font-weight: 600;
-}
-
-.unishare-myproducts .menu a:hover {
-  color: var(--teal);
-}
-
-.unishare-myproducts .rt {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  font-size: 13px;
-  flex-shrink: 0;
-}
-
-.unishare-myproducts .bell {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: 0;
-  color: var(--ink);
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  transition: background 0.15s;
-}
-
-.unishare-myproducts .bell:hover {
-  background: var(--panel);
-}
-
-.unishare-myproducts .bell i {
-  position: absolute;
-  top: 4px;
-  right: 5px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--teal);
-}
-
-.unishare-myproducts .sos {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-weight: 700;
-  color: var(--teal);
-  padding: 6px 10px;
-  border-radius: 6px;
-  border: 0;
-  background: none;
-  transition: background 0.15s;
-}
-
-.unishare-myproducts .sos:hover {
-  background: var(--mint, #e8f2f0);
-}
-
-.unishare-myproducts .me {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 8px;
-  transition: background 0.15s;
-  user-select: none;
-}
-
-.unishare-myproducts .me:hover {
-  background: var(--field, #f3f5f5);
-}
-
-.unishare-myproducts .me .av {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: var(--mint, #e8f2f0);
-  color: var(--teal);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 12px;
-  border: 1.5px solid var(--teal);
-  flex-shrink: 0;
-}
-
-.unishare-myproducts .me b {
-  display: block;
-  font-size: 13px;
-  line-height: 1.2;
-  font-weight: 700;
-  color: var(--ink);
-}
-
-.unishare-myproducts .me small {
-  display: block;
-  font-size: 11px;
-  color: var(--muted);
-}
-
 /* Main Container - Standardized Max Width 1000px */
 .unishare-myproducts .wrap {
   max-width: 1000px;
@@ -686,9 +519,6 @@
 
 /* Responsive Media Queries */
 @media (max-width: 900px) {
-  .unishare-myproducts .menu {
-    gap: 8px;
-  }
   .unishare-myproducts .stats {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -698,7 +528,6 @@
   .unishare-myproducts main.wrap {
     padding: 16px 16px 40px;
   }
-  .unishare-myproducts .top .wrap,
   .unishare-myproducts footer {
     padding-left: 16px;
     padding-right: 16px;

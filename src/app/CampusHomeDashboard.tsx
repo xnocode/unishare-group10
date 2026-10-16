@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import Link from "next/link";
+import AppNavbar from "./components/AppNavbar";
 import "./campus-home.css";
 
 interface ProductItem {
@@ -192,17 +193,6 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
   const [showToast, setShowToast] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
 
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("unishare_favorites");
-      if (stored) {
-        setFavorites(JSON.parse(stored));
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
-
   const pickupAreas = useMemo(() => {
     const set = new Set<string>();
     ITEMS.forEach((item) => set.add(item.a));
@@ -219,13 +209,7 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
 
   const toggleFavorite = (itemName: string) => {
     const isFav = !favorites[itemName];
-    const updated = { ...favorites, [itemName]: isFav };
-    setFavorites(updated);
-    try {
-      localStorage.setItem("unishare_favorites", JSON.stringify(updated));
-    } catch (e) {
-      console.error(e);
-    }
+    setFavorites((prev) => ({ ...prev, [itemName]: isFav }));
     triggerToast(isFav ? "Added to Favorites" : "Removed from Favorites");
   };
 
@@ -266,69 +250,14 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
 
   return (
     <div className="unishare-campus-home">
-      {/* Top Navbar */}
-      <header className="top">
-        <div className="wrap">
-          <Link className="logo" href="/home">
-            <svg
-              width="20"
-              height="14"
-              viewBox="0 0 20 14"
-              fill="none"
-              stroke="#0d6b63"
-              strokeWidth="2"
-              aria-hidden="true"
-            >
-              <circle cx="6" cy="7" r="4.5" />
-              <circle cx="14" cy="7" r="4.5" />
-            </svg>
-            UniShare
-          </Link>
-          <nav className="menu" aria-label="Main">
-            <Link className="on" href="/home">
-              Home
-            </Link>
-            <Link href="/marketplace">Marketplace</Link>
-            <Link href="/my-products">My products</Link>
-            <a href="#rentals">My rentals</a>
-            <Link href="/rides">Rides</Link>
-            <Link href="/wallet">Wallet</Link>
-            <Link href="/favorites">Favorites</Link>
-          </nav>
-          <div className="rt">
-            <Link
-              className="bell"
-              aria-label="Notifications"
-              href="/notifications"
-            >
-              <SvgIcon name="bell" size={20} />
-              <i />
-            </Link>
-            <a
-              className="sos"
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                triggerToast("Emergency Campus SOS: Campus security contacted.");
-              }}
-            >
-              <SvgIcon name="shield" size={18} />
-              <span>SOS</span>
-            </a>
-            <div
-              className="me"
-              onClick={() => setShowProfileModal(true)}
-              title="Click to view profile & options"
-            >
-              <span className="av">FR</span>
-              <div>
-                <b>Farhana Rahman</b>
-                <small>My profile ▾</small>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+      <AppNavbar
+        activeNav="home"
+        onLogout={onLogout}
+        onOpenProfile={() => setShowProfileModal(true)}
+        onSos={() =>
+          triggerToast("Emergency Campus SOS: Campus security contacted.")
+        }
+      />
 
       {/* Main Content */}
       <main className="wrap">
@@ -778,7 +707,7 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
               <p>1 pending request</p>
               <p>300 tokens deposit</p>
             </div>
-            <Link className="more" href="/my-products">
+            <Link className="more" href="#">
               Manage listings <SvgIcon name="arrow" size={14} />
             </Link>
           </div>

@@ -52,7 +52,9 @@
   cursor: pointer;
 }
 
-.unishare-wallet svg {
+.unishare-wallet main svg,
+.unishare-wallet .modal svg,
+.unishare-wallet footer svg {
   width: 1em;
   height: 1em;
   fill: none;
@@ -64,180 +66,10 @@
 }
 
 .unishare-wallet .wrap {
-  max-width: 1000px;
+  max-width: 924px;
   margin: 0 auto;
-  padding: 0 24px;
+  padding: 0 20px;
   width: 100%;
-}
-
-/* Header - Unified */
-.unishare-wallet header {
-  border-bottom: 1px solid var(--line);
-  background: #ffffff;
-  position: sticky;
-  top: 0;
-  z-index: 20;
-}
-
-.unishare-wallet .hd {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  max-width: 1000px;
-  margin: 0 auto;
-  padding: 0 24px;
-  height: 60px;
-}
-
-.unishare-wallet .brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--ink);
-}
-
-.unishare-wallet .brand svg {
-  flex-shrink: 0;
-}
-
-.unishare-wallet nav {
-  display: flex;
-  gap: 13px;
-  flex: 1;
-  justify-content: flex-start;
-  overflow-x: auto;
-  scrollbar-width: none;
-  min-width: 0;
-  height: 100%;
-}
-
-.unishare-wallet nav::-webkit-scrollbar {
-  display: none;
-}
-
-.unishare-wallet nav a {
-  display: flex;
-  align-items: center;
-  height: 100%;
-  padding: 0 2px;
-  margin-top: 2px;
-  font-size: 14px;
-  white-space: nowrap;
-  border-bottom: 2px solid transparent;
-  color: var(--muted);
-  font-weight: 500;
-  transition: color 0.15s, border-color 0.15s;
-}
-
-.unishare-wallet nav a:hover {
-  color: var(--teal);
-}
-
-.unishare-wallet nav a.on {
-  color: var(--teal);
-  font-weight: 600;
-  border-color: var(--teal);
-}
-
-.unishare-wallet .right {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  font-size: 13px;
-  flex: none;
-}
-
-.unishare-wallet .sos {
-  display: flex;
-  gap: 5px;
-  align-items: center;
-  font-weight: 700;
-  color: var(--teal);
-  padding: 6px 10px;
-  border-radius: 6px;
-  border: 0;
-  background: none;
-  transition: background 0.15s;
-}
-
-.unishare-wallet .sos:hover {
-  background: var(--mint);
-}
-
-.unishare-wallet .bell {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: 0;
-  color: var(--ink);
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border-radius: 6px;
-  transition: background 0.15s;
-}
-
-.unishare-wallet .bell:hover {
-  background: var(--soft);
-}
-
-.unishare-wallet .bell i {
-  position: absolute;
-  right: 5px;
-  top: 4px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--teal);
-}
-
-.unishare-wallet .me {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 8px;
-  border: 0;
-  background: none;
-  transition: background 0.15s;
-}
-
-.unishare-wallet .me:hover {
-  background: var(--soft);
-}
-
-.unishare-wallet .av {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  border: 1.5px solid var(--teal);
-  background: var(--mint);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--teal);
-  flex-shrink: 0;
-}
-
-.unishare-wallet .me small {
-  display: block;
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.unishare-wallet .me b {
-  display: block;
-  font-size: 13px;
-  line-height: 1.2;
-  color: var(--ink);
-  font-weight: 700;
 }
 
 /* Breadcrumb */
@@ -785,23 +617,12 @@
   .unishare-wallet .low {
     grid-template-columns: 1fr;
   }
-  .unishare-wallet nav {
-    order: 3;
-    flex-basis: 100%;
-    justify-content: flex-start;
-  }
-  .unishare-wallet .hd {
-    gap: 12px;
-  }
   .unishare-wallet .banner .v {
     margin-left: 0;
   }
 }
 
 @media(max-width: 520px) {
-  .unishare-wallet .me div {
-    display: none;
-  }
   .unishare-wallet .btns .btn {
     flex: 1;
   }

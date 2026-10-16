@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { DEFAULT_ITEMS, MarketplaceItem, UserProfile } from '../marketplace/marketplace-data';
+import AppNavbar from '../components/AppNavbar';
 import '../marketplace/marketplace.css';
 import './product-details.css';
 
@@ -18,7 +19,6 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
   // Authentication State
   const [user, setUser] = useState<UserProfile | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
-  const [showProfileMenu, setShowProfileMenu] = useState(false);
 
   // Product & Interaction State
   const [rentalDays, setRentalDays] = useState(1);
@@ -167,7 +167,6 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
     document.cookie = 'unishare_logged_in=; path=/; max-age=0';
     document.cookie = 'unishare_token=; path=/; max-age=0; SameSite=Lax';
     setUser(null);
-    setShowProfileMenu(false);
     showToast('Logged out of UniShare.');
     setTimeout(() => {
       router.push('/login');
@@ -182,22 +181,7 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
   if (authChecked && !user) {
     return (
       <div className="unishare-marketplace">
-        <header className="top">
-          <div className="wrap">
-            <Link href="/" className="logo">
-              <svg width="22" height="14" viewBox="0 0 22 14" fill="none" stroke="currentColor" strokeWidth="2.4">
-                <circle cx="6.5" cy="7" r="4.5" />
-                <circle cx="15.5" cy="7" r="4.5" />
-              </svg>
-              <span>UniShare</span>
-            </Link>
-            <div className="rt">
-              <Link href="/login?redirect=/marketplace" className="btn" style={{ padding: '8px 18px', height: 40, fontSize: 14 }}>
-                Log in
-              </Link>
-            </div>
-          </div>
-        </header>
+        <AppNavbar mode="guest" redirectPath="/marketplace" />
 
         <main className="wrap" style={{ minHeight: '65vh', display: 'grid', placeItems: 'center', textAlign: 'center', padding: '60px 20px' }}>
           <div style={{ maxWidth: 460, background: '#ffffff', border: '1.5px solid var(--line)', borderRadius: 14, padding: 36, boxShadow: '0 4px 14px rgba(18, 32, 31, 0.08)' }}>
@@ -238,111 +222,12 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
 
   return (
     <div className="product-detail-page unishare-marketplace">
-      {/* Top Navigation */}
-      <header className="top">
-        <div className="wrap">
-          <Link href="/home" className="logo">
-            <svg
-              width="20"
-              height="14"
-              viewBox="0 0 20 14"
-              fill="none"
-              stroke="#0d6b63"
-              strokeWidth="2"
-              aria-hidden="true"
-            >
-              <circle cx="6" cy="7" r="4.5" />
-              <circle cx="14" cy="7" r="4.5" />
-            </svg>
-            UniShare
-          </Link>
-
-          <nav className="menu" aria-label="Main Navigation">
-            <Link href="/home">Home</Link>
-            <Link className="on" href="/marketplace">
-              Marketplace
-            </Link>
-            <Link href="/my-products">My products</Link>
-            <Link href="/home#rentals">My rentals</Link>
-            <Link href="/rides">Rides</Link>
-            <Link href="/wallet">Wallet</Link>
-            <Link href="/favorites">Favorites</Link>
-          </nav>
-
-          <div className="rt">
-            {/* Notification Bell */}
-            <Link
-              href="/notifications"
-              className="bell"
-              aria-label="Notifications"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6 8a6 6 0 1112 0c0 7 3 9 3 9H3s3-2 3-9" />
-                <path d="M10.3 21a1.9 1.9 0 003.4 0" />
-              </svg>
-              <i />
-            </Link>
-
-            {/* SOS Safety Button */}
-            <a
-              className="sos"
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                showToast('Emergency Campus SOS: Dhaka University Proctorial Team contacted.');
-              }}
-              title="DU Campus Safety Hotline"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                <path d="M9 12l2 2 4-4" />
-              </svg>
-              <span>SOS</span>
-            </a>
-
-            {/* User Profile */}
-            <div style={{ position: 'relative' }}>
-              <div
-                className="me"
-                onClick={() => setShowProfileMenu(!showProfileMenu)}
-                title="Click to view profile & options"
-              >
-                <span className="av">{user?.initials || 'FR'}</span>
-                <div>
-                  <b>{user?.name || 'Farhana Rahman'}</b>
-                  <small>My profile ▾</small>
-                </div>
-              </div>
-
-              {showProfileMenu && (
-                <div className="profile-popover">
-                  <div className="user-meta">
-                    <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--ink)' }}>
-                      {user?.name || 'Farhana Rahman'}
-                    </div>
-                    <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>
-                      {user?.email || 'farhana@std.du.ac.bd'}
-                    </div>
-                    <div style={{ fontSize: 11.5, color: 'var(--brand)', fontWeight: 700, marginTop: 4 }}>
-                      Wallet: {user?.tokenBalance ?? 420} tokens
-                    </div>
-                  </div>
-                  <Link href="/marketplace" onClick={() => setShowProfileMenu(false)}>
-                    Browse items
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={handleLogout}
-                    style={{ color: 'var(--red, #b91c1c)' }}
-                  >
-                    Log out
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
+      <AppNavbar
+        activeNav="marketplace"
+        user={user}
+        onLogout={handleLogout}
+        onSos={() => showToast('Emergency Campus SOS: Dhaka University Proctorial Team contacted.')}
+      />
 
       {/* Main Container */}
       <main className="wrap">

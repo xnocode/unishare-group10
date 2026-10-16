@@ -7,7 +7,7 @@
   --muted: #4a5a56;
   --line: #d9e1df;
 
-  font-family: "DM Sans", system-ui, -apple-system, sans-serif;
+  font-family: "Figtree", "DM Sans", system-ui, -apple-system, sans-serif;
   color: var(--ink);
   background: #fff;
   min-height: 100vh;
@@ -25,185 +25,12 @@
   cursor: pointer;
 }
 
-/* Header - Unified */
-.notifications-page .header-nav {
-  border-bottom: 1px solid var(--line, #cfe0dc);
-  height: 60px;
-  background: #fff;
-  position: sticky;
-  top: 0;
-  z-index: 20;
-}
-
-.notifications-page .header-inner {
-  max-width: 1000px;
-  margin: 0 auto;
-  height: 100%;
-  padding: 0 24px;
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.notifications-page .logo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--ink);
-  flex-shrink: 0;
-}
-
-.notifications-page .logo svg {
-  flex-shrink: 0;
-}
-
-.notifications-page nav.main-nav {
-  display: flex;
-  gap: 13px;
-  flex: 1;
-  height: 100%;
-  align-items: center;
-}
-
-.notifications-page nav.main-nav a {
-  display: flex;
-  align-items: center;
-  height: 100%;
-  padding: 0 2px;
-  margin-top: 2px;
-  border-bottom: 2px solid transparent;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--muted);
-  transition: color 0.15s, border-color 0.15s;
-  white-space: nowrap;
-}
-
-.notifications-page nav.main-nav a:hover {
-  color: var(--teal);
-}
-
-.notifications-page .header-right {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  font-size: 13px;
-}
-
-.notifications-page .bell {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: 0;
-  color: var(--ink);
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  transition: background 0.15s;
-  text-decoration: none;
-}
-
-.notifications-page .bell:hover {
-  background: var(--teal-soft, #eef5f3);
-}
-
-.notifications-page .bell i {
-  position: absolute;
-  top: 4px;
-  right: 5px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--teal);
-}
-
-.notifications-page .sos {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--teal);
-  font-weight: 700;
-  font-size: 13px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  border: 0;
-  background: none;
-  transition: background 0.15s;
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.notifications-page .sos:hover {
-  background: var(--teal-soft, #eef5f3);
-}
-
-.notifications-page .me {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 8px;
-  border: 0;
-  background: none;
-  transition: background 0.15s;
-}
-
-.notifications-page .me:hover {
-  background: var(--teal-soft, #eef5f3);
-}
-
-.notifications-page .av {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  border: 1.5px solid var(--teal);
-  background: var(--teal-soft, #eef5f3);
-  color: var(--teal);
-  font-size: 12px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.notifications-page .me b {
-  display: block;
-  font-size: 13px;
-  line-height: 1.2;
-  font-weight: 700;
-  color: var(--ink);
-}
-
-.notifications-page .me small {
-  display: block;
-  font-size: 11px;
-  color: var(--muted);
-}
-
-.notifications-page .user .sub {
-  font-size: 12.5px;
-  color: var(--teal);
-}
-
-.notifications-page .chev {
-  width: 14px;
-  height: 14px;
-  color: var(--teal);
-  margin-left: 6px;
-}
-
 /* Main */
 .notifications-page main {
   width: 100%;
-  max-width: 1000px;
+  max-width: 1104px;
   margin: 0 auto;
-  padding: 24px;
+  padding-top: 29px;
   flex: 1;
 }
 
@@ -466,15 +293,6 @@
 }
 
 @media (max-width: 1100px) {
-  .notifications-page nav.main-nav {
-    display: none;
-  }
-  .notifications-page .header-inner {
-    padding: 0 20px;
-  }
-  .notifications-page .logo {
-    flex: 1;
-  }
   .notifications-page main,
   .notifications-page .footer-inner {
     padding-left: 20px;
@@ -489,10 +307,6 @@
   }
   .notifications-page h1 {
     font-size: 32px;
-  }
-  .notifications-page .user,
-  .notifications-page .chev {
-    display: none;
   }
   .notifications-page .item {
     gap: 14px;

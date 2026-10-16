@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import AppNavbar from "../components/AppNavbar";
 import "./notifications.css";
 
 interface NotificationItem {
@@ -186,69 +187,11 @@ export default function NotificationsPage() {
 
   return (
     <div className="notifications-page">
-      {/* Header */}
-      <header className="header-nav">
-        <div className="header-inner">
-          <Link className="logo" href="/home">
-            <svg
-              width="20"
-              height="14"
-              viewBox="0 0 20 14"
-              fill="none"
-              stroke="#0d6b63"
-              strokeWidth="2"
-              aria-hidden="true"
-            >
-              <circle cx="6" cy="7" r="4.5" />
-              <circle cx="14" cy="7" r="4.5" />
-            </svg>
-            UniShare
-          </Link>
-
-          <nav className="main-nav" aria-label="Main">
-            <Link href="/home">Home</Link>
-            <Link href="/marketplace">Marketplace</Link>
-            <Link href="/my-products">My products</Link>
-            <Link href="/home#rentals">My rentals</Link>
-            <Link href="/rides">Rides</Link>
-            <Link href="/wallet">Wallet</Link>
-            <Link href="/favorites">Favorites</Link>
-          </nav>
-
-          <div className="header-right">
-            <Link className="bell" href="/notifications" id="bell" aria-label="Notifications">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6 8a6 6 0 1112 0c0 7 3 9 3 9H3s3-2 3-9" />
-                <path d="M10.3 21a1.9 1.9 0 003.4 0" />
-              </svg>
-              <i />
-            </Link>
-
-            <a
-              className="sos"
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                alert("Emergency Campus SOS: Campus security contacted.");
-              }}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                <path d="M9 12l2 2 4-4" />
-              </svg>
-              <span>SOS</span>
-            </a>
-
-            <div className="me" onClick={handleLogout} title="Click to log out">
-              <span className="av">FR</span>
-              <div>
-                <b>Farhana Rahman</b>
-                <small>My profile ▾</small>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+      <AppNavbar
+        activeNav="notifications"
+        unreadCount={unreadCount}
+        onLogout={handleLogout}
+      />
 
       {/* Main Content */}
       <main>

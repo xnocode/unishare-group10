@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import AppNavbar from "../components/AppNavbar";
 import "./buy-tokens.css";
 
 interface PackageOption {
@@ -60,8 +61,7 @@ export default function BuyTokensPage() {
     setTimeout(() => setShowToast(false), 2000);
   };
 
-  const handleLogout = (e: React.MouseEvent) => {
-    e.preventDefault();
+  const handleLogout = () => {
     try {
       localStorage.removeItem("unishare_logged_in");
       localStorage.removeItem("unishare_user");
@@ -106,71 +106,13 @@ export default function BuyTokensPage() {
 
   return (
     <div className="unishare-buy-tokens">
-      {/* Header */}
-      <header>
-        <div className="nav">
-          <Link className="brand" href="/home">
-            <svg
-              width="20"
-              height="14"
-              viewBox="0 0 20 14"
-              fill="none"
-              stroke="#0d6b63"
-              strokeWidth="2"
-              aria-hidden="true"
-            >
-              <circle cx="6" cy="7" r="4.5" />
-              <circle cx="14" cy="7" r="4.5" />
-            </svg>
-            UniShare
-          </Link>
-          <div className="links">
-            <Link href="/home">Home</Link>
-            <Link href="/marketplace">Marketplace</Link>
-            <Link href="/my-products">My products</Link>
-            <Link href="/home#rentals">My rentals</Link>
-            <Link href="/rides">Rides</Link>
-            <Link href="/wallet" className="active">
-              Wallet
-            </Link>
-            <Link href="/favorites">Favorites</Link>
-          </div>
-          <div className="right">
-            <Link
-              className="bell"
-              aria-label="Notifications"
-              href="/notifications"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6 8a6 6 0 1112 0c0 7 3 9 3 9H3s3-2 3-9" />
-                <path d="M10.3 21a1.9 1.9 0 003.4 0" />
-              </svg>
-              <span className="dot" />
-            </Link>
-            <a
-              className="sos"
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                triggerToast("Emergency Campus SOS: Campus security contacted.");
-              }}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                <path d="M9 12l2 2 4-4" />
-              </svg>
-              <span>SOS</span>
-            </a>
-            <div className="user" onClick={handleLogout} title="Click to log out">
-              <div className="avatar">FR</div>
-              <div>
-                <div className="name">Farhana Rahman</div>
-                <div className="sub">My profile ▾</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+      <AppNavbar
+        activeNav="wallet"
+        onLogout={handleLogout}
+        onSos={() =>
+          triggerToast("Emergency Campus SOS: Campus security contacted.")
+        }
+      />
 
       {/* Main Content */}
       <main>
