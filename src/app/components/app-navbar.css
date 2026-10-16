@@ -1,0 +1,549 @@
+/* ==========================================================================
+   UniShare Unified Top Navigator Styles
+   Harmonized with Landing & Auth design system:
+   2px solid #12201f rule, #0B5D5E teal, #e6f0ef mint, Bricolage Grotesque logo
+   ========================================================================== */
+
+header.unishare-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(8px);
+  border-bottom: 2px solid #12201f;
+  font-family: "DM Sans", var(--font-dm-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #12201f;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+header.unishare-topbar *,
+header.unishare-topbar *::before,
+header.unishare-topbar *::after {
+  box-sizing: border-box;
+}
+
+header.unishare-topbar .ut-inner {
+  max-width: 1160px;
+  width: 100%;
+  height: 70px;
+  margin: 0 auto;
+  padding: 0 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+/* Brand Mark & Wordmark */
+header.unishare-topbar a.ut-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 4px 0;
+  font-family: "Bricolage Grotesque", var(--font-bricolage), "DM Sans", sans-serif;
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: #12201f;
+}
+
+header.unishare-topbar a.ut-logo:hover {
+  text-decoration: none;
+  color: #12201f;
+}
+
+header.unishare-topbar a.ut-logo svg {
+  width: 26px;
+  height: 16px;
+  stroke: #0B5D5E;
+  fill: none;
+  flex-shrink: 0;
+}
+
+/* Primary Center Navigation */
+header.unishare-topbar nav.ut-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+header.unishare-topbar nav.ut-nav a.ut-nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 38px;
+  padding: 0 14px;
+  margin: 0;
+  border-radius: 10px;
+  border: 1.5px solid transparent;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: #4a5b59;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+header.unishare-topbar nav.ut-nav a.ut-nav-link svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  flex-shrink: 0;
+}
+
+header.unishare-topbar nav.ut-nav a.ut-nav-link:hover {
+  background: #f4f8f7;
+  color: #12201f;
+  text-decoration: none;
+}
+
+header.unishare-topbar nav.ut-nav a.ut-nav-link.active {
+  background: #e6f0ef;
+  color: #0B5D5E;
+  border-color: rgba(11, 93, 94, 0.28);
+  font-weight: 700;
+}
+
+/* Right Action Controls */
+header.unishare-topbar .ut-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+header.unishare-topbar .ut-guest-login {
+  font-size: 15px;
+  font-weight: 600;
+  color: #0B5D5E;
+  padding: 8px 12px;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+header.unishare-topbar .ut-guest-login:hover {
+  background: #f4f8f7;
+  color: #073c3d;
+}
+
+header.unishare-topbar .ut-guest-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 10px;
+  background: #0B5D5E;
+  color: #ffffff;
+  font-size: 14.5px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 0.15s ease;
+}
+
+header.unishare-topbar .ut-guest-cta:hover {
+  background: #073c3d;
+  color: #ffffff;
+  text-decoration: none;
+}
+
+header.unishare-topbar .ut-bell-link {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 10px;
+  border: 1.5px solid #d5e0de;
+  background: #ffffff;
+  color: #12201f;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+header.unishare-topbar .ut-bell-link svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  flex-shrink: 0;
+}
+
+header.unishare-topbar .ut-bell-link:hover,
+header.unishare-topbar .ut-bell-link.active {
+  background: #e6f0ef;
+  border-color: #0B5D5E;
+  color: #0B5D5E;
+}
+
+header.unishare-topbar .ut-bell-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #0B5D5E;
+  box-shadow: 0 0 0 2px #ffffff;
+}
+
+header.unishare-topbar .ut-anchor-wrap {
+  position: relative;
+}
+
+header.unishare-topbar .ut-sos-btn {
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1.5px solid #c5dbd8;
+  background: #eff7f6;
+  color: #0B5D5E;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+header.unishare-topbar .ut-sos-btn svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  flex-shrink: 0;
+}
+
+header.unishare-topbar .ut-sos-btn:hover,
+header.unishare-topbar .ut-sos-btn[aria-expanded="true"] {
+  background: #e2efed;
+  border-color: #0B5D5E;
+}
+
+header.unishare-topbar .ut-profile-btn {
+  height: 40px;
+  padding: 4px 11px 4px 5px;
+  border-radius: 10px;
+  border: 1.5px solid #12201f;
+  background: #ffffff;
+  color: #12201f;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+header.unishare-topbar .ut-profile-btn:hover,
+header.unishare-topbar .ut-profile-btn[aria-expanded="true"] {
+  background: #f5f8f7;
+  box-shadow: 2px 2px 0 #0B5D5E;
+}
+
+header.unishare-topbar .ut-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: #0B5D5E;
+  color: #ffffff;
+  font-size: 11.5px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+header.unishare-topbar .ut-user-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #12201f;
+  max-width: 124px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+header.unishare-topbar .ut-chev {
+  width: 14px;
+  height: 14px;
+  stroke: #4a5b59;
+  fill: none;
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+header.unishare-topbar .ut-profile-btn[aria-expanded="true"] .ut-chev {
+  transform: rotate(180deg);
+}
+
+/* Popover Card (User Menu & SOS Panel) */
+header.unishare-topbar .ut-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 256px;
+  background: #ffffff;
+  border: 1.5px solid #12201f;
+  border-radius: 14px;
+  box-shadow: 6px 6px 0 #0B5D5E;
+  padding: 8px;
+  z-index: 80;
+}
+
+header.unishare-topbar .ut-popover-head {
+  background: #f4f8f7;
+  border: 1px solid #dce6e4;
+  border-radius: 9px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+}
+
+header.unishare-topbar .ut-popover-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #12201f;
+  line-height: 1.25;
+}
+
+header.unishare-topbar .ut-popover-email {
+  font-size: 12px;
+  color: #4a5b59;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+header.unishare-topbar .ut-popover-meta {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #e6f0ef;
+  color: #0B5D5E;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+header.unishare-topbar .ut-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 0;
+  background: transparent;
+  color: #12201f;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.14s ease, color 0.14s ease;
+}
+
+header.unishare-topbar .ut-menu-item svg {
+  width: 15px;
+  height: 15px;
+  stroke: #4a5b59;
+  fill: none;
+  flex-shrink: 0;
+}
+
+header.unishare-topbar .ut-menu-item:hover {
+  background: #e6f0ef;
+  color: #0B5D5E;
+  text-decoration: none;
+}
+
+header.unishare-topbar .ut-menu-item:hover svg {
+  stroke: #0B5D5E;
+}
+
+header.unishare-topbar .ut-menu-item.danger {
+  color: #b3261e;
+  font-weight: 600;
+}
+
+header.unishare-topbar .ut-menu-item.danger svg {
+  stroke: #b3261e;
+}
+
+header.unishare-topbar .ut-menu-item.danger:hover {
+  background: #fdf2f2;
+  color: #961e17;
+}
+
+header.unishare-topbar .ut-divider {
+  height: 1px;
+  background: #e1eae8;
+  margin: 6px 4px;
+}
+
+/* SOS Popover Specifics */
+header.unishare-topbar .ut-sos-panel {
+  width: 280px;
+  padding: 14px;
+}
+
+header.unishare-topbar .ut-sos-title {
+  font-family: "Bricolage Grotesque", var(--font-bricolage), sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: #12201f;
+  margin: 0 0 4px;
+}
+
+header.unishare-topbar .ut-sos-desc {
+  font-size: 12.5px;
+  color: #4a5b59;
+  line-height: 1.45;
+  margin: 0 0 12px;
+}
+
+header.unishare-topbar .ut-sos-action {
+  width: 100%;
+  height: 38px;
+  border: 0;
+  border-radius: 9px;
+  background: #0B5D5E;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+header.unishare-topbar .ut-sos-action:hover {
+  background: #073c3d;
+}
+
+header.unishare-topbar .ut-sos-status {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #e6f0ef;
+  color: #0B5D5E;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Mobile Navigation Drawer Toggle & Panel */
+header.unishare-topbar .ut-mobile-btn {
+  display: none;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 10px;
+  border: 1.5px solid #d5e0de;
+  background: #ffffff;
+  color: #12201f;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+header.unishare-topbar .ut-mobile-btn svg {
+  width: 19px;
+  height: 19px;
+  stroke: currentColor;
+  fill: none;
+}
+
+header.unishare-topbar .ut-mobile-drawer {
+  display: none;
+  border-top: 1px solid #d5e0de;
+  background: #ffffff;
+  padding: 12px 18px 16px;
+}
+
+@media (max-width: 960px) {
+  header.unishare-topbar .ut-inner {
+    padding: 0 20px;
+    height: 66px;
+  }
+
+  header.unishare-topbar nav.ut-nav {
+    display: none;
+  }
+
+  header.unishare-topbar .ut-mobile-btn {
+    display: inline-flex;
+  }
+
+  header.unishare-topbar .ut-mobile-drawer {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  header.unishare-topbar .ut-mobile-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #4a5b59;
+    text-decoration: none;
+  }
+
+  header.unishare-topbar .ut-mobile-link svg {
+    width: 17px;
+    height: 17px;
+    stroke: currentColor;
+    fill: none;
+  }
+
+  header.unishare-topbar .ut-mobile-link.active {
+    background: #e6f0ef;
+    color: #0B5D5E;
+    font-weight: 700;
+  }
+}
+
+@media (max-width: 520px) {
+  header.unishare-topbar .ut-inner {
+    padding: 0 16px;
+    gap: 8px;
+  }
+
+  header.unishare-topbar .ut-user-name,
+  header.unishare-topbar .ut-sos-text {
+    display: none;
+  }
+
+  header.unishare-topbar .ut-profile-btn {
+    padding: 4px 6px 4px 4px;
+    gap: 4px;
+  }
+
+  header.unishare-topbar .ut-sos-btn {
+    padding: 0 10px;
+  }
+}
+
