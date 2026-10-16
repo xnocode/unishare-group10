@@ -1529,3 +1529,246 @@
 .unishare-auth .match-status.no {
   color: var(--err);
 }
+
+/* Registration University Autocomplete */
+.unishare-auth .univ-field-wrap {
+  margin-bottom: 16px;
+}
+
+.unishare-auth .univ-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.unishare-auth .univ-section-head label,
+.unishare-auth .univ-section-head .univ-field-label {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--ink);
+  margin: 0;
+}
+
+.unishare-auth .univ-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--brand);
+  background: #e6f0ef;
+  padding: 2px 9px;
+  border-radius: 999px;
+}
+
+.unishare-auth .univ-autocomplete {
+  position: relative;
+}
+
+.unishare-auth .univ-search-box {
+  position: relative;
+}
+
+.unishare-auth .univ-search-box .search-ic {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+  display: inline-flex;
+}
+
+.unishare-auth .univ-search-box input {
+  width: 100%;
+  height: 42px;
+  background: var(--field);
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  padding: 0 38px 0 40px;
+  font: 400 15px var(--body);
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.unishare-auth .univ-search-box input:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(11, 93, 94, 0.15);
+}
+
+.unishare-auth .univ-search-box.error input {
+  border-color: var(--err);
+}
+
+.unishare-auth .univ-search-box.error input:focus {
+  box-shadow: 0 0 0 3px rgba(196, 57, 45, 0.14);
+}
+
+.unishare-auth .univ-search-box input::placeholder {
+  color: var(--muted);
+  opacity: 0.75;
+}
+
+.unishare-auth .univ-clear-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.unishare-auth .univ-clear-btn:hover {
+  background: rgba(18, 32, 31, 0.08);
+  color: var(--ink);
+}
+
+.unishare-auth .univ-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  max-height: 256px;
+  overflow-y: auto;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 6px;
+  box-shadow: 0 14px 32px rgba(18, 32, 31, 0.14);
+}
+
+.unishare-auth .univ-list::-webkit-scrollbar {
+  width: 7px;
+}
+
+.unishare-auth .univ-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.unishare-auth .univ-list::-webkit-scrollbar-thumb {
+  background: #cbd6d4;
+  border-radius: 999px;
+}
+
+.unishare-auth .univ-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: 1.5px solid transparent;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.14s ease, border-color 0.14s ease;
+}
+
+.unishare-auth .univ-row + .univ-row {
+  margin-top: 2px;
+}
+
+.unishare-auth .univ-row:hover,
+.unishare-auth .univ-row.active {
+  background: #f4f8f7;
+}
+
+.unishare-auth .univ-row.selected {
+  background: #e6f0ef;
+  border-color: var(--brand);
+}
+
+.unishare-auth .univ-logo-box {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid #dce5e3;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  padding: 4px;
+  overflow: hidden;
+}
+
+.unishare-auth .univ-logo-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.unishare-auth .univ-logo-fallback {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--brand);
+  letter-spacing: -0.02em;
+}
+
+.unishare-auth .univ-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.unishare-auth .univ-name {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.3;
+}
+
+.unishare-auth .univ-sub {
+  display: block;
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+.unishare-auth .univ-empty {
+  padding: 20px 14px;
+  text-align: center;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+
+.unishare-auth .selected-uni-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1.5px solid var(--brand);
+  background: #eef6f5;
+}
+
+.unishare-auth .selected-uni-pill .univ-logo-box {
+  width: 32px;
+  height: 32px;
+}
+
+.unishare-auth .selected-uni-change {
+  margin-left: auto;
+  flex-shrink: 0;
+  background: #ffffff;
+  border: 1px solid #c5d4d2;
+  color: var(--brand);
+  border-radius: 7px;
+  padding: 5px 10px;
+  font: 600 12.5px var(--body);
+  cursor: pointer;
+  transition: background-color 0.14s ease, border-color 0.14s ease;
+}
+
+.unishare-auth .selected-uni-change:hover {
+  background: #e6f0ef;
+  border-color: var(--brand);
+}
