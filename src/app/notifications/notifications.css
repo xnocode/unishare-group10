@@ -7,7 +7,7 @@
   --muted: #4a5a56;
   --line: #d9e1df;
 
-  font-family: "Figtree", "DM Sans", system-ui, -apple-system, sans-serif;
+  font-family: "DM Sans", system-ui, -apple-system, sans-serif;
   color: var(--ink);
   background: #fff;
   min-height: 100vh;
@@ -28,9 +28,9 @@
 /* Main */
 .notifications-page main {
   width: 100%;
-  max-width: 1104px;
+  max-width: 1000px;
   margin: 0 auto;
-  padding-top: 29px;
+  padding: 24px;
   flex: 1;
 }
 
