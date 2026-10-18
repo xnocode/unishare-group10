@@ -7,14 +7,115 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Your first model: Student Account
+// Student Account
 model User {
+  id                String             @id @default(cuid())
+  email             String             @unique
+  fullName          String
+  studentId         String?
+  passwordHash      String
+  verified          Boolean            @default(false)
+  tokenBalance      Int                @default(50)
+  createdAt         DateTime           @default(now())
+  emergencyContacts EmergencyContact[]
+  emergencySessions EmergencySession[]
+}
+
+model EmergencyContact {
   id           String   @id @default(cuid())
-  email        String   @unique
-  fullName     String
-  studentId    String?
-  passwordHash String
-  verified     Boolean  @default(false)
-  tokenBalance Int      @default(50)
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  phoneNumber  String
+  relationship String
+  priority     Int      // 1 to 5
   createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  callAttempts  EmergencyCallAttempt[]
+  smsDispatches EmergencySmsDispatch[]
+
+  @@index([userId])
+}
+
+model EmergencySession {
+  id                String                 @id @default(cuid())
+  userId            String
+  user              User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status            String                 @default("ACTIVE") // ACTIVE, RESOLVED, CANCELLED
+  callingStatus     String                 @default("INITIATING") // INITIATING, ESCALATING, CONTACT_REACHED, EXHAUSTED, CANCELLED
+  triggerReason     String?                @default("SOS Emergency Triggered")
+  resolvedReason    String?
+  answeredContactId String?
+  activeCallSid     String?
+  trackingToken     String?                @unique
+  latestLatitude    Float?
+  latestLongitude   Float?
+  latestAccuracy    Float?
+  latestLocationAt  DateTime?
+  gpsStatus         String?                @default("PENDING") // PENDING, GRANTED, DENIED, UNAVAILABLE, TIMEOUT
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  resolvedAt        DateTime?
+
+  callAttempts      EmergencyCallAttempt[]
+  locationUpdates   EmergencyLocationUpdate[]
+  smsDispatches     EmergencySmsDispatch[]
+
+  @@index([userId])
+}
+
+model EmergencyCallAttempt {
+  id              String            @id @default(cuid())
+  sessionId       String
+  session         EmergencySession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  contactId       String?
+  contact         EmergencyContact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  contactName     String
+  phoneNumber     String
+  priority        Int
+  attemptNumber   Int               @default(1) // 1 or 2
+  status          String            // INITIATED, RINGING, ANSWERED, UNANSWERED, BUSY, FAILED, CANCELLED
+  provider        String            // "TWILIO" or "MOCK_SIMULATOR"
+  telephonySid    String?
+  durationSeconds Int               @default(0)
+  errorMessage    String?
+  notes           String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([sessionId])
+}
+
+model EmergencyLocationUpdate {
+  id         String           @id @default(cuid())
+  sessionId  String
+  session    EmergencySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  latitude   Float
+  longitude  Float
+  accuracy   Float?
+  heading    Float?
+  speed      Float?
+  timestamp  DateTime         @default(now())
+
+  @@index([sessionId])
+}
+
+model EmergencySmsDispatch {
+  id            String            @id @default(cuid())
+  sessionId     String
+  session       EmergencySession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  contactId     String?
+  contact       EmergencyContact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  recipientName String
+  phoneNumber   String
+  messageBody   String
+  status        String            // QUEUED, SENT, DELIVERED, FAILED, MOCK_SENT
+  provider      String            // "TWILIO" or "MOCK_SIMULATOR"
+  telephonySid  String?
+  errorMessage  String?
+  sentAt        DateTime?
+  createdAt     DateTime          @default(now())
+
+  @@index([sessionId])
 }
