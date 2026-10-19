@@ -1,0 +1,1647 @@
+/* UniShare · SOS & Emergency Assistance
+   Follows unishare.online design tokens, fonts, and layout system
+*/
+
+.unishare-sos-page {
+  --brand: #0d6b63;
+  --brand-dark: #094e48;
+  --brand-ink: #ffffff;
+  --teal: #0d6b63;
+  --teal-dark: #094e48;
+  --ink: #12201f;
+  --muted: #4a5b59;
+  --muted-light: #6c7d7b;
+  --line: #12201f;
+  --hair: #d5dcda;
+  --border-subtle: #dbe4e2;
+  --field: #f5f8f7;
+  --tint: #e6f0ef;
+  --mint: #e6f0ef;
+  --mint-border: #b8ded4;
+  --amber-bg: #fff8ee;
+  --amber-border: #fcd34d;
+  --amber-title: #9a3412;
+  --amber-text: #7c2d12;
+  --danger: #b3261e;
+  --danger-bg: #fee2e2;
+  --radius-card: 14px;
+  --radius-btn: 6px;
+
+  font-family: "DM Sans", var(--font-dm-sans), system-ui, -apple-system, sans-serif;
+  color: var(--ink);
+  background: #ffffff;
+  line-height: 1.5;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.unishare-sos-page *,
+.unishare-sos-page *::before,
+.unishare-sos-page *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.unishare-sos-page h1,
+.unishare-sos-page h2,
+.unishare-sos-page h3,
+.unishare-sos-page .font-heading {
+  font-family: "Bricolage Grotesque", var(--font-bricolage), "DM Sans", sans-serif;
+  line-height: 1.15;
+}
+
+.unishare-sos-page a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.unishare-sos-page button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.unishare-sos-page .wrap {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 24px;
+  width: 100%;
+}
+
+/* =========================================================
+   TOP NAV (Unified 60px height, 1000px max-width, unishare.online)
+   ========================================================= */
+
+.unishare-sos-page .top {
+  border-bottom: 1px solid var(--line);
+  background: #ffffff;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.unishare-sos-page .top .wrap {
+  display: flex;
+  align-items: center;
+  height: 60px;
+  gap: 20px;
+}
+
+.unishare-sos-page .logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: "Bricolage Grotesque", var(--font-bricolage), sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.unishare-sos-page .logo svg {
+  flex-shrink: 0;
+}
+
+.unishare-sos-page .menu {
+  display: flex;
+  gap: 13px;
+  min-width: 0;
+  height: 100%;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.unishare-sos-page .menu::-webkit-scrollbar {
+  display: none;
+}
+
+.unishare-sos-page .menu a {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  margin-top: 2px;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.unishare-sos-page .menu a:hover {
+  color: var(--brand);
+}
+
+.unishare-sos-page .rt {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.unishare-sos-page .bell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 0;
+  color: var(--ink);
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.unishare-sos-page .bell:hover {
+  background: var(--field);
+}
+
+.unishare-sos-page .bell i {
+  position: absolute;
+  top: 4px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--brand);
+}
+
+.unishare-sos-page .sos {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--brand);
+  background: var(--tint);
+  border: 1px solid var(--mint-border);
+  padding: 6px 12px;
+  border-radius: 6px;
+  transition: background 0.15s, filter 0.15s;
+}
+
+.unishare-sos-page .sos:hover {
+  background: #d8ece8;
+}
+
+.unishare-sos-page .me {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+
+.unishare-sos-page .me:hover {
+  background: var(--field);
+}
+
+.unishare-sos-page .av {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1.5px solid var(--brand);
+  background: var(--tint);
+  color: var(--brand);
+  font-weight: 700;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.unishare-sos-page .me b {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.unishare-sos-page .me small {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* =========================================================
+   PAGE MAIN CONTENT
+   ========================================================= */
+
+.unishare-sos-page main {
+  padding-top: 32px;
+  padding-bottom: 64px;
+  flex: 1;
+}
+
+/* Header & Eyebrow */
+.sos-eyebrow {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--brand);
+  margin-bottom: 6px;
+}
+
+.sos-title {
+  font-family: "Bricolage Grotesque", var(--font-bricolage), "DM Sans", sans-serif;
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+  margin-bottom: 6px;
+}
+
+.sos-subtitle {
+  font-size: 14.5px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+
+/* Verified Student Band (Matching unishare.online .band) */
+.sos-band {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--tint);
+  border-radius: 10px;
+  padding: 13px 18px;
+  margin-bottom: 14px;
+  color: var(--brand);
+}
+
+.sos-band-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.sos-band-left svg {
+  color: var(--brand);
+  flex-shrink: 0;
+}
+
+.sos-band-badge {
+  background: #ffffff;
+  color: var(--brand);
+  border: 1px solid var(--mint-border);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 12px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+/* Immediate Danger Alert Banner */
+.sos-alert-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--amber-bg);
+  border: 1px solid var(--amber-border);
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin-bottom: 24px;
+}
+
+.sos-alert-box svg {
+  color: #ea580c;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.sos-alert-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--amber-title);
+  margin-bottom: 2px;
+}
+
+.sos-alert-desc {
+  font-size: 13px;
+  color: var(--amber-text);
+  line-height: 1.45;
+}
+
+/* 2-Column Grid Layout */
+.sos-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+  align-items: start;
+}
+
+.sos-col {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Cards (Border: 1.5px solid var(--line) matching unishare.online) */
+.sos-card {
+  background: #ffffff;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.sos-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.sos-card-title {
+  font-family: "Bricolage Grotesque", var(--font-bricolage), sans-serif;
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.sos-card-badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--tint);
+  color: var(--brand);
+  border: 1px solid var(--mint-border);
+}
+
+.sos-card-badge.badge-amber {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fde68a;
+}
+
+.sos-card-desc {
+  font-size: 13.5px;
+  color: var(--muted);
+  line-height: 1.45;
+  margin-bottom: 18px;
+}
+
+/* Form Controls */
+.sos-form-group {
+  margin-bottom: 16px;
+}
+
+.sos-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+.sos-input,
+.sos-textarea,
+.sos-select {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--ink);
+  background: var(--field);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-btn);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+
+.sos-input:focus,
+.sos-textarea:focus,
+.sos-select:focus {
+  border-color: var(--brand);
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(11, 93, 94, 0.15);
+}
+
+.sos-textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+
+.sos-help-text {
+  font-size: 12px;
+  color: var(--muted-light);
+  margin-top: 5px;
+  line-height: 1.4;
+}
+
+/* Buttons (unishare.online .btn style) */
+.sos-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  padding: 10px 18px;
+  border-radius: var(--radius-btn);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.sos-btn-primary {
+  background: var(--brand);
+  color: var(--brand-ink);
+  border: 1.5px solid var(--brand);
+}
+
+.sos-btn-primary:hover {
+  background: var(--brand-dark);
+  border-color: var(--brand-dark);
+}
+
+.sos-btn-outline {
+  background: #ffffff;
+  color: var(--brand);
+  border: 1.5px solid var(--brand);
+}
+
+.sos-btn-outline:hover {
+  background: var(--tint);
+}
+
+.sos-btn-sm {
+  font-size: 12.5px;
+  padding: 6px 12px;
+  border-radius: 6px;
+}
+
+.sos-btn-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+
+/* Contacts List */
+.sos-contacts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.sos-contact-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.sos-contact-item:hover {
+  border-color: var(--brand);
+  background: #fafcfb;
+}
+
+.sos-contact-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sos-contact-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--tint);
+  border: 1px solid var(--mint-border);
+  color: var(--brand);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.sos-contact-info {
+  min-width: 0;
+}
+
+.sos-contact-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sos-contact-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sos-contact-priority-tag {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--brand);
+  background: var(--tint);
+  padding: 1px 7px;
+  border-radius: 4px;
+  border: 1px solid var(--mint-border);
+  white-space: nowrap;
+}
+
+.sos-contact-sub {
+  font-size: 12.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
+.sos-contact-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.sos-icon-btn {
+  background: none;
+  border: 1px solid var(--border-subtle);
+  color: var(--muted);
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.sos-icon-btn:hover {
+  background: var(--field);
+  color: var(--brand);
+  border-color: var(--brand);
+}
+
+.sos-icon-btn.btn-danger:hover {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.sos-icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  border-color: var(--border-subtle);
+  color: var(--muted);
+}
+
+/* Expanded Contact Details */
+.sos-contact-expanded {
+  margin-top: 8px;
+  padding: 12px 14px;
+  background: var(--field);
+  border-radius: 8px;
+  border: 1px dashed var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sos-contact-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+  font-size: 12.5px;
+}
+
+.sos-contact-details-grid b {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sos-contact-details-grid span {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.sos-contact-expanded-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Card Footer Link */
+.sos-card-footer-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--brand);
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.sos-card-footer-link:hover {
+  color: var(--brand-dark);
+  text-decoration: underline;
+}
+
+/* Context List */
+.sos-context-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sos-context-item {
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.sos-context-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.sos-context-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.sos-context-title {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.sos-context-desc {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.4;
+  margin-bottom: 4px;
+}
+
+.sos-context-sub {
+  font-size: 12px;
+  color: var(--muted-light);
+  line-height: 1.4;
+}
+
+/* Checkbox Row */
+.sos-checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 14px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.sos-checkbox-row input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--brand);
+  margin-top: 2px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.sos-checkbox-label {
+  font-size: 13px;
+  color: var(--ink);
+  line-height: 1.4;
+}
+
+/* Alert Notification Status Box */
+.sos-status-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--tint);
+  border: 1px solid var(--mint-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 18px 0;
+}
+
+.sos-status-box svg {
+  color: var(--brand);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.sos-status-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--brand);
+  margin-bottom: 2px;
+}
+
+.sos-status-desc {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+/* Bottom Note */
+.sos-bottom-note {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 28px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* Footer (unishare.online) */
+.sos-footer {
+  border-top: 1px solid var(--line);
+  background: #ffffff;
+  padding: 24px 0;
+  margin-top: auto;
+}
+
+.sos-footer .wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.sos-footer-links {
+  display: flex;
+  gap: 20px;
+}
+
+.sos-footer-links a:hover {
+  color: var(--brand);
+}
+
+/* Modal */
+.sos-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(18, 32, 31, 0.45);
+  backdrop-filter: blur(2px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.sos-modal {
+  background: #ffffff;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-card);
+  max-width: 500px;
+  width: 100%;
+  padding: 24px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+}
+
+.sos-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.sos-modal-title {
+  font-family: "Bricolage Grotesque", var(--font-bricolage), sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.sos-modal-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+}
+
+.sos-modal-close:hover {
+  color: var(--ink);
+}
+
+/* Toast */
+.sos-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--ink);
+  color: #ffffff;
+  padding: 12px 20px;
+  border-radius: var(--radius-btn);
+  font-size: 13.5px;
+  font-weight: 500;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: slideInUp 0.2s ease-out;
+}
+
+@keyframes slideInUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Responsive */
+@media (max-width: 860px) {
+  .sos-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .unishare-sos-page .top .wrap {
+    gap: 12px;
+  }
+
+  .sos-btn-row {
+    flex-direction: column;
+  }
+
+  .sos-btn-row .sos-btn {
+    width: 100%;
+  }
+}
+
+
+/* =========================================================
+   EMERGENCY ACTIVATION & ESCALATION CALLING SYSTEM
+   ========================================================= */
+
+.sos-escalation-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(18, 32, 31, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.sos-escalation-modal {
+  background: #ffffff;
+  border: 2px solid var(--line);
+  border-radius: 16px;
+  max-width: 580px;
+  width: 100%;
+  max-height: 92vh;
+  overflow-y: auto;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+}
+
+.sos-countdown-header {
+  background: #fff1f2;
+  border-bottom: 2px solid #fecdd3;
+  padding: 24px;
+  text-align: center;
+}
+
+.sos-countdown-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffe4e6;
+  color: #e11d48;
+  border: 1px solid #fda4af;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  border-radius: 999px;
+  margin-bottom: 12px;
+}
+
+.sos-countdown-timer-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 14px 0;
+}
+
+.sos-countdown-circle {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  border: 4px solid #e11d48;
+  background: #ffffff;
+  color: #e11d48;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Bricolage Grotesque", var(--font-bricolage), sans-serif;
+  font-size: 38px;
+  font-weight: 800;
+  box-shadow: 0 0 0 6px rgba(225, 29, 72, 0.15);
+  animation: pulseCountdown 1s infinite;
+}
+
+@keyframes pulseCountdown {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.sos-countdown-title {
+  font-family: "Bricolage Grotesque", var(--font-bricolage), sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: #881337;
+  margin-bottom: 6px;
+}
+
+.sos-countdown-desc {
+  font-size: 13.5px;
+  color: #9f1239;
+  line-height: 1.45;
+  max-width: 440px;
+  margin: 0 auto;
+}
+
+.sos-countdown-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px 24px 24px;
+}
+
+.sos-btn-cancel-large {
+  background: #ffffff;
+  color: #12201f;
+  border: 2px solid #12201f;
+  padding: 13px;
+  font-size: 15px;
+  font-weight: 700;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.15s;
+}
+
+.sos-btn-cancel-large:hover {
+  background: #f5f8f7;
+}
+
+.sos-btn-instant-confirm {
+  background: #e11d48;
+  color: #ffffff;
+  border: 2px solid #e11d48;
+  padding: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.15s;
+}
+
+.sos-btn-instant-confirm:hover {
+  background: #be123c;
+}
+
+/* Active Emergency Session Calling View */
+.sos-active-session-wrap {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.sos-active-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1.5px solid var(--border-subtle);
+  padding-bottom: 14px;
+}
+
+.sos-active-title-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sos-pulsing-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #e11d48;
+  box-shadow: 0 0 0 4px rgba(225, 29, 72, 0.25);
+  animation: pulseDot 1.2s infinite;
+}
+
+@keyframes pulseDot {
+  0% { transform: scale(0.9); opacity: 0.8; }
+  50% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(0.9); opacity: 0.8; }
+}
+
+.sos-telephony-banner {
+  background: var(--tint);
+  border: 1px solid var(--mint-border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--brand-dark);
+  line-height: 1.45;
+}
+
+.sos-telephony-banner.is-mock {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+.sos-calling-card {
+  border: 2px solid var(--brand);
+  background: #f9fbfb;
+  border-radius: 12px;
+  padding: 18px;
+}
+
+.sos-calling-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.sos-calling-name {
+  font-family: "Bricolage Grotesque", var(--font-bricolage), sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.sos-calling-priority-badge {
+  background: var(--brand);
+  color: #ffffff;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sos-calling-phone {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--brand);
+  margin-bottom: 8px;
+}
+
+.sos-calling-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #0369a1;
+  background: #e0f2fe;
+  border: 1px solid #bae6fd;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin: 12px 0;
+}
+
+.sos-manual-fallback-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  background: #ffffff;
+  color: var(--brand);
+  border: 1.5px solid var(--brand);
+  padding: 10px 14px;
+  font-size: 13.5px;
+  font-weight: 600;
+  border-radius: 6px;
+  transition: all 0.15s;
+}
+
+.sos-manual-fallback-btn:hover {
+  background: var(--tint);
+}
+
+/* Call Simulation Controls (Clearly labelled for mock mode testing) */
+.sos-simulation-controls {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: #f1f5f9;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.sos-simulation-btns {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.sos-sim-btn {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 4px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.sos-sim-btn:hover {
+  background: #e2e8f0;
+}
+
+.sos-sim-btn.sim-answer {
+  background: #dcfce7;
+  color: #15803d;
+  border-color: #bbf7d0;
+}
+
+.sos-sim-btn.sim-answer:hover {
+  background: #bbf7d0;
+}
+
+/* Call Log & Escalation Timeline */
+.sos-timeline-box {
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 14px 16px;
+  background: #ffffff;
+}
+
+.sos-timeline-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sos-timeline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.sos-timeline-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: var(--field);
+  border-radius: 6px;
+  font-size: 12.5px;
+}
+
+.sos-timeline-item-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sos-status-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.sos-status-pill.status-ANSWERED {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.sos-status-pill.status-UNANSWERED {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.sos-status-pill.status-RINGING {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.sos-status-pill.status-FAILED {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.sos-status-pill.status-CANCELLED {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
+.sos-status-pill.status-INITIATED {
+  background: #f3e8ff;
+  color: #7e22ce;
+}
+
+/* Active Calling Session Status Tags & Banners */
+.sos-session-status-tag {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sos-session-status-tag.tag-contact_reached {
+  background: #dcfce7;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.sos-session-status-tag.tag-escalating,
+.sos-session-status-tag.tag-initiating {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecdd3;
+}
+
+.sos-session-status-tag.tag-exhausted {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.sos-session-status-tag.tag-resolved {
+  background: #e2e8f0;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+.sos-pulsing-dot.reached {
+  background: #0d6b63;
+  box-shadow: 0 0 0 4px rgba(13, 107, 99, 0.25);
+}
+
+.sos-contact-reached-banner {
+  background: #f0fdf4;
+  border: 1.5px solid #86efac;
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.sos-contact-reached-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #0d6b63;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+/* Floating Active Banner on main page if emergency session is active */
+.sos-active-alert-bar {
+  background: #fff1f2;
+  border: 1.5px solid #fda4af;
+  border-radius: 10px;
+  padding: 12px 18px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.sos-active-alert-bar.contact-reached {
+  background: #f0fdf4;
+  border-color: #86efac;
+}
+
+/* =========================================================================
+   STEP 3: GPS LOCATION TRACKING & AUTOMATIC EMERGENCY SMS STYLES
+   ========================================================================= */
+
+.sos-gps-card {
+  border: 1.5px solid var(--border-subtle);
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sos-gps-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sos-gps-title {
+  font-family: "Bricolage Grotesque", var(--font-bricolage), sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sos-gps-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+.sos-gps-pill.status-connected {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.sos-gps-pill.status-pending {
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+
+.sos-gps-pill.status-denied {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fecdd3;
+}
+
+.sos-gps-pill.status-unavailable {
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.sos-tracking-url-box {
+  background: #f8fafc;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sos-tracking-url-text {
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--brand-dark);
+  word-break: break-all;
+}
+
+.sos-sms-card {
+  border: 1.5px solid var(--border-subtle);
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.sos-sms-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.sos-sms-title {
+  font-family: "Bricolage Grotesque", var(--font-bricolage), sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sos-sms-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sos-sms-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--field);
+  border-radius: 6px;
+  font-size: 12.5px;
+}
+
+.sos-status-pill.status-DELIVERED,
+.sos-status-pill.status-SENT,
+.sos-status-pill.status-MOCK_SENT {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.sos-status-pill.status-QUEUED {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+/* =========================================================
+   EMERGENCY ACTIVITY & INCIDENT HISTORY STYLES (Requirement 2)
+   ========================================================= */
+
+.sos-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.sos-history-item {
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 14px 16px;
+  background: #ffffff;
+  transition: all 0.15s ease;
+}
+
+.sos-history-item:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.sos-history-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.sos-history-details-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 12.5px;
+  color: var(--muted);
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+/* =========================================================
+   MOBILE RESPONSIVENESS (Requirement 10)
+   ========================================================= */
+
+@media (max-width: 580px) {
+  .sos-escalation-modal {
+    margin: 8px;
+    border-radius: 12px;
+    max-height: 94vh;
+  }
+
+  .sos-active-session-wrap {
+    padding: 16px;
+    gap: 14px;
+  }
+
+  .sos-active-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .sos-active-header > div:last-child {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .sos-countdown-header {
+    padding: 18px 14px;
+  }
+
+  .sos-countdown-circle {
+    width: 72px;
+    height: 72px;
+    font-size: 32px;
+  }
+
+  .sos-tracking-url-box {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .sos-tracking-url-box > div:last-child {
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .sos-history-item-top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .sos-history-details-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .sos-btn {
+    min-height: 44px;
+  }
+
+  .sos-band {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .sos-contact-item {
+    padding: 12px;
+  }
+
+  .sos-contact-actions {
+    margin-top: 8px;
+    justify-content: flex-end;
+  }
+}
+
+
+
