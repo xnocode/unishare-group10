@@ -1,24 +1,64 @@
 "use client";
 
-import { useState, useRef, Suspense } from "react";
+import { useState, useRef, useMemo, useSyncExternalStore, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import "../auth.css";
+
+const subscribeUserStorage = () => () => {};
 
 function StudentVerificationContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
   const emailParam = searchParams.get("email");
+  const universityParam = searchParams.get("university");
   const email = emailParam ? decodeURIComponent(emailParam) : "farhana@std.du.ac.bd";
+  const isDemo = email.toLowerCase() === "farhana@std.du.ac.bd";
 
-  // Form State
-  const [fullName, setFullName] = useState("Farhana Rahman");
-  const [university] = useState("University of Dhaka");
-  const [studentId, setStudentId] = useState("2023-114-028");
-  const [department, setDepartment] = useState("Computer Science & Engineering");
+  const rawStoredUser = useSyncExternalStore(
+    subscribeUserStorage,
+    () => localStorage.getItem("unishare_user") || "",
+    () => ""
+  );
+
+  const storedUser = useMemo(() => {
+    if (!rawStoredUser) return null;
+    try {
+      const u = JSON.parse(rawStoredUser) as {
+        email?: string;
+        name?: string;
+        university?: string;
+        studentId?: string;
+      };
+      if (u.email && u.email.toLowerCase() === email.toLowerCase()) {
+        return u;
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }, [rawStoredUser, email]);
+
+  // Form State (user-edited values take precedence over stored defaults cleanly)
+  const [editedFullName, setEditedFullName] = useState<string | null>(null);
+  const [editedStudentId, setEditedStudentId] = useState<string | null>(null);
+  const [department, setDepartment] = useState(
+    isDemo ? "Computer Science & Engineering" : ""
+  );
   const [programme, setProgramme] = useState("BSc (Honours)");
   const [session, setSession] = useState("2023–2024");
+
+  const fullName =
+    editedFullName ?? (storedUser?.name || (isDemo ? "Farhana Rahman" : ""));
+  const setFullName = (val: string) => setEditedFullName(val);
+  const university =
+    (universityParam ? decodeURIComponent(universityParam) : "") ||
+    storedUser?.university ||
+    (isDemo ? "University of Dhaka" : "");
+  const studentId =
+    editedStudentId ?? (storedUser?.studentId || (isDemo ? "2023-114-028" : ""));
+  const setStudentId = (val: string) => setEditedStudentId(val);
 
   // Photos State
   const [idCardFile, setIdCardFile] = useState<{ name: string; size: string }>({
@@ -33,6 +73,7 @@ function StudentVerificationContent() {
   const [agreed, setAgreed] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitMsg, setSubmitMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
 
   const idCardInputRef = useRef<HTMLInputElement | null>(null);
   const faceInputRef = useRef<HTMLInputElement | null>(null);
@@ -61,27 +102,74 @@ function StudentVerificationContent() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMsg("");
+    setSubmitMsg("");
+
+    if (!fullName.trim() || !studentId.trim() || !department.trim()) {
+      setErrorMsg("Please enter your full name, student ID, and department.");
+      return;
+    }
+
     if (!agreed) {
-      alert("Please confirm the verification agreement to continue.");
+      setErrorMsg("Please confirm the verification agreement to continue.");
       return;
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setSubmitMsg("Verification details submitted successfully! Moving to Review Pending...");
+    try {
+      const res = await fetch("/api/auth/student-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          fullName: fullName.trim(),
+          university: university.trim(),
+          studentId: studentId.trim(),
+          department: department.trim(),
+          programme,
+          academicSession: session,
+        }),
+      });
+
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        user?: Record<string, unknown>;
+      };
+
+      if (!res.ok || !data.ok) {
+        setErrorMsg(data.error || "Unable to save student verification details.");
+        return;
+      }
+
+      if (data.user) {
+        try {
+          localStorage.setItem("unishare_logged_in", "true");
+          localStorage.setItem("unishare_user", JSON.stringify(data.user));
+        } catch {
+          // ignore
+        }
+      }
+
+      setSubmitMsg(
+        "Verification details saved! Moving to Review Pending..."
+      );
       setTimeout(() => {
         router.push(
           `/verification-pending?name=${encodeURIComponent(
-            fullName
+            fullName.trim()
           )}&email=${encodeURIComponent(email)}&university=${encodeURIComponent(
-            university
-          )}&studentId=${encodeURIComponent(studentId)}`
+            university.trim() || "University of Dhaka"
+          )}&studentId=${encodeURIComponent(studentId.trim())}`
         );
-      }, 500);
-    }, 600);
+      }, 450);
+    } catch {
+      setErrorMsg("Network error while saving your student details.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -185,6 +273,7 @@ function StudentVerificationContent() {
                       id="fullName"
                       type="text"
                       value={fullName}
+                      placeholder="Your full name"
                       onChange={(e) => setFullName(e.target.value)}
                       required
                     />
@@ -196,13 +285,13 @@ function StudentVerificationContent() {
                 <div className="field-block">
                   <label htmlFor="university">University</label>
                   <div className="field-input locked">
-                    <input id="university" type="text" value={university} readOnly />
+                    <input id="university" type="text" value={university || "Selected campus"} readOnly />
                     <svg className="ic" viewBox="0 0 24 24" aria-hidden="true">
                       <rect x="5" y="11" width="14" height="10" rx="2" />
                       <path d="M8 11V8a4 4 0 0 1 8 0v3" />
                     </svg>
                   </div>
-                  <p className="hint">Matched to your university email.</p>
+                  <p className="hint">Matched to your university selection.</p>
                 </div>
 
                 {/* Student ID */}
@@ -213,6 +302,7 @@ function StudentVerificationContent() {
                       id="studentId"
                       type="text"
                       value={studentId}
+                      placeholder="e.g., 2023-114-028"
                       onChange={(e) => setStudentId(e.target.value)}
                       required
                     />
@@ -227,6 +317,7 @@ function StudentVerificationContent() {
                       id="dept"
                       type="text"
                       value={department}
+                      placeholder="e.g., Computer Science & Engineering"
                       onChange={(e) => setDepartment(e.target.value)}
                       required
                     />
@@ -394,10 +485,16 @@ function StudentVerificationContent() {
                     <path d="M5 12h14m-6-6 6 6-6 6" />
                   </svg>
                 </button>
-                <Link href="/" className="later-link">
+                <Link href="/home" className="later-link">
                   Save and finish later
                 </Link>
               </div>
+
+              {errorMsg && (
+                <div className="err-banner" role="alert" style={{ marginTop: "18px" }}>
+                  {errorMsg}
+                </div>
+              )}
 
               {submitMsg && (
                 <div className="ok" role="status" style={{ marginTop: "18px" }}>

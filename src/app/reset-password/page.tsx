@@ -1,21 +1,58 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useRef, useMemo, useSyncExternalStore, Suspense } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import "../auth.css";
+
+const subscribeResetStorage = () => () => {};
 
 function ResetPasswordContent() {
   const searchParams = useSearchParams();
-  const emailParam = searchParams.get("email") || "farhana@std.du.ac.bd";
+  const router = useRouter();
+  const emailParam = (searchParams.get("email") || "").trim();
 
+  const rawResetMeta = useSyncExternalStore(
+    subscribeResetStorage,
+    () => sessionStorage.getItem("unishare_pending_reset_meta") || "",
+    () => ""
+  );
+
+  const matchingMeta = useMemo(() => {
+    if (!rawResetMeta) return null;
+    try {
+      const parsed = JSON.parse(rawResetMeta) as {
+        email?: string;
+        isLiveEmail?: boolean;
+        previewUrl?: string;
+      };
+      if (
+        parsed.email &&
+        (!emailParam || parsed.email.toLowerCase() === emailParam.toLowerCase())
+      ) {
+        return parsed;
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }, [rawResetMeta, emailParam]);
+
+  const [digits, setDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+  const [overridePreviewUrl, setOverridePreviewUrl] = useState<string | null>(null);
+  const [overrideIsLive, setOverrideIsLive] = useState<boolean | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+  const inputsRef = useRef<(HTMLInputElement | null)[]>([]);
+
+  const previewUrl = overridePreviewUrl ?? matchingMeta?.previewUrl ?? "";
+  const isLiveEmail = overrideIsLive ?? (matchingMeta ? Boolean(matchingMeta.isLiveEmail) : true);
 
   // Validation criteria
   const hasMinLength = password.length >= 8;
@@ -34,10 +71,87 @@ function ResetPasswordContent() {
     }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleDigitChange = (index: number, value: string) => {
+    setErrorMsg("");
+    const cleaned = value.replace(/\D/g, "");
+    if (!cleaned) {
+      const next = [...digits];
+      next[index] = "";
+      setDigits(next);
+      return;
+    }
+    const next = [...digits];
+    next[index] = cleaned.slice(-1);
+    setDigits(next);
+    if (index < 5) inputsRef.current[index + 1]?.focus();
+  };
+
+  const handleDigitKeyDown = (
+    index: number,
+    e: React.KeyboardEvent<HTMLInputElement>
+  ) => {
+    if (e.key === "Backspace" && !digits[index] && index > 0) {
+      inputsRef.current[index - 1]?.focus();
+    }
+  };
+
+  const handleDigitPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "");
+    if (!pasted) return;
+    const next = [...digits];
+    for (let i = 0; i < 6; i++) {
+      if (pasted[i]) next[i] = pasted[i];
+    }
+    setDigits(next);
+    inputsRef.current[Math.min(pasted.length, 5)]?.focus();
+  };
+
+  const handleResendResetCode = async () => {
+    if (!emailParam || isResending) return;
+    setErrorMsg("");
+    setIsResending(true);
+    try {
+      const res = await fetch("/api/auth/resend-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailParam, purpose: "PASSWORD_RESET" }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        isLiveEmail?: boolean;
+        previewUrl?: string;
+      };
+      if (!res.ok || !data.ok) {
+        setErrorMsg(data.error || "Unable to resend reset code.");
+        return;
+      }
+      setOverrideIsLive(Boolean(data.isLiveEmail));
+      if (data.previewUrl) setOverridePreviewUrl(data.previewUrl);
+      setSuccessMsg(`A fresh 6-digit reset code was sent to ${emailParam}.`);
+    } catch {
+      setErrorMsg("Network error while resending reset code.");
+    } finally {
+      setIsResending(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
     setSuccessMsg("");
+
+    if (!emailParam) {
+      setErrorMsg("Missing account email. Start from Forgot password first.");
+      return;
+    }
+
+    const code = digits.join("");
+    if (code.length < 6) {
+      setErrorMsg("Enter the 6-digit reset code sent to your email.");
+      return;
+    }
 
     if (!hasMinLength || !hasLetterAndNumber) {
       setErrorMsg("Password needs 8+ characters, a letter and a number.");
@@ -50,12 +164,42 @@ function ResetPasswordContent() {
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      const res = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: emailParam,
+          code,
+          password,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+      if (!res.ok || !data.ok) {
+        setErrorMsg(data.error || "Unable to reset password.");
+        return;
+      }
+
+      try {
+        sessionStorage.removeItem("unishare_pending_reset_meta");
+      } catch {
+        // ignore
+      }
+
       setSuccessMsg(
-        "Password updated successfully! You can now log in with your new password."
+        "Password updated successfully! Redirecting you to Log in..."
       );
-    }, 600);
+      setTimeout(() => {
+        router.push(`/login?email=${encodeURIComponent(emailParam)}`);
+      }, 850);
+    } catch {
+      setErrorMsg("Network error while resetting password. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -142,12 +286,60 @@ function ResetPasswordContent() {
                 color: "var(--ink)",
               }}
             >
-              {emailParam}
+              {emailParam || "No email provided"}
             </div>
 
+            {previewUrl && !isLiveEmail && (
+              <div className="mail-preview-note">
+                Test web-inbox mode active:
+                <br />
+                <a href={previewUrl} target="_blank" rel="noopener noreferrer">
+                  Open reset code email on Ethereal ↗
+                </a>
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} noValidate>
+              {/* 6-digit Reset Code */}
+              <div style={{ marginTop: "20px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+                  <label className="l" htmlFor="rc-0" style={{ margin: 0 }}>
+                    6-digit reset code
+                  </label>
+                  {emailParam && (
+                    <button
+                      type="button"
+                      className="univ-manual-toggle"
+                      onClick={handleResendResetCode}
+                      disabled={isResending}
+                    >
+                      {isResending ? "Sending..." : "Resend code"}
+                    </button>
+                  )}
+                </div>
+                <div className="codes" onPaste={handleDigitPaste}>
+                  {digits.map((digit, idx) => (
+                    <input
+                      key={idx}
+                      id={`rc-${idx}`}
+                      ref={(el) => {
+                        inputsRef.current[idx] = el;
+                      }}
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={1}
+                      value={digit}
+                      placeholder="—"
+                      onChange={(e) => handleDigitChange(idx, e.target.value)}
+                      onKeyDown={(e) => handleDigitKeyDown(idx, e)}
+                      aria-label={`Reset code digit ${idx + 1}`}
+                    />
+                  ))}
+                </div>
+              </div>
+
               {/* New Password */}
-              <div style={{ marginTop: "24px" }}>
+              <div style={{ marginTop: "20px" }}>
                 <label className="l" htmlFor="npw">
                   New password
                 </label>

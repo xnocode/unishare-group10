@@ -1763,10 +1763,79 @@
 }
 
 .unishare-auth .univ-empty {
-  padding: 20px 14px;
+  padding: 12px 14px;
   text-align: center;
-  font-size: 13.5px;
+  font-size: 13px;
   color: var(--muted);
+}
+
+.unishare-auth .univ-custom-divider {
+  border-top: 1px solid #e3ecea;
+  margin: 6px 4px 4px;
+  padding-top: 6px;
+}
+
+.unishare-auth .univ-custom-row {
+  background: #f5faf9;
+  border-color: #cde0dd;
+}
+
+.unishare-auth .univ-custom-row:hover {
+  background: #e6f2f0;
+  border-color: var(--brand);
+}
+
+.unishare-auth .univ-logo-custom {
+  background: #e6f2f0;
+  border-color: #b7d4d0;
+}
+
+.unishare-auth .univ-logo-custom .univ-logo-fallback {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--brand);
+}
+
+.unishare-auth .univ-manual-toggle {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: 600 12.5px var(--body);
+  color: var(--brand);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.unishare-auth .univ-manual-toggle:hover {
+  text-decoration: underline;
+}
+
+.unishare-auth .univ-hint-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.unishare-auth .mail-preview-note {
+  margin-top: 14px;
+  padding: 10px 13px;
+  border-radius: 9px;
+  border: 1.5px solid #b8d8d5;
+  background: #eef6f5;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.unishare-auth .mail-preview-note a {
+  display: inline-block;
+  margin-top: 4px;
+  color: var(--brand);
+  font-weight: 700;
+  text-decoration: underline;
 }
 
 .unishare-auth .selected-uni-pill {

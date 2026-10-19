@@ -1,32 +1,82 @@
 "use client";
 
-import { useState, useRef, useEffect, Suspense } from "react";
+import { useState, useRef, useEffect, useMemo, useSyncExternalStore, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import "../auth.css";
+
+const subscribeStorage = () => () => {};
 
 function ConfirmEmailContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  // Get email from query params or fallback to the Figma mockup email
   const emailParam = searchParams.get("email");
-  const email = emailParam ? decodeURIComponent(emailParam) : "farhana@std.du.ac.bd";
+  const universityParam = searchParams.get("university");
 
-  const [digits, setDigits] = useState<string[]>(["4", "8", "2", "", "", ""]);
+  const rawPendingMeta = useSyncExternalStore(
+    subscribeStorage,
+    () => sessionStorage.getItem("unishare_pending_mail_meta") || "",
+    () => ""
+  );
+
+  const pendingMeta = useMemo(() => {
+    if (!rawPendingMeta) return null;
+    try {
+      return JSON.parse(rawPendingMeta) as {
+        email?: string;
+        university?: string;
+        isLiveEmail?: boolean;
+        previewUrl?: string;
+      };
+    } catch {
+      return null;
+    }
+  }, [rawPendingMeta]);
+
+  const matchingMeta = useMemo(() => {
+    if (!pendingMeta?.email) return null;
+    if (
+      emailParam &&
+      pendingMeta.email.toLowerCase() !== decodeURIComponent(emailParam).toLowerCase()
+    ) {
+      return null;
+    }
+    return pendingMeta;
+  }, [pendingMeta, emailParam]);
+
+  const [overridePreviewUrl, setOverridePreviewUrl] = useState<string | null>(null);
+  const [overrideIsLive, setOverrideIsLive] = useState<boolean | null>(null);
+
+  const email = (
+    emailParam ? decodeURIComponent(emailParam) : matchingMeta?.email || ""
+  ).trim();
+  const university = (
+    universityParam
+      ? decodeURIComponent(universityParam)
+      : matchingMeta?.university || ""
+  ).trim();
+  const previewUrl = overridePreviewUrl ?? matchingMeta?.previewUrl ?? "";
+  const isLiveEmail = overrideIsLive ?? (matchingMeta ? Boolean(matchingMeta.isLiveEmail) : true);
+
+  const [digits, setDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [errorMsg, setErrorMsg] = useState("");
   const [infoMsg, setInfoMsg] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   const inputsRef = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
-    // Focus the first empty digit box on load
-    const firstEmptyIndex = digits.findIndex((d) => d === "");
-    if (firstEmptyIndex !== -1 && inputsRef.current[firstEmptyIndex]) {
-      inputsRef.current[firstEmptyIndex]?.focus();
-    }
+    inputsRef.current[0]?.focus();
   }, []);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setTimeout(() => setResendCooldown((prev) => Math.max(0, prev - 1)), 1000);
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
 
   const handleDigitChange = (index: number, value: string) => {
     setErrorMsg("");
@@ -79,10 +129,15 @@ function ConfirmEmailContent() {
     inputsRef.current[nextFocusIndex]?.focus();
   };
 
-  const handleConfirm = (e: React.FormEvent) => {
+  const handleConfirm = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
     setInfoMsg("");
+
+    if (!email) {
+      setErrorMsg("No email address to verify. Please start from Create account.");
+      return;
+    }
 
     const fullCode = digits.join("");
     if (fullCode.length < 6) {
@@ -91,18 +146,102 @@ function ConfirmEmailContent() {
     }
 
     setIsVerifying(true);
-    setTimeout(() => {
-      setIsVerifying(false);
-      setInfoMsg("Email confirmed successfully! Proceeding to Step 3 Student verification...");
+    try {
+      const res = await fetch("/api/auth/verify-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code: fullCode }),
+      });
+
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        user?: {
+          email: string;
+          name: string;
+          initials: string;
+          university: string;
+          tokenBalance: number;
+          verified: boolean;
+        };
+      };
+
+      if (!res.ok || !data.ok || !data.user) {
+        setErrorMsg(data.error || "Invalid or expired confirmation code.");
+        return;
+      }
+
+      try {
+        localStorage.setItem("unishare_logged_in", "true");
+        localStorage.setItem("unishare_user", JSON.stringify(data.user));
+        sessionStorage.removeItem("unishare_pending_mail_meta");
+      } catch {
+        // ignore storage errors
+      }
+
+      setInfoMsg(
+        "Email confirmed! Proceeding to Step 3 Student verification..."
+      );
+
+      const nextParams = new URLSearchParams({
+        email: data.user.email,
+        university: data.user.university || university || "University of Dhaka",
+      });
+
       setTimeout(() => {
-        router.push(`/student-verification?email=${encodeURIComponent(email)}`);
-      }, 500);
-    }, 600);
+        router.push(`/student-verification?${nextParams.toString()}`);
+      }, 450);
+    } catch {
+      setErrorMsg("Network error while verifying your code. Please try again.");
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
-  const handleResend = () => {
+  const handleResend = async () => {
+    if (!email || isResending || resendCooldown > 0) return;
     setErrorMsg("");
-    setInfoMsg(`A fresh 6-digit confirmation code has been sent to ${email}.`);
+    setInfoMsg("");
+    setIsResending(true);
+
+    try {
+      const res = await fetch("/api/auth/resend-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, purpose: "EMAIL_VERIFY" }),
+      });
+
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        retryAfterSeconds?: number;
+        isLiveEmail?: boolean;
+        previewUrl?: string;
+      };
+
+      if (!res.ok || !data.ok) {
+        if (data.retryAfterSeconds) {
+          setResendCooldown(data.retryAfterSeconds);
+        }
+        setErrorMsg(data.error || "Unable to resend confirmation code.");
+        return;
+      }
+
+      setResendCooldown(30);
+      setOverrideIsLive(Boolean(data.isLiveEmail));
+      if (data.previewUrl) {
+        setOverridePreviewUrl(data.previewUrl);
+      }
+      setInfoMsg(
+        data.isLiveEmail
+          ? `A fresh 6-digit confirmation code has been sent to ${email}.`
+          : `A new 6-digit code email was generated for ${email}. Open the Ethereal inbox link below.`
+      );
+    } catch {
+      setErrorMsg("Network error while resending code.");
+    } finally {
+      setIsResending(false);
+    }
   };
 
   return (
@@ -207,10 +346,23 @@ function ConfirmEmailContent() {
           <section className="card" aria-labelledby="confirm-title">
             <h2 id="confirm-title">Check your inbox</h2>
             <p className="sent">We sent a 6-digit code to</p>
-            <p className="email-target">{email}</p>
+            <p className="email-target">
+              {email || "your university email"}
+            </p>
             <Link href="/register" className="diff-link">
               Use a different email
             </Link>
+
+            {previewUrl && !isLiveEmail && (
+              <div className="mail-preview-note">
+                Test web-inbox mode active (add Gmail, SMTP, Brevo, or Resend in{" "}
+                <code>.env.local</code> for direct Temp-Mail/Gmail delivery):
+                <br />
+                <a href={previewUrl} target="_blank" rel="noopener noreferrer">
+                  Open email message on Ethereal ↗
+                </a>
+              </div>
+            )}
 
             <form onSubmit={handleConfirm} noValidate style={{ marginTop: "24px" }}>
               <label className="l" htmlFor="c-0">
@@ -244,7 +396,7 @@ function ConfirmEmailContent() {
               <button
                 className="btn btn-lg"
                 type="submit"
-                disabled={isVerifying}
+                disabled={isVerifying || !email}
                 style={{ marginTop: "16px" }}
               >
                 <span>{isVerifying ? "Verifying..." : "Confirm email"}</span>
@@ -275,8 +427,13 @@ function ConfirmEmailContent() {
                 type="button"
                 className="resend-btn"
                 onClick={handleResend}
+                disabled={isResending || resendCooldown > 0 || !email}
               >
-                Resend code
+                {isResending
+                  ? "Sending code..."
+                  : resendCooldown > 0
+                  ? `Resend code (${resendCooldown}s)`
+                  : "Resend code"}
               </button>
 
               <div className="private-banner">

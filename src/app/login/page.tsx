@@ -1,58 +1,85 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import "../auth.css";
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter();
-  const [email, setEmail] = useState("farhana@std.du.ac.bd");
-  const [password, setPassword] = useState("password123");
+  const searchParams = useSearchParams();
+  const initialEmail = searchParams.get("email") || "";
+  const [email, setEmail] = useState(initialEmail);
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
   const [errorMsg, setErrorMsg] = useState("");
+  const [unverifiedEmail, setUnverifiedEmail] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
+    setUnverifiedEmail("");
     setSuccessMsg("");
 
-    if (!email.trim() || !password) {
-      setErrorMsg("Please enter both your university email and password.");
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !password) {
+      setErrorMsg("Please enter both your email and password.");
       return;
     }
 
     setIsLoggingIn(true);
-    const userProfile = {
-      name: email.toLowerCase().includes("farhana") ? "Farhana Rahman" : "DU Student",
-      email: email.trim(),
-      initials: email.toLowerCase().includes("farhana") ? "FR" : "DU",
-      university: "University of Dhaka",
-      verified: true,
-      tokenBalance: 420,
-    };
-
     try {
-      localStorage.setItem("unishare_logged_in", "true");
-      localStorage.setItem("unishare_user", JSON.stringify(userProfile));
-      document.cookie = "unishare_logged_in=true; path=/; max-age=86400";
-      document.cookie = `unishare_user=${encodeURIComponent(JSON.stringify(userProfile))}; path=/; max-age=86400; SameSite=Lax`;
-      document.cookie = `unishare_token=verified_token_${Date.now()}; path=/; max-age=604800; SameSite=Lax`;
-    } catch (err) {
-      console.error(err);
-    }
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: trimmedEmail,
+          password,
+          rememberMe,
+        }),
+      });
 
-    setTimeout(() => {
-      setIsLoggingIn(false);
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        needsEmailVerification?: boolean;
+        email?: string;
+        user?: {
+          name: string;
+          email: string;
+          initials: string;
+          university: string;
+          verified: boolean;
+          tokenBalance: number;
+        };
+      };
+
+      if (!res.ok || !data.ok || !data.user) {
+        if (data.needsEmailVerification && data.email) {
+          setUnverifiedEmail(data.email);
+        }
+        setErrorMsg(
+          data.error || "Invalid email or password. Please check and try again."
+        );
+        return;
+      }
+
+      try {
+        localStorage.setItem("unishare_logged_in", "true");
+        localStorage.setItem("unishare_user", JSON.stringify(data.user));
+      } catch (err) {
+        console.error(err);
+      }
+
       let destination = "/home";
       if (typeof window !== "undefined") {
         const params = new URLSearchParams(window.location.search);
         const redir = params.get("redirect");
-        if (redir && redir.startsWith("/")) {
+        if (redir && redir.startsWith("/") && !redir.startsWith("//")) {
           destination = redir;
         }
       }
@@ -67,8 +94,12 @@ export default function LoginPage() {
 
       setTimeout(() => {
         router.push(destination);
-      }, 400);
-    }, 500);
+      }, 350);
+    } catch {
+      setErrorMsg("Network error while logging in. Please try again.");
+    } finally {
+      setIsLoggingIn(false);
+    }
   };
 
   return (
@@ -309,6 +340,17 @@ export default function LoginPage() {
               {errorMsg && (
                 <div className="err-banner" role="alert" style={{ marginTop: "16px" }}>
                   {errorMsg}
+                  {unverifiedEmail && (
+                    <>
+                      {" "}
+                      <Link
+                        href={`/confirm-email?email=${encodeURIComponent(unverifiedEmail)}`}
+                        style={{ color: "inherit", fontWeight: 700, textDecoration: "underline" }}
+                      >
+                        Confirm email now →
+                      </Link>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -374,6 +416,22 @@ export default function LoginPage() {
         </div>
       </footer>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="unishare-auth">
+          <div className="wrap" style={{ padding: "80px 0", textAlign: "center" }}>
+            Loading...
+          </div>
+        </div>
+      }
+    >
+      <LoginContent />
+    </Suspense>
   );
 }
 

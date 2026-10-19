@@ -215,7 +215,9 @@ export default function AppNavbar({
       localStorage.removeItem("unishare_logged_in");
       localStorage.removeItem("unishare_user");
       document.cookie = "unishare_logged_in=; path=/; max-age=0";
+      document.cookie = "unishare_user=; path=/; max-age=0; SameSite=Lax";
       document.cookie = "unishare_token=; path=/; max-age=0; SameSite=Lax";
+      fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
     } catch {
       // Ignore storage access errors
     }

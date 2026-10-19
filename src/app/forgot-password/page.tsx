@@ -2,30 +2,82 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import "../auth.css";
 
 export default function ForgotPasswordPage() {
-  const [email, setEmail] = useState("farhana@std.du.ac.bd");
+  const router = useRouter();
+  const [email, setEmail] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+  const [previewUrl, setPreviewUrl] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
     setSuccessMsg("");
+    setPreviewUrl("");
 
-    const trimmed = email.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      setErrorMsg("Please enter a valid university email.");
+    const trimmed = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(trimmed)) {
+      setErrorMsg("Please enter a valid email address.");
       return;
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
+    try {
+      const res = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: trimmed }),
+      });
+
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        isLiveEmail?: boolean;
+        previewUrl?: string;
+      };
+
+      if (!res.ok || !data.ok) {
+        setErrorMsg(
+          data.error || "Unable to send password reset code right now."
+        );
+        return;
+      }
+
+      if (data.previewUrl && !data.isLiveEmail) {
+        setPreviewUrl(data.previewUrl);
+      }
+
+      try {
+        sessionStorage.setItem(
+          "unishare_pending_reset_meta",
+          JSON.stringify({
+            email: trimmed,
+            isLiveEmail: Boolean(data.isLiveEmail),
+            previewUrl: data.previewUrl || "",
+          })
+        );
+      } catch {
+        // ignore storage errors
+      }
+
+      setSuccessMsg(
+        data.isLiveEmail
+          ? `A 6-digit password reset code has been sent to ${trimmed}.`
+          : `A 6-digit reset code email was generated for ${trimmed}.`
+      );
+
+      setTimeout(() => {
+        router.push(`/reset-password?email=${encodeURIComponent(trimmed)}`);
+      }, 650);
+    } catch {
+      setErrorMsg("Network error while sending reset code. Please try again.");
+    } finally {
       setIsSubmitting(false);
-      setSuccessMsg(`Reset link sent to ${trimmed}. Check your university inbox.`);
-    }, 600);
+    }
   };
 
   return (
@@ -141,7 +193,7 @@ export default function ForgotPasswordPage() {
                 disabled={isSubmitting}
                 style={{ marginTop: "12px" }}
               >
-                <span>{isSubmitting ? "Sending link..." : "Send reset link"}</span>
+                <span>{isSubmitting ? "Sending code..." : "Send reset code"}</span>
                 <svg
                   width="16"
                   height="16"
@@ -158,17 +210,34 @@ export default function ForgotPasswordPage() {
               {successMsg && (
                 <div className="ok" role="status" style={{ marginTop: "14px" }}>
                   <p>{successMsg}</p>
-                  <Link
-                    href={`/reset-password?email=${encodeURIComponent(email)}`}
-                    style={{
-                      display: "inline-block",
-                      marginTop: "8px",
-                      textDecoration: "underline",
-                      fontWeight: 600,
-                    }}
-                  >
-                    Open reset password page (Demo) →
-                  </Link>
+                  {previewUrl && (
+                    <a
+                      href={previewUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: "inline-block",
+                        marginTop: "6px",
+                        textDecoration: "underline",
+                        fontWeight: 700,
+                      }}
+                    >
+                      Open email on Ethereal ↗
+                    </a>
+                  )}
+                  <div>
+                    <Link
+                      href={`/reset-password?email=${encodeURIComponent(email.trim().toLowerCase())}`}
+                      style={{
+                        display: "inline-block",
+                        marginTop: "8px",
+                        textDecoration: "underline",
+                        fontWeight: 600,
+                      }}
+                    >
+                      Enter 6-digit code &amp; reset password →
+                    </Link>
+                  </div>
                 </div>
               )}
 

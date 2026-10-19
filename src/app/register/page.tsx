@@ -86,15 +86,30 @@ function getUniversityMatchScore(
   return null;
 }
 
+function deriveCustomShortName(name: string): string {
+  const words = name
+    .trim()
+    .split(/\s+/)
+    .filter((w) => w.length > 0 && !/^(of|and|for|the|at|in)$/i.test(w));
+  if (words.length === 0) return "UNI";
+  if (words.length === 1) return words[0].slice(0, 3).toUpperCase();
+  return words
+    .slice(0, 3)
+    .map((w) => w[0].toUpperCase())
+    .join("");
+}
+
 export default function RegisterPage() {
   const router = useRouter();
   const autocompleteRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const shouldFocusSearchRef = useRef(false);
 
-  // University autocomplete state
+  // University autocomplete & manual custom entry state
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUniId, setSelectedUniId] = useState<string>("");
+  const [customUniName, setCustomUniName] = useState<string>("");
+  const [manualMode, setManualMode] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [failedLogos, setFailedLogos] = useState<Record<string, boolean>>({});
 
@@ -112,25 +127,40 @@ export default function RegisterPage() {
   const [passwordError, setPasswordError] = useState("");
   const [confirmPasswordError, setConfirmPasswordError] = useState("");
   const [bannerError, setBannerError] = useState("");
+  const [accountExistsError, setAccountExistsError] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const selectedUniversity: BdUniversity | undefined = useMemo(
     () => BD_UNIVERSITIES.find((u) => u.id === selectedUniId),
     [selectedUniId]
   );
 
-  const trimmedQuery = searchQuery.trim();
-  const showDropdown = !selectedUniversity && dropdownOpen && trimmedQuery.length > 0;
+  const activeCustomUniName = customUniName.trim();
+  const isCustomUniversityActive = Boolean(activeCustomUniName) || manualMode;
+  const effectiveUniName = selectedUniversity
+    ? selectedUniversity.name
+    : activeCustomUniName;
 
-  const { matches, totalMatches, firstMatch } = useMemo(() => {
+  const trimmedQuery = searchQuery.trim();
+  const showDropdown =
+    !selectedUniversity &&
+    !activeCustomUniName &&
+    !manualMode &&
+    dropdownOpen &&
+    trimmedQuery.length > 0;
+
+  const { matches, totalMatches, firstMatch, hasExactNameMatch } = useMemo(() => {
     if (!trimmedQuery) {
       return {
         matches: [] as BdUniversity[],
         totalMatches: 0,
         firstMatch: undefined as BdUniversity | undefined,
+        hasExactNameMatch: false,
       };
     }
 
+    const qNorm = normalizeSearch(trimmedQuery);
     const scored = BD_UNIVERSITIES.flatMap((u) => {
       const score = getUniversityMatchScore(u, trimmedQuery);
       return score === null ? [] : [{ uni: u, score }];
@@ -138,10 +168,13 @@ export default function RegisterPage() {
       .sort((a, b) => a.score - b.score)
       .map((item) => item.uni);
 
+    const exact = scored.some((u) => normalizeSearch(u.name) === qNorm);
+
     return {
       matches: scored,
       totalMatches: scored.length,
       firstMatch: scored[0],
+      hasExactNameMatch: exact,
     };
   }, [trimmedQuery]);
 
@@ -159,14 +192,32 @@ export default function RegisterPage() {
   }, []);
 
   useEffect(() => {
-    if (!selectedUniId && shouldFocusSearchRef.current) {
+    if (!selectedUniId && !customUniName && shouldFocusSearchRef.current) {
       shouldFocusSearchRef.current = false;
       searchInputRef.current?.focus();
     }
-  }, [selectedUniId]);
+  }, [selectedUniId, customUniName, manualMode]);
 
   const handleSelectUniversity = (uni: BdUniversity) => {
     setSelectedUniId(uni.id);
+    setCustomUniName("");
+    setManualMode(false);
+    setSearchQuery("");
+    setDropdownOpen(false);
+    setUniversityError("");
+    setEmailError("");
+    setBannerError("");
+  };
+
+  const handleSelectCustomUniversity = (name: string) => {
+    const cleaned = name.trim();
+    if (cleaned.length < 2) {
+      setUniversityError("Please enter your full university name (at least 2 characters).");
+      return;
+    }
+    setSelectedUniId("");
+    setCustomUniName(cleaned);
+    setManualMode(false);
     setSearchQuery("");
     setDropdownOpen(false);
     setUniversityError("");
@@ -177,31 +228,58 @@ export default function RegisterPage() {
   const handleChangeUniversity = () => {
     shouldFocusSearchRef.current = true;
     setSelectedUniId("");
+    setCustomUniName("");
+    setManualMode(false);
     setSearchQuery("");
     setDropdownOpen(false);
     setUniversityError("");
     setEmailError("");
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSwitchToManual = () => {
+    shouldFocusSearchRef.current = true;
+    setSelectedUniId("");
+    setCustomUniName(trimmedQuery);
+    setManualMode(true);
+    setSearchQuery("");
+    setDropdownOpen(false);
+    setUniversityError("");
+    setEmailError("");
+  };
+
+  const handleSwitchToSearchList = () => {
+    shouldFocusSearchRef.current = true;
+    setManualMode(false);
+    setCustomUniName("");
+    setSearchQuery("");
+    setUniversityError("");
+    setEmailError("");
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSuccessMessage("");
     setBannerError("");
+    setAccountExistsError(false);
 
-    const trimmedEmail = email.trim();
+    const trimmedEmail = email.trim().toLowerCase();
     let isValid = true;
 
-    if (!selectedUniversity) {
-      setUniversityError("Search for and select your university first.");
+    if (!effectiveUniName || effectiveUniName.length < 2) {
+      setUniversityError(
+        manualMode
+          ? "Please type your university name (at least 2 characters)."
+          : "Search for your university, or click “Enter manually” if it isn’t listed."
+      );
       isValid = false;
     } else {
       setUniversityError("");
     }
 
-    // Email format + selected university domain validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    // Email format + listed university domain check (custom university accepts any valid email)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
     if (!emailRegex.test(trimmedEmail)) {
-      setEmailError("Enter a valid university email address.");
+      setEmailError("Enter a valid email address.");
       isValid = false;
     } else if (
       selectedUniversity &&
@@ -211,7 +289,7 @@ export default function RegisterPage() {
         .map((d) => `@${d}`)
         .join(" or ");
       setEmailError(
-        `Use your ${selectedUniversity.shortName} email (${domainLabel}).`
+        `Use your ${selectedUniversity.shortName} email (${domainLabel}), or type a custom university if yours isn’t listed.`
       );
       isValid = false;
     } else {
@@ -248,15 +326,75 @@ export default function RegisterPage() {
       return;
     }
 
-    // Success response matching the sample flow and navigate to Step 2
-    setSuccessMessage(`Next: we’ll send a 6-digit code to ${trimmedEmail}.`);
-    setTimeout(() => {
-      const nextParams = new URLSearchParams({ email: trimmedEmail });
-      if (selectedUniversity) {
-        nextParams.set("university", selectedUniversity.name);
+    setIsSubmitting(true);
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: trimmedEmail,
+          password,
+          universityName: effectiveUniName,
+          universityId: selectedUniversity ? selectedUniversity.id : "custom",
+          isCustomUniversity: !selectedUniversity,
+        }),
+      });
+
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        email?: string;
+        university?: string;
+        provider?: string;
+        isLiveEmail?: boolean;
+        previewUrl?: string;
+        error?: string;
+      };
+
+      if (!res.ok || !data.ok) {
+        if (res.status === 409) {
+          setAccountExistsError(true);
+        }
+        setBannerError(
+          data.error || "Unable to create your account. Please try again."
+        );
+        return;
       }
-      router.push(`/confirm-email?${nextParams.toString()}`);
-    }, 600);
+
+      try {
+        sessionStorage.setItem(
+          "unishare_pending_mail_meta",
+          JSON.stringify({
+            email: data.email || trimmedEmail,
+            university: data.university || effectiveUniName,
+            provider: data.provider,
+            isLiveEmail: Boolean(data.isLiveEmail),
+            previewUrl: data.previewUrl || "",
+          })
+        );
+      } catch {
+        // ignore sessionStorage restriction
+      }
+
+      setSuccessMessage(
+        data.isLiveEmail
+          ? `Verification code sent to ${trimmedEmail}. Redirecting...`
+          : `Verification code generated for ${trimmedEmail}. Redirecting...`
+      );
+
+      const nextParams = new URLSearchParams({
+        email: data.email || trimmedEmail,
+        university: data.university || effectiveUniName,
+      });
+      setTimeout(() => {
+        router.push(`/confirm-email?${nextParams.toString()}`);
+      }, 350);
+    } catch {
+      setBannerError(
+        "Network error while creating your account. Please try again."
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const renderUniversityLogo = (uni: BdUniversity) => {
@@ -392,11 +530,22 @@ export default function RegisterPage() {
             </p>
 
             <form onSubmit={handleSubmit} noValidate>
-              {/* University Autocomplete / Selected Pill */}
+              {/* University Autocomplete / Manual Custom / Selected Pill */}
               <div className="univ-field-wrap">
                 <div className="univ-section-head">
-                  {selectedUniversity ? (
+                  {selectedUniversity || (activeCustomUniName && !manualMode) ? (
                     <span className="univ-field-label">Your university</span>
+                  ) : manualMode ? (
+                    <>
+                      <label htmlFor="univ-manual">Type your university name</label>
+                      <button
+                        type="button"
+                        className="univ-manual-toggle"
+                        onClick={handleSwitchToSearchList}
+                      >
+                        Back to university list
+                      </button>
+                    </>
                   ) : (
                     <>
                       <label htmlFor="univ-search">Select your university</label>
@@ -428,6 +577,91 @@ export default function RegisterPage() {
                       Change
                     </button>
                   </div>
+                ) : activeCustomUniName && !manualMode ? (
+                  <div className="selected-uni-pill">
+                    <span className="univ-logo-box univ-logo-custom">
+                      <span className="univ-logo-fallback">
+                        {deriveCustomShortName(activeCustomUniName)}
+                      </span>
+                    </span>
+                    <span className="univ-meta">
+                      <span className="univ-name">{activeCustomUniName}</span>
+                      <span className="univ-sub">
+                        Custom university · Enter your email below
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      className="selected-uni-change"
+                      onClick={handleChangeUniversity}
+                    >
+                      Change
+                    </button>
+                  </div>
+                ) : manualMode ? (
+                  <>
+                    <div
+                      className={`univ-search-box ${universityError ? "error" : ""}`}
+                    >
+                      <span className="search-ic" aria-hidden="true">
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.1"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M12 3 2 8l10 5 10-5-10-5z" />
+                          <path d="M6 10.5V16c0 1.7 2.7 3 6 3s6-1.3 6-3v-5.5" />
+                        </svg>
+                      </span>
+                      <input
+                        ref={searchInputRef}
+                        id="univ-manual"
+                        type="text"
+                        value={customUniName}
+                        onChange={(e) => {
+                          setCustomUniName(e.target.value);
+                          if (universityError) setUniversityError("");
+                        }}
+                        placeholder="e.g., Dhaka City College or your university"
+                        autoComplete="organization"
+                      />
+                      {customUniName && (
+                        <button
+                          type="button"
+                          className="univ-clear-btn"
+                          onClick={() => {
+                            setCustomUniName("");
+                            searchInputRef.current?.focus();
+                          }}
+                          aria-label="Clear university name"
+                        >
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.2"
+                            strokeLinecap="round"
+                          >
+                            <path d="M18 6 6 18M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                    <p
+                      className={`hint ${universityError ? "error" : ""}`}
+                      style={{ marginTop: "6px", marginBottom: 0 }}
+                    >
+                      {universityError ||
+                        "Using an unlisted university lets you sign up with your own email address."}
+                    </p>
+                  </>
                 ) : (
                   <>
                     <div className="univ-autocomplete" ref={autocompleteRef}>
@@ -472,6 +706,8 @@ export default function RegisterPage() {
                               e.preventDefault();
                               if (firstMatch) {
                                 handleSelectUniversity(firstMatch);
+                              } else if (trimmedQuery.length >= 2) {
+                                handleSelectCustomUniversity(trimmedQuery);
                               }
                             }
                           }}
@@ -516,46 +752,110 @@ export default function RegisterPage() {
                           aria-label="Matching universities"
                         >
                           {totalMatches === 0 ? (
-                            <div className="univ-empty">
-                              No university matched &ldquo;{trimmedQuery}&rdquo;.
-                              Try a different name or acronym.
-                            </div>
-                          ) : (
-                            matches.map((uni) => (
-                              <button
-                                key={uni.id}
-                                type="button"
-                                className="univ-row"
-                                onClick={() => handleSelectUniversity(uni)}
-                              >
-                                {renderUniversityLogo(uni)}
-                                <span className="univ-meta">
-                                  <span className="univ-name">{uni.name}</span>
-                                  <span className="univ-sub">
-                                    {uni.shortName} · @{uni.domains[0]}
+                            <>
+                              <div className="univ-empty">
+                                No university matched &ldquo;{trimmedQuery}&rdquo;.
+                              </div>
+                              {trimmedQuery.length >= 2 && (
+                                <button
+                                  type="button"
+                                  className="univ-row univ-custom-row"
+                                  onClick={() =>
+                                    handleSelectCustomUniversity(trimmedQuery)
+                                  }
+                                >
+                                  <span className="univ-logo-box univ-logo-custom">
+                                    <span className="univ-logo-fallback">
+                                      {deriveCustomShortName(trimmedQuery)}
+                                    </span>
                                   </span>
-                                </span>
-                              </button>
-                            ))
+                                  <span className="univ-meta">
+                                    <span className="univ-name">
+                                      Use &ldquo;{trimmedQuery}&rdquo; as my
+                                      university
+                                    </span>
+                                    <span className="univ-sub">
+                                      Not listed · Enter your own email below
+                                    </span>
+                                  </span>
+                                </button>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              {matches.map((uni) => (
+                                <button
+                                  key={uni.id}
+                                  type="button"
+                                  className="univ-row"
+                                  onClick={() => handleSelectUniversity(uni)}
+                                >
+                                  {renderUniversityLogo(uni)}
+                                  <span className="univ-meta">
+                                    <span className="univ-name">{uni.name}</span>
+                                    <span className="univ-sub">
+                                      {uni.shortName} · @{uni.domains[0]}
+                                    </span>
+                                  </span>
+                                </button>
+                              ))}
+                              {!hasExactNameMatch && trimmedQuery.length >= 2 && (
+                                <div className="univ-custom-divider">
+                                  <button
+                                    type="button"
+                                    className="univ-row univ-custom-row"
+                                    onClick={() =>
+                                      handleSelectCustomUniversity(trimmedQuery)
+                                    }
+                                  >
+                                    <span className="univ-logo-box univ-logo-custom">
+                                      <span className="univ-logo-fallback">
+                                        {deriveCustomShortName(trimmedQuery)}
+                                      </span>
+                                    </span>
+                                    <span className="univ-meta">
+                                      <span className="univ-name">
+                                        Can&apos;t find yours? Use &ldquo;
+                                        {trimmedQuery}&rdquo;
+                                      </span>
+                                      <span className="univ-sub">
+                                        Add custom university · Use your own email
+                                      </span>
+                                    </span>
+                                  </button>
+                                </div>
+                              )}
+                            </>
                           )}
                         </div>
                       )}
                     </div>
 
-                    <p
-                      className={`hint ${universityError ? "error" : ""}`}
-                      style={{ marginTop: "6px", marginBottom: 0 }}
-                    >
-                      {universityError ||
-                        "Start typing your university name or acronym to select it."}
-                    </p>
+                    <div className="univ-hint-row">
+                      <p
+                        className={`hint ${universityError ? "error" : ""}`}
+                        style={{ marginTop: 0, marginBottom: 0 }}
+                      >
+                        {universityError ||
+                          "Start typing to pick your university."}
+                      </p>
+                      <button
+                        type="button"
+                        className="univ-manual-toggle"
+                        onClick={handleSwitchToManual}
+                      >
+                        Not listed? Type manually
+                      </button>
+                    </div>
                   </>
                 )}
               </div>
 
               {/* University Email */}
               <label className="l" htmlFor="email">
-                University email address
+                {isCustomUniversityActive
+                  ? "Email address"
+                  : "University email address"}
               </label>
               <div className="field">
                 <input
@@ -569,7 +869,7 @@ export default function RegisterPage() {
                   placeholder={
                     selectedUniversity
                       ? `name@${selectedUniversity.domains[0]}`
-                      : "name@university.edu"
+                      : "name@university.edu or your email"
                   }
                   autoComplete="email"
                   required
@@ -594,7 +894,9 @@ export default function RegisterPage() {
                     ? `Use your ${selectedUniversity.shortName} email (${selectedUniversity.domains
                         .map((d) => `@${d}`)
                         .join(" or ")}).`
-                    : "Use the email address issued by your university.")}
+                    : isCustomUniversityActive
+                    ? "Enter your university or personal email to receive the 6-digit code."
+                    : "Use the email address issued by your university (or any valid email for unlisted universities).")}
               </p>
 
               {/* Password */}
@@ -732,8 +1034,8 @@ export default function RegisterPage() {
               </label>
 
               {/* Submit Button */}
-              <button className="btn btn-lg" type="submit">
-                <span>Continue</span>
+              <button className="btn btn-lg" type="submit" disabled={isSubmitting}>
+                <span>{isSubmitting ? "Sending code..." : "Continue"}</span>
                 <svg
                   width="16"
                   height="16"
@@ -748,13 +1050,23 @@ export default function RegisterPage() {
               </button>
 
               <p className="center">
-                We’ll send a 6-digit code to confirm your university email
-                address.
+                We’ll send a 6-digit code to confirm your email address.
               </p>
 
               {bannerError && (
                 <div className="err-banner" role="alert">
                   {bannerError}
+                  {accountExistsError && (
+                    <>
+                      {" "}
+                      <Link
+                        href={`/login?email=${encodeURIComponent(email.trim().toLowerCase())}`}
+                        style={{ color: "inherit", fontWeight: 700, textDecoration: "underline" }}
+                      >
+                        Go to Log in →
+                      </Link>
+                    </>
+                  )}
                 </div>
               )}
 
