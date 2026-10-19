@@ -56,41 +56,68 @@
 }
 
 .unishare-auth header .wrap {
+  max-width: 1160px;
+  padding: 0 28px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 62px;
+  height: 72px;
 }
 
-.unishare-auth .logo {
+.unishare-auth header .logo {
   display: flex;
   align-items: center;
   gap: 10px;
   font-family: var(--head);
-  font-weight: 700;
-  font-size: 20px;
+  font-weight: 800;
+  font-size: 24px;
+  line-height: 1.05;
   color: var(--ink);
   text-decoration: none;
 }
 
-.unishare-auth .logo:hover {
+.unishare-auth header .logo:hover {
   text-decoration: none;
 }
 
-.unishare-auth .logo svg {
+.unishare-auth header .logo svg {
+  width: 28px;
+  height: 18px;
   color: var(--brand);
+  flex-shrink: 0;
 }
 
-.unishare-auth nav {
+.unishare-auth header nav {
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 22px;
 }
 
-.unishare-auth nav a.nav-link {
-  color: var(--ink);
-  font-weight: 600;
+.unishare-auth header nav a.nav-link {
+  color: var(--brand);
+  font-weight: 500;
+  font-size: 16px;
+}
+
+.unishare-auth header nav a.nav-link:hover {
+  color: #073c3d;
+  text-decoration: underline;
+}
+
+.unishare-auth header nav .btn {
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 8px;
+  border: 2px solid var(--brand);
+  font-weight: 700;
   font-size: 15px;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.unishare-auth header nav .btn:hover {
+  background: #073c3d;
+  border-color: #073c3d;
+  filter: none;
 }
 
 .unishare-auth .btn {
@@ -508,13 +535,15 @@
 }
 
 @media (max-width: 480px) {
-  .unishare-auth .wrap {
+  .unishare-auth .wrap,
+  .unishare-auth header .wrap {
     padding: 0 16px;
   }
   .unishare-auth .card {
     padding: 20px;
     box-shadow: 5px 5px 0 var(--brand);
   }
+  .unishare-auth header nav,
   .unishare-auth nav {
     gap: 14px;
   }
