@@ -1,42 +1,14 @@
 "use client";
 
-import { useState, useRef, useMemo, useSyncExternalStore, Suspense } from "react";
+import { useState, useRef, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import "../auth.css";
-
-const subscribeResetStorage = () => () => {};
 
 function ResetPasswordContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const emailParam = (searchParams.get("email") || "").trim();
-
-  const rawResetMeta = useSyncExternalStore(
-    subscribeResetStorage,
-    () => sessionStorage.getItem("unishare_pending_reset_meta") || "",
-    () => ""
-  );
-
-  const matchingMeta = useMemo(() => {
-    if (!rawResetMeta) return null;
-    try {
-      const parsed = JSON.parse(rawResetMeta) as {
-        email?: string;
-        isLiveEmail?: boolean;
-        previewUrl?: string;
-      };
-      if (
-        parsed.email &&
-        (!emailParam || parsed.email.toLowerCase() === emailParam.toLowerCase())
-      ) {
-        return parsed;
-      }
-    } catch {
-      return null;
-    }
-    return null;
-  }, [rawResetMeta, emailParam]);
 
   const [digits, setDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [password, setPassword] = useState("");
@@ -45,14 +17,9 @@ function ResetPasswordContent() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
-  const [overridePreviewUrl, setOverridePreviewUrl] = useState<string | null>(null);
-  const [overrideIsLive, setOverrideIsLive] = useState<boolean | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const inputsRef = useRef<(HTMLInputElement | null)[]>([]);
-
-  const previewUrl = overridePreviewUrl ?? matchingMeta?.previewUrl ?? "";
-  const isLiveEmail = overrideIsLive ?? (matchingMeta ? Boolean(matchingMeta.isLiveEmail) : true);
 
   // Validation criteria
   const hasMinLength = password.length >= 8;
@@ -120,15 +87,11 @@ function ResetPasswordContent() {
       const data = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
         error?: string;
-        isLiveEmail?: boolean;
-        previewUrl?: string;
       };
       if (!res.ok || !data.ok) {
         setErrorMsg(data.error || "Unable to resend reset code.");
         return;
       }
-      setOverrideIsLive(Boolean(data.isLiveEmail));
-      if (data.previewUrl) setOverridePreviewUrl(data.previewUrl);
       setSuccessMsg(`A fresh 6-digit reset code was sent to ${emailParam}.`);
     } catch {
       setErrorMsg("Network error while resending reset code.");
@@ -181,12 +144,6 @@ function ResetPasswordContent() {
       if (!res.ok || !data.ok) {
         setErrorMsg(data.error || "Unable to reset password.");
         return;
-      }
-
-      try {
-        sessionStorage.removeItem("unishare_pending_reset_meta");
-      } catch {
-        // ignore
       }
 
       setSuccessMsg(
@@ -288,16 +245,6 @@ function ResetPasswordContent() {
             >
               {emailParam || "No email provided"}
             </div>
-
-            {previewUrl && !isLiveEmail && (
-              <div className="mail-preview-note">
-                Test web-inbox mode active:
-                <br />
-                <a href={previewUrl} target="_blank" rel="noopener noreferrer">
-                  Open reset code email on Ethereal ↗
-                </a>
-              </div>
-            )}
 
             <form onSubmit={handleSubmit} noValidate>
               {/* 6-digit Reset Code */}

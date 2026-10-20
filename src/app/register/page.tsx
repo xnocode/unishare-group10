@@ -344,9 +344,6 @@ export default function RegisterPage() {
         ok?: boolean;
         email?: string;
         university?: string;
-        provider?: string;
-        isLiveEmail?: boolean;
-        previewUrl?: string;
         error?: string;
       };
 
@@ -366,9 +363,6 @@ export default function RegisterPage() {
           JSON.stringify({
             email: data.email || trimmedEmail,
             university: data.university || effectiveUniName,
-            provider: data.provider,
-            isLiveEmail: Boolean(data.isLiveEmail),
-            previewUrl: data.previewUrl || "",
           })
         );
       } catch {
@@ -376,9 +370,7 @@ export default function RegisterPage() {
       }
 
       setSuccessMessage(
-        data.isLiveEmail
-          ? `Verification code sent to ${trimmedEmail}. Redirecting...`
-          : `Verification code generated for ${trimmedEmail}. Redirecting...`
+        `Verification code sent to ${trimmedEmail}. Redirecting...`
       );
 
       const nextParams = new URLSearchParams({

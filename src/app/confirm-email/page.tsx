@@ -26,8 +26,6 @@ function ConfirmEmailContent() {
       return JSON.parse(rawPendingMeta) as {
         email?: string;
         university?: string;
-        isLiveEmail?: boolean;
-        previewUrl?: string;
       };
     } catch {
       return null;
@@ -45,9 +43,6 @@ function ConfirmEmailContent() {
     return pendingMeta;
   }, [pendingMeta, emailParam]);
 
-  const [overridePreviewUrl, setOverridePreviewUrl] = useState<string | null>(null);
-  const [overrideIsLive, setOverrideIsLive] = useState<boolean | null>(null);
-
   const email = (
     emailParam ? decodeURIComponent(emailParam) : matchingMeta?.email || ""
   ).trim();
@@ -56,8 +51,6 @@ function ConfirmEmailContent() {
       ? decodeURIComponent(universityParam)
       : matchingMeta?.university || ""
   ).trim();
-  const previewUrl = overridePreviewUrl ?? matchingMeta?.previewUrl ?? "";
-  const isLiveEmail = overrideIsLive ?? (matchingMeta ? Boolean(matchingMeta.isLiveEmail) : true);
 
   const [digits, setDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [errorMsg, setErrorMsg] = useState("");
@@ -215,8 +208,6 @@ function ConfirmEmailContent() {
         ok?: boolean;
         error?: string;
         retryAfterSeconds?: number;
-        isLiveEmail?: boolean;
-        previewUrl?: string;
       };
 
       if (!res.ok || !data.ok) {
@@ -228,14 +219,8 @@ function ConfirmEmailContent() {
       }
 
       setResendCooldown(30);
-      setOverrideIsLive(Boolean(data.isLiveEmail));
-      if (data.previewUrl) {
-        setOverridePreviewUrl(data.previewUrl);
-      }
       setInfoMsg(
-        data.isLiveEmail
-          ? `A fresh 6-digit confirmation code has been sent to ${email}.`
-          : `A new 6-digit code email was generated for ${email}. Open the Ethereal inbox link below.`
+        `A fresh 6-digit confirmation code has been sent to ${email}.`
       );
     } catch {
       setErrorMsg("Network error while resending code.");
@@ -352,17 +337,6 @@ function ConfirmEmailContent() {
             <Link href="/register" className="diff-link">
               Use a different email
             </Link>
-
-            {previewUrl && !isLiveEmail && (
-              <div className="mail-preview-note">
-                Test web-inbox mode active (add Gmail, SMTP, Brevo, or Resend in{" "}
-                <code>.env.local</code> for direct Temp-Mail/Gmail delivery):
-                <br />
-                <a href={previewUrl} target="_blank" rel="noopener noreferrer">
-                  Open email message on Ethereal ↗
-                </a>
-              </div>
-            )}
 
             <form onSubmit={handleConfirm} noValidate style={{ marginTop: "24px" }}>
               <label className="l" htmlFor="c-0">

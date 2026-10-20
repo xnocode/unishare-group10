@@ -10,14 +10,12 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
-  const [previewUrl, setPreviewUrl] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
     setSuccessMsg("");
-    setPreviewUrl("");
 
     const trimmed = email.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(trimmed)) {
@@ -36,8 +34,6 @@ export default function ForgotPasswordPage() {
       const data = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
         error?: string;
-        isLiveEmail?: boolean;
-        previewUrl?: string;
       };
 
       if (!res.ok || !data.ok) {
@@ -47,27 +43,8 @@ export default function ForgotPasswordPage() {
         return;
       }
 
-      if (data.previewUrl && !data.isLiveEmail) {
-        setPreviewUrl(data.previewUrl);
-      }
-
-      try {
-        sessionStorage.setItem(
-          "unishare_pending_reset_meta",
-          JSON.stringify({
-            email: trimmed,
-            isLiveEmail: Boolean(data.isLiveEmail),
-            previewUrl: data.previewUrl || "",
-          })
-        );
-      } catch {
-        // ignore storage errors
-      }
-
       setSuccessMsg(
-        data.isLiveEmail
-          ? `A 6-digit password reset code has been sent to ${trimmed}.`
-          : `A 6-digit reset code email was generated for ${trimmed}.`
+        `A 6-digit password reset code has been sent to ${trimmed}.`
       );
 
       setTimeout(() => {
@@ -210,21 +187,6 @@ export default function ForgotPasswordPage() {
               {successMsg && (
                 <div className="ok" role="status" style={{ marginTop: "14px" }}>
                   <p>{successMsg}</p>
-                  {previewUrl && (
-                    <a
-                      href={previewUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        display: "inline-block",
-                        marginTop: "6px",
-                        textDecoration: "underline",
-                        fontWeight: 700,
-                      }}
-                    >
-                      Open email on Ethereal ↗
-                    </a>
-                  )}
                   <div>
                     <Link
                       href={`/reset-password?email=${encodeURIComponent(email.trim().toLowerCase())}`}
