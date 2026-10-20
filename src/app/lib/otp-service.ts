@@ -24,7 +24,6 @@ export async function issueOtpCode(params: {
   email: string;
   purpose: OtpPurpose;
   university?: string;
-  isCustomUniversity?: boolean;
   enforceCooldown?: boolean;
 }): Promise<IssueOtpResult> {
   const email = normalizeEmail(params.email);
@@ -78,7 +77,6 @@ export async function issueOtpCode(params: {
     code,
     purpose: params.purpose,
     university: params.university,
-    isCustomUniversity: params.isCustomUniversity,
   });
 
   if (!mailResult.delivered) {

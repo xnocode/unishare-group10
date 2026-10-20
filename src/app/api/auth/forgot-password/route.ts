@@ -27,7 +27,6 @@ export async function POST(req: NextRequest) {
     }
 
     let university: string | undefined;
-    let isCustomUniversity = false;
     let found = false;
 
     try {
@@ -35,7 +34,6 @@ export async function POST(req: NextRequest) {
       if (user) {
         found = true;
         university = user.university || undefined;
-        isCustomUniversity = user.isCustomUniversity;
       }
     } catch (err) {
       console.warn("Forgot password DB lookup warning:", err);
@@ -48,7 +46,6 @@ export async function POST(req: NextRequest) {
       if (cookieAcc && cookieAcc.email === email) {
         found = true;
         university = cookieAcc.university;
-        isCustomUniversity = cookieAcc.isCustomUniversity;
       } else if (email === DEMO_EMAIL) {
         found = true;
         university = "University of Dhaka";
@@ -66,7 +63,6 @@ export async function POST(req: NextRequest) {
       email,
       purpose: "PASSWORD_RESET",
       university,
-      isCustomUniversity,
       enforceCooldown: true,
     });
 
@@ -81,8 +77,6 @@ export async function POST(req: NextRequest) {
       ok: true,
       email,
       provider: otpRes.mailResult.provider,
-      isLiveEmail: otpRes.mailResult.isLiveEmail,
-      previewUrl: otpRes.mailResult.previewUrl,
     });
 
     const resetToken = signPayload<PendingResetPayload>({

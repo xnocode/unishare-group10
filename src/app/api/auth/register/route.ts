@@ -133,7 +133,6 @@ export async function POST(req: NextRequest) {
       email,
       purpose: "EMAIL_VERIFY",
       university: resolvedUniName,
-      isCustomUniversity: resolvedIsCustom,
       enforceCooldown: false,
     });
 
@@ -151,8 +150,6 @@ export async function POST(req: NextRequest) {
       universityId: resolvedUniId,
       isCustomUniversity: resolvedIsCustom,
       provider: otpRes.mailResult.provider,
-      isLiveEmail: otpRes.mailResult.isLiveEmail,
-      previewUrl: otpRes.mailResult.previewUrl,
     });
 
     const pendingToken = signPayload<PendingVerifyPayload>({

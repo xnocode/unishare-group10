@@ -39,11 +39,9 @@ export async function POST(req: NextRequest) {
       pendingVerify && pendingVerify.email === email ? pendingVerify : null;
 
     let university = matchingPendingVerify?.university;
-    let isCustomUniversity = matchingPendingVerify?.isCustomUniversity ?? false;
     try {
       const user = await db.user.findUnique({ where: { email } });
       if (user?.university) university = user.university;
-      if (user) isCustomUniversity = user.isCustomUniversity;
     } catch {
       // ignore DB lookup error
     }
@@ -52,7 +50,6 @@ export async function POST(req: NextRequest) {
       email,
       purpose,
       university,
-      isCustomUniversity,
       enforceCooldown: true,
     });
 
@@ -70,8 +67,6 @@ export async function POST(req: NextRequest) {
       ok: true,
       email,
       provider: otpRes.mailResult.provider,
-      isLiveEmail: otpRes.mailResult.isLiveEmail,
-      previewUrl: otpRes.mailResult.previewUrl,
     });
 
     if (purpose === "EMAIL_VERIFY" && matchingPendingVerify) {
