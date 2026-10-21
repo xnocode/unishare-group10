@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useMemo, useSyncExternalStore, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
+import { saveClientUser, type ClientUser } from "../lib/user-client";
 import "../auth.css";
 
 const subscribeStorage = () => () => {};
@@ -149,14 +150,7 @@ function ConfirmEmailContent() {
       const data = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
         error?: string;
-        user?: {
-          email: string;
-          name: string;
-          initials: string;
-          university: string;
-          tokenBalance: number;
-          verified: boolean;
-        };
+        user?: ClientUser;
       };
 
       if (!res.ok || !data.ok || !data.user) {
@@ -164,9 +158,8 @@ function ConfirmEmailContent() {
         return;
       }
 
+      saveClientUser(data.user);
       try {
-        localStorage.setItem("unishare_logged_in", "true");
-        localStorage.setItem("unishare_user", JSON.stringify(data.user));
         sessionStorage.removeItem("unishare_pending_mail_meta");
       } catch {
         // ignore storage errors

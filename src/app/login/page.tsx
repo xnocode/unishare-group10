@@ -3,6 +3,7 @@
 import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { saveClientUser, type ClientUser } from "../lib/user-client";
 import "../auth.css";
 
 function LoginContent() {
@@ -48,14 +49,7 @@ function LoginContent() {
         error?: string;
         needsEmailVerification?: boolean;
         email?: string;
-        user?: {
-          name: string;
-          email: string;
-          initials: string;
-          university: string;
-          verified: boolean;
-          tokenBalance: number;
-        };
+        user?: ClientUser;
       };
 
       if (!res.ok || !data.ok || !data.user) {
@@ -68,12 +62,7 @@ function LoginContent() {
         return;
       }
 
-      try {
-        localStorage.setItem("unishare_logged_in", "true");
-        localStorage.setItem("unishare_user", JSON.stringify(data.user));
-      } catch (err) {
-        console.error(err);
-      }
+      saveClientUser(data.user);
 
       let destination = "/home";
       if (typeof window !== "undefined") {

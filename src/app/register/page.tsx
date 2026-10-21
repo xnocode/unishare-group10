@@ -9,6 +9,12 @@ import {
   BdUniversity,
   matchesUniversityEmail,
 } from "../lib/bd-universities";
+import {
+  findListedUniversityConflict,
+  validateCustomUniversityName,
+  validateFullName,
+  validatePasswordChoice,
+} from "../lib/validation";
 
 const COMMON_DOMAIN_SEGMENTS = new Set([
   "edu",
@@ -114,6 +120,7 @@ export default function RegisterPage() {
   const [failedLogos, setFailedLogos] = useState<Record<string, boolean>>({});
 
   // Account form state
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -122,6 +129,7 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  const [fullNameError, setFullNameError] = useState("");
   const [universityError, setUniversityError] = useState("");
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
@@ -210,13 +218,20 @@ export default function RegisterPage() {
   };
 
   const handleSelectCustomUniversity = (name: string) => {
-    const cleaned = name.trim();
-    if (cleaned.length < 2) {
-      setUniversityError("Please enter your full university name (at least 2 characters).");
+    const conflict = findListedUniversityConflict(name);
+    if (conflict) {
+      handleSelectUniversity(conflict);
+      return;
+    }
+    const check = validateCustomUniversityName(name);
+    if (!check.valid) {
+      setUniversityError(
+        check.error || "Please enter your full official university or college name."
+      );
       return;
     }
     setSelectedUniId("");
-    setCustomUniName(cleaned);
+    setCustomUniName(check.normalized);
     setManualMode(false);
     setSearchQuery("");
     setDropdownOpen(false);
@@ -265,13 +280,33 @@ export default function RegisterPage() {
     const trimmedEmail = email.trim().toLowerCase();
     let isValid = true;
 
-    if (!effectiveUniName || effectiveUniName.length < 2) {
+    const nameCheck = validateFullName(fullName);
+    if (!nameCheck.valid) {
+      setFullNameError(nameCheck.error || "Enter your real first and last name.");
+      isValid = false;
+    } else {
+      setFullNameError("");
+    }
+
+    let resolvedUniversityName = effectiveUniName;
+    if (!effectiveUniName) {
       setUniversityError(
         manualMode
-          ? "Please type your university name (at least 2 characters)."
-          : "Search for your university, or click “Enter manually” if it isn’t listed."
+          ? "Please type your full university name."
+          : "Search for your university, or click “Type manually” if it isn’t listed."
       );
       isValid = false;
+    } else if (!selectedUniversity) {
+      const customCheck = validateCustomUniversityName(effectiveUniName);
+      if (!customCheck.valid) {
+        setUniversityError(
+          customCheck.error || "Please enter a valid full institution name."
+        );
+        isValid = false;
+      } else {
+        resolvedUniversityName = customCheck.normalized;
+        setUniversityError("");
+      }
     } else {
       setUniversityError("");
     }
@@ -289,18 +324,19 @@ export default function RegisterPage() {
         .map((d) => `@${d}`)
         .join(" or ");
       setEmailError(
-        `Use your ${selectedUniversity.shortName} email (${domainLabel}), or type a custom university if yours isn’t listed.`
+        `Use your ${selectedUniversity.shortName} email (${domainLabel}).`
       );
       isValid = false;
     } else {
       setEmailError("");
     }
 
-    // Password validation: at least 8 chars, must include letter and number
-    const passwordValid =
-      password.length >= 8 && /[A-Za-z]/.test(password) && /\d/.test(password);
-    if (!passwordValid) {
-      setPasswordError("Use at least 8 characters with a letter and a number.");
+    // Password validation: at least 8 chars, letter + number, not weak placeholder
+    const pwCheck = validatePasswordChoice(password);
+    if (!pwCheck.valid) {
+      setPasswordError(
+        pwCheck.error || "Use at least 8 characters with a letter and a number."
+      );
       isValid = false;
     } else {
       setPasswordError("");
@@ -332,9 +368,10 @@ export default function RegisterPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          fullName: nameCheck.normalized,
           email: trimmedEmail,
           password,
-          universityName: effectiveUniName,
+          universityName: resolvedUniversityName,
           universityId: selectedUniversity ? selectedUniversity.id : "custom",
           isCustomUniversity: !selectedUniversity,
         }),
@@ -842,6 +879,42 @@ export default function RegisterPage() {
                   </>
                 )}
               </div>
+
+              {/* Full Name */}
+              <label className="l" htmlFor="fullName">
+                Full name
+              </label>
+              <div className="field">
+                <input
+                  id="fullName"
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => {
+                    setFullName(e.target.value);
+                    if (fullNameError) setFullNameError("");
+                  }}
+                  placeholder="e.g., Fahim Tajwar"
+                  autoComplete="name"
+                  required
+                />
+                <span className="ic static" aria-hidden="true">
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <circle cx="12" cy="8" r="4" />
+                    <path d="M5 20a7 7 0 0 1 14 0" />
+                  </svg>
+                </span>
+              </div>
+              <p className={`hint ${fullNameError ? "error" : ""}`}>
+                {fullNameError ||
+                  "Use your real full name as shown on your student ID card."}
+              </p>
 
               {/* University Email */}
               <label className="l" htmlFor="email">

@@ -4,6 +4,13 @@ import { useState, useRef, useMemo, useSyncExternalStore, Suspense } from "react
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import "../auth.css";
+import { saveClientUser, type ClientUser } from "../lib/user-client";
+import {
+  validateDepartment,
+  validateFullName,
+  validateImageUpload,
+  validateStudentId,
+} from "../lib/validation";
 
 const subscribeUserStorage = () => () => {};
 
@@ -60,17 +67,15 @@ function StudentVerificationContent() {
     editedStudentId ?? (storedUser?.studentId || (isDemo ? "2023-114-028" : ""));
   const setStudentId = (val: string) => setEditedStudentId(val);
 
-  // Photos State
-  const [idCardFile, setIdCardFile] = useState<{ name: string; size: string }>({
-    name: "student-id-front.jpg",
-    size: "JPG · 2.4 MB",
-  });
-  const [faceFile, setFaceFile] = useState<{ name: string; size: string }>({
-    name: "farhana-face.jpg",
-    size: "JPG · 1.8 MB",
-  });
+  // Photos State (do not fake pre-uploaded photos for real users)
+  const [idCardFile, setIdCardFile] = useState<{ name: string; size: string } | null>(
+    isDemo ? { name: "student-id-front.jpg", size: "JPG · 2.4 MB" } : null
+  );
+  const [faceFile, setFaceFile] = useState<{ name: string; size: string } | null>(
+    isDemo ? { name: "farhana-face.jpg", size: "JPG · 1.8 MB" } : null
+  );
 
-  const [agreed, setAgreed] = useState(true);
+  const [agreed, setAgreed] = useState(isDemo);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitMsg, setSubmitMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
@@ -78,28 +83,41 @@ function StudentVerificationContent() {
   const idCardInputRef = useRef<HTMLInputElement | null>(null);
   const faceInputRef = useRef<HTMLInputElement | null>(null);
 
+  const formatFileSize = (bytes: number) => {
+    if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  };
+
   const handleIdCardUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
-      const ext = file.name.split(".").pop()?.toUpperCase() || "JPG";
-      setIdCardFile({
-        name: file.name,
-        size: `${ext} · ${sizeMB} MB`,
-      });
+    if (!file) return;
+    const check = validateImageUpload(file);
+    if (!check.valid) {
+      setErrorMsg(check.error || "Invalid student ID image.");
+      return;
     }
+    setErrorMsg("");
+    const ext = file.name.split(".").pop()?.toUpperCase() || "JPG";
+    setIdCardFile({
+      name: file.name,
+      size: `${ext} · ${formatFileSize(file.size)}`,
+    });
   };
 
   const handleFaceUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
-      const ext = file.name.split(".").pop()?.toUpperCase() || "JPG";
-      setFaceFile({
-        name: file.name,
-        size: `${ext} · ${sizeMB} MB`,
-      });
+    if (!file) return;
+    const check = validateImageUpload(file);
+    if (!check.valid) {
+      setErrorMsg(check.error || "Invalid face photo.");
+      return;
     }
+    setErrorMsg("");
+    const ext = file.name.split(".").pop()?.toUpperCase() || "JPG";
+    setFaceFile({
+      name: file.name,
+      size: `${ext} · ${formatFileSize(file.size)}`,
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -107,8 +125,28 @@ function StudentVerificationContent() {
     setErrorMsg("");
     setSubmitMsg("");
 
-    if (!fullName.trim() || !studentId.trim() || !department.trim()) {
-      setErrorMsg("Please enter your full name, student ID, and department.");
+    const nameCheck = validateFullName(fullName);
+    if (!nameCheck.valid) {
+      setErrorMsg(nameCheck.error || "Please enter your genuine full name.");
+      return;
+    }
+
+    const idCheck = validateStudentId(studentId);
+    if (!idCheck.valid) {
+      setErrorMsg(idCheck.error || "Please enter a valid student ID number.");
+      return;
+    }
+
+    const deptCheck = validateDepartment(department);
+    if (!deptCheck.valid) {
+      setErrorMsg(deptCheck.error || "Please enter your genuine department name.");
+      return;
+    }
+
+    if (!idCardFile || !faceFile) {
+      setErrorMsg(
+        "Please upload both your student ID card photo and a face photo to continue."
+      );
       return;
     }
 
@@ -124,19 +162,21 @@ function StudentVerificationContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email,
-          fullName: fullName.trim(),
+          fullName: nameCheck.normalized,
           university: university.trim(),
-          studentId: studentId.trim(),
-          department: department.trim(),
+          studentId: idCheck.normalized,
+          department: deptCheck.normalized,
           programme,
           academicSession: session,
+          idCardFileName: idCardFile.name,
+          faceFileName: faceFile.name,
         }),
       });
 
       const data = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
         error?: string;
-        user?: Record<string, unknown>;
+        user?: ClientUser;
       };
 
       if (!res.ok || !data.ok) {
@@ -145,12 +185,7 @@ function StudentVerificationContent() {
       }
 
       if (data.user) {
-        try {
-          localStorage.setItem("unishare_logged_in", "true");
-          localStorage.setItem("unishare_user", JSON.stringify(data.user));
-        } catch {
-          // ignore
-        }
+        saveClientUser(data.user);
       }
 
       setSubmitMsg(
@@ -159,10 +194,10 @@ function StudentVerificationContent() {
       setTimeout(() => {
         router.push(
           `/verification-pending?name=${encodeURIComponent(
-            fullName.trim()
+            nameCheck.normalized
           )}&email=${encodeURIComponent(email)}&university=${encodeURIComponent(
             university.trim() || "University of Dhaka"
-          )}&studentId=${encodeURIComponent(studentId.trim())}`
+          )}&studentId=${encodeURIComponent(idCheck.normalized)}`
         );
       }, 450);
     } catch {
@@ -383,27 +418,37 @@ function StudentVerificationContent() {
                           <circle cx="12" cy="10" r="2.5" />
                           <path d="M8 17c.6-1.5 2-2.3 4-2.3s3.4.8 4 2.3" />
                         </svg>
-                        <span className="up-status-ok">
-                          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <circle cx="12" cy="12" r="9" />
-                            <path d="M8 12l3 3 5-6" />
-                          </svg>
-                          Uploaded
-                        </span>
+                        {idCardFile ? (
+                          <span className="up-status-ok">
+                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                              <circle cx="12" cy="12" r="9" />
+                              <path d="M8 12l3 3 5-6" />
+                            </svg>
+                            Uploaded
+                          </span>
+                        ) : (
+                          <span className="up-status-ok" style={{ color: "#8a5a00" }}>
+                            Required
+                          </span>
+                        )}
                       </div>
-                      <div className="fname">{idCardFile.name}</div>
-                      <div className="fsize">{idCardFile.size}</div>
+                      <div className="fname">
+                        {idCardFile ? idCardFile.name : "No ID card selected"}
+                      </div>
+                      <div className="fsize">
+                        {idCardFile ? idCardFile.size : "JPG, PNG or WebP · up to 10 MB"}
+                      </div>
                       <button
                         type="button"
                         className="replace-link"
                         onClick={() => idCardInputRef.current?.click()}
                       >
-                        Replace photo
+                        {idCardFile ? "Replace photo" : "Upload ID card"}
                       </button>
                       <input
                         ref={idCardInputRef}
                         type="file"
-                        accept="image/jpeg,image/png"
+                        accept="image/jpeg,image/png,image/webp"
                         style={{ display: "none" }}
                         onChange={handleIdCardUpload}
                       />
@@ -424,27 +469,37 @@ function StudentVerificationContent() {
                           <path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2" />
                           <path d="M9 10v1M15 10v1M9.5 15c.7.8 1.5 1.2 2.5 1.2s1.8-.4 2.5-1.2" />
                         </svg>
-                        <span className="up-status-ok">
-                          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <circle cx="12" cy="12" r="9" />
-                            <path d="M8 12l3 3 5-6" />
-                          </svg>
-                          Uploaded
-                        </span>
+                        {faceFile ? (
+                          <span className="up-status-ok">
+                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                              <circle cx="12" cy="12" r="9" />
+                              <path d="M8 12l3 3 5-6" />
+                            </svg>
+                            Uploaded
+                          </span>
+                        ) : (
+                          <span className="up-status-ok" style={{ color: "#8a5a00" }}>
+                            Required
+                          </span>
+                        )}
                       </div>
-                      <div className="fname">{faceFile.name}</div>
-                      <div className="fsize">{faceFile.size}</div>
+                      <div className="fname">
+                        {faceFile ? faceFile.name : "No face photo selected"}
+                      </div>
+                      <div className="fsize">
+                        {faceFile ? faceFile.size : "JPG, PNG or WebP · up to 10 MB"}
+                      </div>
                       <button
                         type="button"
                         className="replace-link"
                         onClick={() => faceInputRef.current?.click()}
                       >
-                        Replace photo
+                        {faceFile ? "Replace photo" : "Upload face photo"}
                       </button>
                       <input
                         ref={faceInputRef}
                         type="file"
-                        accept="image/jpeg,image/png"
+                        accept="image/jpeg,image/png,image/webp"
                         style={{ display: "none" }}
                         onChange={handleFaceUpload}
                       />

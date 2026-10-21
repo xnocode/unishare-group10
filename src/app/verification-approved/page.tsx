@@ -3,17 +3,25 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import {
+  clearClientSession,
+  getFirstName,
+  useCurrentUser,
+} from "../lib/user-client";
 import "../auth.css";
 
 function VerificationApprovedContent() {
   const searchParams = useSearchParams();
+  const { user, resolvedUser } = useCurrentUser();
+  const activeUser = user || resolvedUser;
 
-  const nameParam = searchParams.get("name") || "Farhana Rahman";
-  const universityParam = searchParams.get("university") || "University of Dhaka";
-  const emailParam = searchParams.get("email") || "farhana@std.du.ac.bd";
-  const studentIdParam = searchParams.get("studentId") || "2023-114-028";
+  const nameParam = searchParams.get("name") || activeUser.name;
+  const universityParam = searchParams.get("university") || activeUser.university;
+  const emailParam = searchParams.get("email") || activeUser.email;
+  const studentIdParam =
+    searchParams.get("studentId") || activeUser.studentId || "Verified";
 
-  const firstName = nameParam.split(" ")[0] || "Farhana";
+  const firstName = getFirstName(nameParam);
 
   return (
     <div className="unishare-auth">
@@ -249,7 +257,11 @@ function VerificationApprovedContent() {
                 <path d="M5 12h14m-6-6 6 6-6 6" />
               </svg>
             </Link>
-            <Link className="logout-link" href="/login">
+            <Link
+              className="logout-link"
+              href="/login"
+              onClick={() => clearClientSession()}
+            >
               Log out
             </Link>
           </div>

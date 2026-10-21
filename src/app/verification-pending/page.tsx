@@ -3,17 +3,25 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import {
+  clearClientSession,
+  getFirstName,
+  useCurrentUser,
+} from "../lib/user-client";
 import "../auth.css";
 
 function VerificationPendingContent() {
   const searchParams = useSearchParams();
+  const { user, resolvedUser } = useCurrentUser();
+  const activeUser = user || resolvedUser;
 
-  const nameParam = searchParams.get("name") || "Farhana Rahman";
-  const emailParam = searchParams.get("email") || "farhana@std.du.ac.bd";
-  const universityParam = searchParams.get("university") || "University of Dhaka";
-  const studentIdParam = searchParams.get("studentId") || "2023-114-028";
+  const nameParam = searchParams.get("name") || activeUser.name;
+  const emailParam = searchParams.get("email") || activeUser.email;
+  const universityParam = searchParams.get("university") || activeUser.university;
+  const studentIdParam =
+    searchParams.get("studentId") || activeUser.studentId || "Pending verification";
 
-  const firstName = nameParam.split(" ")[0] || "Farhana";
+  const firstName = getFirstName(nameParam);
 
   return (
     <div className="unishare-auth">
@@ -220,7 +228,11 @@ function VerificationPendingContent() {
             <Link className="btn ghost-home" href="/">
               Back to home
             </Link>
-            <Link className="logout-link" href="/login">
+            <Link
+              className="logout-link"
+              href="/login"
+              onClick={() => clearClientSession()}
+            >
               Log out
             </Link>
           </div>
