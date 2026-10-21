@@ -22,9 +22,14 @@ export interface PublicUser {
   universityId: string;
   isCustomUniversity: boolean;
   studentId: string | null;
+  department: string | null;
+  programme: string | null;
+  academicSession: string | null;
+  createdAt: string | null;
   verified: boolean;
   emailVerified: boolean;
   tokenBalance: number;
+  isDemoUser: boolean;
 }
 
 export interface PendingVerifyPayload {
@@ -51,6 +56,10 @@ export interface VerifiedAccountPayload {
   universityId: string;
   isCustomUniversity: boolean;
   studentId: string | null;
+  department?: string | null;
+  programme?: string | null;
+  academicSession?: string | null;
+  createdAt?: string | null;
   passwordHash: string;
   emailVerified: boolean;
   verified: boolean;
@@ -241,14 +250,26 @@ export function toPublicUser(user: {
   universityId?: string | null;
   isCustomUniversity?: boolean;
   studentId?: string | null;
+  department?: string | null;
+  programme?: string | null;
+  academicSession?: string | null;
+  createdAt?: Date | string | null;
   verified: boolean;
   emailVerified?: boolean;
   tokenBalance: number;
 }): PublicUser {
-  const fullName = user.fullName?.trim() || deriveNameFromEmail(user.email);
+  const email = normalizeEmail(user.email);
+  const fullName = user.fullName?.trim() || deriveNameFromEmail(email);
+  const createdAtIso =
+    user.createdAt instanceof Date
+      ? user.createdAt.toISOString()
+      : typeof user.createdAt === "string"
+      ? user.createdAt
+      : null;
+
   return {
     id: user.id,
-    email: normalizeEmail(user.email),
+    email,
     name: fullName,
     fullName,
     initials: deriveInitials(fullName),
@@ -256,9 +277,14 @@ export function toPublicUser(user: {
     universityId: user.universityId || "du",
     isCustomUniversity: Boolean(user.isCustomUniversity),
     studentId: user.studentId ?? null,
+    department: user.department ?? null,
+    programme: user.programme ?? null,
+    academicSession: user.academicSession ?? null,
+    createdAt: createdAtIso,
     verified: Boolean(user.verified),
     emailVerified: Boolean(user.emailVerified ?? user.verified),
     tokenBalance: user.tokenBalance ?? 50,
+    isDemoUser: email === DEMO_EMAIL,
   };
 }
 
@@ -329,6 +355,29 @@ export function setVerifiedAccountCookie(
     secure: process.env.NODE_ENV === "production",
     path: "/",
     maxAge: maxAgeSeconds,
+  });
+}
+
+export function setVerifiedAccountCookieFromUser(
+  res: NextResponse,
+  publicUser: PublicUser,
+  passwordHash: string
+) {
+  setVerifiedAccountCookie(res, {
+    email: publicUser.email,
+    fullName: publicUser.fullName,
+    university: publicUser.university,
+    universityId: publicUser.universityId,
+    isCustomUniversity: publicUser.isCustomUniversity,
+    studentId: publicUser.studentId,
+    department: publicUser.department,
+    programme: publicUser.programme,
+    academicSession: publicUser.academicSession,
+    createdAt: publicUser.createdAt,
+    passwordHash,
+    emailVerified: publicUser.emailVerified,
+    verified: publicUser.verified,
+    tokenBalance: publicUser.tokenBalance,
   });
 }
 
