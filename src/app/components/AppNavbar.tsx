@@ -3,6 +3,11 @@
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import {
+  clearClientSession,
+  deriveInitials,
+  useCurrentUser,
+} from "../lib/user-client";
 import "./app-navbar.css";
 
 export type ActiveNavKey =
@@ -32,25 +37,6 @@ interface AppNavbarProps {
   onLogout?: () => void;
   onOpenProfile?: () => void;
   onSos?: () => void;
-}
-
-const DEFAULT_USER: Required<NavUser> = {
-  name: "Farhana Rahman",
-  email: "farhana@std.du.ac.bd",
-  initials: "FR",
-  university: "University of Dhaka",
-  tokenBalance: 420,
-};
-
-function deriveInitials(name?: string, provided?: string): string {
-  if (provided?.trim()) return provided.trim().slice(0, 2).toUpperCase();
-  if (!name?.trim()) return "US";
-  const parts = name.trim().split(/\s+/);
-  return parts
-    .slice(0, 2)
-    .map((p) => p[0])
-    .join("")
-    .toUpperCase();
 }
 
 const NAV_ITEMS: { key: ActiveNavKey; label: string; href: string }[] = [
@@ -159,22 +145,11 @@ export default function AppNavbar({
   onSos,
 }: AppNavbarProps) {
   const router = useRouter();
-  const [storedUser, setStoredUser] = useState<NavUser | null>(null);
+  const { resolvedUser: currentUser } = useCurrentUser();
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const profileRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("unishare_user");
-      if (raw) {
-        setStoredUser(JSON.parse(raw));
-      }
-    } catch {
-      // Ignore malformed storage entries cleanly
-    }
-  }, []);
 
   useEffect(() => {
     const handleOutside = (e: MouseEvent) => {
@@ -187,34 +162,22 @@ export default function AppNavbar({
     return () => document.removeEventListener("mousedown", handleOutside);
   }, []);
 
+  const effectiveName = user?.name || currentUser.name;
   const resolvedUser: Required<NavUser> = {
-    name: user?.name || storedUser?.name || DEFAULT_USER.name,
-    email: user?.email || storedUser?.email || DEFAULT_USER.email,
+    name: effectiveName,
+    email: user?.email || currentUser.email,
     initials: deriveInitials(
-      user?.name || storedUser?.name || DEFAULT_USER.name,
-      user?.initials || storedUser?.initials
+      effectiveName,
+      user?.name ? user?.initials : user?.initials || currentUser.initials
     ),
-    university:
-      user?.university || storedUser?.university || DEFAULT_USER.university,
-    tokenBalance:
-      user?.tokenBalance ??
-      storedUser?.tokenBalance ??
-      DEFAULT_USER.tokenBalance,
+    university: user?.university || currentUser.university,
+    tokenBalance: user?.tokenBalance ?? currentUser.tokenBalance,
   };
 
   const handleSignOut = () => {
     setProfileOpen(false);
     setMobileOpen(false);
-    try {
-      localStorage.removeItem("unishare_logged_in");
-      localStorage.removeItem("unishare_user");
-      document.cookie = "unishare_logged_in=; path=/; max-age=0";
-      document.cookie = "unishare_user=; path=/; max-age=0; SameSite=Lax";
-      document.cookie = "unishare_token=; path=/; max-age=0; SameSite=Lax";
-      fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
-    } catch {
-      // Ignore storage access errors
-    }
+    clearClientSession();
     if (onLogout) {
       onLogout();
     } else {
@@ -261,20 +224,25 @@ export default function AppNavbar({
   };
 
   useEffect(() => {
-    loadEmergencyContact();
-    fetch("/api/emergency-contacts")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d?.contacts?.[0]) {
-          setSosContact(d.contacts[0]);
-        }
-      })
-      .catch(() => {});
+    const t = setTimeout(loadEmergencyContact, 0);
+    if (resolvedUser.email) {
+      fetch(`/api/emergency-contacts?email=${encodeURIComponent(resolvedUser.email)}`)
+        .then((r) => r.json())
+        .then((d) => {
+          if (d?.contacts?.[0]) {
+            setSosContact(d.contacts[0]);
+          }
+        })
+        .catch(() => {});
+    }
 
     const handleStorage = () => loadEmergencyContact();
     window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
-  }, []);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, [resolvedUser.email]);
 
   const triggerSosEmergency = async () => {
     setIsTriggering(true);

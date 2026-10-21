@@ -1,8 +1,16 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import Link from "next/link";
 import AppNavbar from "./components/AppNavbar";
+import {
+  clearClientSession,
+  formatMemberSince,
+  getUserScopedKey,
+  useCurrentUser,
+  useLocalStorageRaw,
+  writeUserScopedJson,
+} from "./lib/user-client";
 import "./campus-home.css";
 
 interface ProductItem {
@@ -182,33 +190,143 @@ interface CampusHomeProps {
 }
 
 export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
+  const { resolvedUser, isDemoUser, firstName } = useCurrentUser();
   const [selectedCat, setSelectedCat] = useState("All items");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedArea, setSelectedArea] = useState("");
   const [selectedPrice, setSelectedPrice] = useState("");
   const [availOnly, setAvailOnly] = useState(true);
   const [sortBy, setSortBy] = useState("rec");
-  const [favorites, setFavorites] = useState<Record<string, boolean>>({});
   const [toastMsg, setToastMsg] = useState("");
   const [showToast, setShowToast] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
 
-  useEffect(() => {
+  const productsStorageKey = getUserScopedKey(
+    "unishare_my_products",
+    resolvedUser.email,
+    isDemoUser
+  );
+  const walletStorageKey = getUserScopedKey(
+    "unishare_wallet",
+    resolvedUser.email,
+    isDemoUser
+  );
+  const notificationsStorageKey = getUserScopedKey(
+    "unishare_notifications",
+    resolvedUser.email,
+    isDemoUser
+  );
+  const favoritesStorageKey = getUserScopedKey(
+    "unishare_favorites",
+    resolvedUser.email,
+    isDemoUser
+  );
+
+  const rawProductsJson = useLocalStorageRaw(productsStorageKey);
+  const rawWalletJson = useLocalStorageRaw(walletStorageKey);
+  const rawNotificationsJson = useLocalStorageRaw(notificationsStorageKey);
+  const rawFavoritesJson = useLocalStorageRaw(favoritesStorageKey);
+
+  const favorites = useMemo(() => {
+    if (!rawFavoritesJson) return {} as Record<string, boolean>;
     try {
-      const stored = localStorage.getItem("unishare_favorites");
-      if (stored) {
-        setFavorites(JSON.parse(stored));
-      }
-    } catch (e) {
-      console.error(e);
+      return JSON.parse(rawFavoritesJson) as Record<string, boolean>;
+    } catch {
+      return {} as Record<string, boolean>;
     }
-  }, []);
+  }, [rawFavoritesJson]);
+
+  const myProducts = useMemo(() => {
+    if (!rawProductsJson) return null;
+    try {
+      const parsed = JSON.parse(rawProductsJson);
+      return Array.isArray(parsed)
+        ? (parsed as Array<{
+            name?: string;
+            category?: string;
+            condition?: string;
+            price?: number;
+            rate?: number;
+            deposit?: number;
+            status?: string;
+            state?: string;
+          }>)
+        : null;
+    } catch {
+      return null;
+    }
+  }, [rawProductsJson]);
+
+  const walletSummary = useMemo(() => {
+    if (!rawWalletJson) return null;
+    try {
+      return JSON.parse(rawWalletJson) as {
+        balance?: number;
+        heldDeposit?: number;
+      };
+    } catch {
+      return null;
+    }
+  }, [rawWalletJson]);
+
+  const storedNotifications = useMemo(() => {
+    if (!rawNotificationsJson) return null;
+    try {
+      const parsed = JSON.parse(rawNotificationsJson);
+      return Array.isArray(parsed)
+        ? (parsed as Array<{
+            title?: string;
+            meta?: string;
+            body?: string;
+            read?: boolean;
+          }>)
+        : null;
+    } catch {
+      return null;
+    }
+  }, [rawNotificationsJson]);
+
+  const tokenBalance = walletSummary?.balance ?? resolvedUser.tokenBalance;
+  const heldDeposit = walletSummary?.heldDeposit ?? (isDemoUser ? 100 : 0);
+  const activeRentalsCount = isDemoUser ? 1 : 0;
+  const liveListingsCount = myProducts
+    ? myProducts.filter(
+        (p) => p.status !== "Paused" && p.state !== "paused" && p.state !== "draft"
+      ).length
+    : isDemoUser
+    ? 2
+    : 0;
+  const firstListing =
+    myProducts && myProducts.length > 0
+      ? myProducts.find((p) => p.state !== "paused" && p.state !== "draft") ||
+        myProducts[0]
+      : isDemoUser
+      ? {
+          name: "Canon EOS 200D",
+          category: "Cameras",
+          condition: "Good",
+          price: 60,
+          rate: 60,
+          deposit: 300,
+          status: "Active",
+          state: "active",
+        }
+      : null;
+
+  const campusItems = useMemo(() => {
+    if (isDemoUser) return ITEMS;
+    return ITEMS.map((item) =>
+      item.a === "DU Central Field"
+        ? { ...item, a: "Central Sports Field" }
+        : item
+    );
+  }, [isDemoUser]);
 
   const pickupAreas = useMemo(() => {
     const set = new Set<string>();
-    ITEMS.forEach((item) => set.add(item.a));
+    campusItems.forEach((item) => set.add(item.a));
     return Array.from(set);
-  }, []);
+  }, [campusItems]);
 
   const triggerToast = (msg: string) => {
     setToastMsg(msg);
@@ -221,18 +339,13 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
   const toggleFavorite = (itemName: string) => {
     const isFav = !favorites[itemName];
     const updated = { ...favorites, [itemName]: isFav };
-    setFavorites(updated);
-    try {
-      localStorage.setItem("unishare_favorites", JSON.stringify(updated));
-    } catch (e) {
-      console.error(e);
-    }
+    writeUserScopedJson(favoritesStorageKey, updated);
     triggerToast(isFav ? "Added to Favorites" : "Removed from Favorites");
   };
 
   const filteredItems = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    const result = ITEMS.filter((x) => {
+    const result = campusItems.filter((x) => {
       const matchCat = selectedCat === "All items" || x.c === selectedCat;
       const matchArea = !selectedArea || x.a === selectedArea;
       const matchPrice = !selectedPrice || x.p <= Number(selectedPrice);
@@ -247,20 +360,14 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
       result.sort((a, b) => b.p - a.p);
     }
     return result;
-  }, [selectedCat, searchQuery, selectedArea, selectedPrice, sortBy]);
+  }, [campusItems, selectedCat, searchQuery, selectedArea, selectedPrice, sortBy]);
 
   const handleLogoutClick = (e: React.MouseEvent) => {
     e.preventDefault();
+    clearClientSession();
     if (onLogout) {
       onLogout();
     } else {
-      try {
-        localStorage.removeItem("unishare_logged_in");
-        localStorage.removeItem("unishare_user");
-        document.cookie = "unishare_logged_in=; path=/; max-age=0";
-      } catch (err) {
-        console.error(err);
-      }
       window.location.href = "/";
     }
   };
@@ -269,6 +376,7 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
     <div className="unishare-campus-home">
       <AppNavbar
         activeNav="home"
+        user={{ tokenBalance }}
         onLogout={onLogout}
         onOpenProfile={() => setShowProfileModal(true)}
         onSos={() =>
@@ -281,7 +389,7 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
         <div className="eyebrow">Your campus, still sharing</div>
         <div className="hero">
           <div>
-            <h1>Hello, Farhana.</h1>
+            <h1>Hello, {firstName}.</h1>
             <p className="sub">What do you need for your campus day?</p>
           </div>
           <div className="acts">
@@ -300,40 +408,70 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
         <div className="band">
           <SvgIcon name="shield" size={18} style={{ width: "auto" }} />
           <div>
-            <b>University of Dhaka</b>
+            <b>{resolvedUser.university}</b>
             <p>
-              Only your university. Every item and ride here is from a verified
-              DU student.
+              Only your university. Every item and ride here is from a verified{" "}
+              {resolvedUser.university} student.
             </p>
           </div>
-          <span>
-            <SvgIcon name="check" size={12} />
-            Verified student
-            <SvgIcon name="lock" size={16} />
-          </span>
+          {resolvedUser.verified ? (
+            <span>
+              <SvgIcon name="check" size={12} />
+              Verified student
+              <SvgIcon name="lock" size={16} />
+            </span>
+          ) : resolvedUser.studentId ? (
+            <span>
+              <SvgIcon name="clock" size={12} />
+              Verification in review
+              <SvgIcon name="lock" size={16} />
+            </span>
+          ) : (
+            <Link href="/student-verification" style={{ textDecoration: "none", color: "inherit" }}>
+              <span>
+                <SvgIcon name="shield" size={12} />
+                Complete student verification
+                <SvgIcon name="arrow" size={14} />
+              </span>
+            </Link>
+          )}
         </div>
 
         {/* Stat Cards */}
         <div className="stats">
           <div className="stat">
             <small>Available tokens</small>
-            <strong>500</strong>
+            <strong>{tokenBalance}</strong>
             <p>Ready for your next booking</p>
           </div>
           <div className="stat">
             <small>Held deposits</small>
-            <strong>100</strong>
-            <p>1 active rental deposit</p>
+            <strong>{heldDeposit}</strong>
+            <p>
+              {isDemoUser
+                ? "1 active rental deposit"
+                : heldDeposit > 0
+                ? "Refundable rental deposit"
+                : "No held deposits"}
+            </p>
           </div>
           <div className="stat">
             <small>Active rentals</small>
-            <strong>1</strong>
-            <p>1 item borrowed</p>
+            <strong>{activeRentalsCount}</strong>
+            <p>
+              {activeRentalsCount === 0
+                ? "No active rentals yet"
+                : `${activeRentalsCount} item${activeRentalsCount > 1 ? "s" : ""} borrowed`}
+            </p>
           </div>
           <div className="stat">
             <small>Live listings</small>
-            <strong>2</strong>
-            <p>2 items available for rent</p>
+            <strong>{liveListingsCount}</strong>
+            <p>
+              {liveListingsCount === 0
+                ? "No items listed yet"
+                : `${liveListingsCount} item${liveListingsCount === 1 ? "" : "s"} available for rent`}
+            </p>
           </div>
         </div>
 
@@ -370,37 +508,99 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
               </span>
               <div>
                 <b>Notifications</b>
-                <small>3 unread updates</small>
+                <small>
+                  {storedNotifications
+                    ? `${storedNotifications.filter((n) => !n.read).length} unread updates`
+                    : isDemoUser
+                    ? "3 unread updates"
+                    : "Account updates"}
+                </small>
               </div>
-              <Link className="tag" href="/notifications">New</Link>
+              <Link className="tag" href="/notifications">
+                {storedNotifications || isDemoUser ? "View" : "New"}
+              </Link>
             </div>
-            <div className="li">
-              <span className="ck">
-                <SvgIcon name="check" size={11} />
-              </span>
-              <div>
-                <b>Pickup reminder for scientific calculator</b>
-                <p>14 Oct · 9:10 AM · Pickup at Science Library today.</p>
-              </div>
-            </div>
-            <div className="li">
-              <span className="ck">
-                <SvgIcon name="check" size={11} />
-              </span>
-              <div>
-                <b>Car ride seat booked</b>
-                <p>14 Oct · 9:18 AM · Arif Hossain · Dhanmondi 27 to TSC · 80 tokens / seat.</p>
-              </div>
-            </div>
-            <div className="li">
-              <span className="ck">
-                <SvgIcon name="check" size={11} />
-              </span>
-              <div>
-                <b>New request for Canon EOS 200D</b>
-                <p>14 Oct · 9:22 AM · Review the request and respond from your listings.</p>
-              </div>
-            </div>
+            {storedNotifications && storedNotifications.length > 0 ? (
+              storedNotifications.slice(0, 3).map((n, idx) => (
+                <div className="li" key={idx}>
+                  <span className="ck">
+                    <SvgIcon name="check" size={11} />
+                  </span>
+                  <div>
+                    <b>{n.title || "Campus update"}</b>
+                    <p>{n.meta ? `${n.meta} · ` : ""}{n.body || ""}</p>
+                  </div>
+                </div>
+              ))
+            ) : isDemoUser ? (
+              <>
+                <div className="li">
+                  <span className="ck">
+                    <SvgIcon name="check" size={11} />
+                  </span>
+                  <div>
+                    <b>Pickup reminder for scientific calculator</b>
+                    <p>14 Oct · 9:10 AM · Pickup at Science Library today.</p>
+                  </div>
+                </div>
+                <div className="li">
+                  <span className="ck">
+                    <SvgIcon name="check" size={11} />
+                  </span>
+                  <div>
+                    <b>Car ride seat booked</b>
+                    <p>14 Oct · 9:18 AM · Arif Hossain · Dhanmondi 27 to TSC · 80 tokens / seat.</p>
+                  </div>
+                </div>
+                <div className="li">
+                  <span className="ck">
+                    <SvgIcon name="check" size={11} />
+                  </span>
+                  <div>
+                    <b>New request for Canon EOS 200D</b>
+                    <p>14 Oct · 9:22 AM · Review the request and respond from your listings.</p>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="li">
+                  <span className="ck">
+                    <SvgIcon name="check" size={11} />
+                  </span>
+                  <div>
+                    <b>Welcome to {resolvedUser.university}</b>
+                    <p>Your profile is active for {resolvedUser.email}.</p>
+                  </div>
+                </div>
+                <div className="li">
+                  <span className="ck">
+                    <SvgIcon name="check" size={11} />
+                  </span>
+                  <div>
+                    <b>
+                      {resolvedUser.studentId
+                        ? `Student ID ${resolvedUser.studentId} linked`
+                        : "Complete student ID verification"}
+                    </b>
+                    <p>
+                      {resolvedUser.department
+                        ? `Department: ${resolvedUser.department}`
+                        : "Submit your campus details to unlock all listings."}
+                    </p>
+                  </div>
+                </div>
+                <div className="li">
+                  <span className="ck">
+                    <SvgIcon name="check" size={11} />
+                  </span>
+                  <div>
+                    <b>{tokenBalance} starter tokens available</b>
+                    <p>Use tokens to rent items or top up anytime in your wallet.</p>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           <div className="panel wal">
@@ -410,7 +610,7 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
               </span>
               <div>
                 <b>Wallet Access</b>
-                <small>Open wallet</small>
+                <small>{tokenBalance} tokens ready</small>
               </div>
               <Link className="tag" href="/wallet">
                 Open wallet
@@ -425,28 +625,57 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
               </span>
               <div>
                 <b>Recent Activity</b>
-                <small>2 updates</small>
+                <small>{isDemoUser ? "2 updates" : "Account summary"}</small>
               </div>
               <span className="tag">Today</span>
             </div>
-            <div className="li">
-              <span className="ck">
-                <SvgIcon name="check" size={11} />
-              </span>
-              <div>
-                <b>Scientific calculator rental confirmed</b>
-                <p>14 Oct · 9:10 AM · 80 rental tokens charged; 100 held deposit.</p>
-              </div>
-            </div>
-            <div className="li">
-              <span className="ck">
-                <SvgIcon name="check" size={11} />
-              </span>
-              <div>
-                <b>Car ride seat booked</b>
-                <p>14 Oct · 9:18 AM · Arif Hossain · 80 tokens / seat.</p>
-              </div>
-            </div>
+            {isDemoUser ? (
+              <>
+                <div className="li">
+                  <span className="ck">
+                    <SvgIcon name="check" size={11} />
+                  </span>
+                  <div>
+                    <b>Scientific calculator rental confirmed</b>
+                    <p>14 Oct · 9:10 AM · 80 rental tokens charged; 100 held deposit.</p>
+                  </div>
+                </div>
+                <div className="li">
+                  <span className="ck">
+                    <SvgIcon name="check" size={11} />
+                  </span>
+                  <div>
+                    <b>Car ride seat booked</b>
+                    <p>14 Oct · 9:18 AM · Arif Hossain · 80 tokens / seat.</p>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="li">
+                  <span className="ck">
+                    <SvgIcon name="check" size={11} />
+                  </span>
+                  <div>
+                    <b>Signed in as {resolvedUser.name}</b>
+                    <p>{resolvedUser.university} · Member since {formatMemberSince(resolvedUser.createdAt)}.</p>
+                  </div>
+                </div>
+                <div className="li">
+                  <span className="ck">
+                    <SvgIcon name="check" size={11} />
+                  </span>
+                  <div>
+                    <b>
+                      {liveListingsCount > 0 && firstListing?.name
+                        ? `Listing active: ${firstListing.name}`
+                        : "Ready to list or borrow on campus"}
+                    </b>
+                    <p>{tokenBalance} tokens available in your {resolvedUser.university} wallet.</p>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -592,50 +821,70 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
             </span>
             <div>
               <b>Upcoming Ride</b>
-              <small>Confirmed today</small>
+              <small>{isDemoUser ? "Confirmed today" : "Your campus rides"}</small>
             </div>
-            <span className="tag">80 tokens / seat</span>
-          </div>
-          <div className="route">
-            <div>
-              <SvgIcon name="clock" size={15} />
-              Dhanmondi 27
-            </div>
-            <div>
-              <SvgIcon name="pin" size={13} />
-              TSC, DU
-            </div>
-          </div>
-          <div className="meta">
-            <span>15 Oct · 8:30 AM</span>
-            <span>Car · 2 seats left</span>
-          </div>
-          <div className="foot">
-            <span className="ow" style={{ margin: 0 }}>
-              <span
-                className="mini"
-                style={{
-                  width: "22px",
-                  height: "22px",
-                  borderRadius: "50%",
-                  background: "var(--mint)",
-                  color: "var(--teal)",
-                  fontSize: "8px",
-                  fontWeight: 700,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                AH
-              </span>
-              Arif Hossain{" "}
-              <SvgIcon name="check" size={12} style={{ color: "var(--teal)" }} />
+            <span className="tag">
+              {isDemoUser ? "80 tokens / seat" : "0 booked"}
             </span>
-            <Link className="more" href="/rides">
-              Details <SvgIcon name="arrow" size={14} />
-            </Link>
           </div>
+          {isDemoUser ? (
+            <>
+              <div className="route">
+                <div>
+                  <SvgIcon name="clock" size={15} />
+                  Dhanmondi 27
+                </div>
+                <div>
+                  <SvgIcon name="pin" size={13} />
+                  TSC, DU
+                </div>
+              </div>
+              <div className="meta">
+                <span>15 Oct · 8:30 AM</span>
+                <span>Car · 2 seats left</span>
+              </div>
+              <div className="foot">
+                <span className="ow" style={{ margin: 0 }}>
+                  <span
+                    className="mini"
+                    style={{
+                      width: "22px",
+                      height: "22px",
+                      borderRadius: "50%",
+                      background: "var(--mint)",
+                      color: "var(--teal)",
+                      fontSize: "8px",
+                      fontWeight: 700,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    AH
+                  </span>
+                  Arif Hossain{" "}
+                  <SvgIcon name="check" size={12} style={{ color: "var(--teal)" }} />
+                </span>
+                <Link className="more" href="/rides">
+                  Details <SvgIcon name="arrow" size={14} />
+                </Link>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="meta" style={{ marginTop: "6px" }}>
+                <span>No upcoming ride booked yet for {resolvedUser.university}.</span>
+              </div>
+              <div className="foot">
+                <span className="ow" style={{ margin: 0, color: "var(--muted)" }}>
+                  Find or offer verified campus seats
+                </span>
+                <Link className="more" href="/rides">
+                  Browse rides <SvgIcon name="arrow" size={14} />
+                </Link>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Active Rental Card */}
@@ -646,43 +895,58 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
             </span>
             <div>
               <b>Active Rental</b>
-              <small>Pickup today</small>
+              <small>{isDemoUser ? "Pickup today" : "Your borrowings"}</small>
             </div>
-            <span className="tag">80 rental + 100 deposit</span>
+            <span className="tag">
+              {isDemoUser ? "80 rental + 100 deposit" : "0 active"}
+            </span>
           </div>
-          <div className="rent">
-            <div className="rim">
-              <span className="av-t">Pickup today</span>
+          {isDemoUser ? (
+            <>
+              <div className="rent">
+                <div className="rim">
+                  <span className="av-t">Pickup today</span>
+                </div>
+                <div>
+                  <small>Calculators</small>
+                  <h3>Scientific calculator</h3>
+                  <div className="pr">
+                    <b>40</b>tokens / day
+                  </div>
+                  <div className="loc">
+                    <SvgIcon name="pin" size={12} />
+                    Science Library
+                  </div>
+                  <div
+                    className="ow"
+                    style={{
+                      borderTop: "1px solid var(--hair)",
+                      paddingTop: "8px",
+                      marginTop: "10px",
+                    }}
+                  >
+                    <span className="mini">NA</span>
+                    Nafis Ahmed
+                    <SvgIcon name="check" size={12} />
+                  </div>
+                </div>
+              </div>
+              <div className="rsum" style={{ marginTop: "10px" }}>
+                <span>2 days</span>
+                <span>80 rental tokens</span>
+                <span>100 refundable deposit</span>
+              </div>
+            </>
+          ) : (
+            <div className="foot" style={{ marginTop: "6px" }}>
+              <span className="ow" style={{ margin: 0, color: "var(--muted)" }}>
+                You haven&apos;t borrowed an item yet. You have {tokenBalance} tokens ready.
+              </span>
+              <Link className="more" href="/marketplace">
+                Browse Marketplace <SvgIcon name="arrow" size={14} />
+              </Link>
             </div>
-            <div>
-              <small>Calculators</small>
-              <h3>Scientific calculator</h3>
-              <div className="pr">
-                <b>40</b>tokens / day
-              </div>
-              <div className="loc">
-                <SvgIcon name="pin" size={12} />
-                Science Library
-              </div>
-              <div
-                className="ow"
-                style={{
-                  borderTop: "1px solid var(--hair)",
-                  paddingTop: "8px",
-                  marginTop: "10px",
-                }}
-              >
-                <span className="mini">NA</span>
-                Nafis Ahmed
-                <SvgIcon name="check" size={12} />
-              </div>
-            </div>
-          </div>
-          <div className="rsum" style={{ marginTop: "10px" }}>
-            <span>2 days</span>
-            <span>80 rental tokens</span>
-            <span>100 refundable deposit</span>
-          </div>
+          )}
         </div>
 
         {/* Your Campus Corner */}
@@ -695,35 +959,69 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
               My rentals <SvgIcon name="box" size={18} />
             </h3>
             <div className="row">
-              <b>1 item borrowed</b>
-              <span className="tag">1 borrowed</span>
+              <b>
+                {activeRentalsCount} item{activeRentalsCount === 1 ? "" : "s"} borrowed
+              </b>
+              <span className="tag">
+                {activeRentalsCount > 0 ? `${activeRentalsCount} borrowed` : "Ready"}
+              </span>
             </div>
             <div className="row" style={{ marginTop: "2px" }}>
-              <p>1 active rental · 1 booked ride</p>
+              <p>
+                {activeRentalsCount} active rental ·{" "}
+                {isDemoUser ? "1 booked ride" : "0 booked rides"}
+              </p>
             </div>
             <div className="row" style={{ marginTop: "2px" }}>
-              <p>1 booked ride</p>
-              <p>2 live listings</p>
+              <p>{isDemoUser ? "1 booked ride" : `${tokenBalance} available tokens`}</p>
+              <p>
+                {liveListingsCount} live listing{liveListingsCount === 1 ? "" : "s"}
+              </p>
             </div>
-            <Link className="more" href="#">
-              View rentals <SvgIcon name="arrow" size={14} />
+            <Link className="more" href={isDemoUser ? "#rentals" : "/marketplace"}>
+              {isDemoUser ? "View rentals" : "Browse rentals"} <SvgIcon name="arrow" size={14} />
             </Link>
           </div>
           <div className="cc">
             <h3>
               My listings <SvgIcon name="hand" size={20} />
             </h3>
-            <div className="row">
-              <b>Canon EOS 200D</b>
-              <span className="tag">Active</span>
-            </div>
-            <div className="row" style={{ marginTop: "2px" }}>
-              <p>Cameras · Good · 60 tokens / day</p>
-            </div>
-            <div className="row" style={{ marginTop: "2px" }}>
-              <p>1 pending request</p>
-              <p>300 tokens deposit</p>
-            </div>
+            {firstListing ? (
+              <>
+                <div className="row">
+                  <b>{firstListing.name}</b>
+                  <span className="tag">
+                    {firstListing.status ||
+                      (firstListing.state === "draft"
+                        ? "Draft"
+                        : firstListing.state === "paused"
+                        ? "Paused"
+                        : "Active")}
+                  </span>
+                </div>
+                <div className="row" style={{ marginTop: "2px" }}>
+                  <p>
+                    {firstListing.category || "Campus Item"} ·{" "}
+                    {firstListing.condition || "Good"} ·{" "}
+                    {firstListing.price ?? firstListing.rate ?? 0} tokens / day
+                  </p>
+                </div>
+                <div className="row" style={{ marginTop: "2px" }}>
+                  <p>{isDemoUser ? "1 pending request" : `${liveListingsCount} live listing${liveListingsCount === 1 ? "" : "s"}`}</p>
+                  <p>{firstListing.deposit || 0} tokens deposit</p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="row">
+                  <b>No listings yet</b>
+                  <span className="tag">0 active</span>
+                </div>
+                <div className="row" style={{ marginTop: "2px" }}>
+                  <p>Share books, calculators, or chargers with {resolvedUser.university} peers.</p>
+                </div>
+              </>
+            )}
             <Link className="more" href="/my-products">
               Manage listings <SvgIcon name="arrow" size={14} />
             </Link>
@@ -806,14 +1104,14 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
                   placeItems: "center",
                 }}
               >
-                FR
+                {resolvedUser.initials}
               </div>
               <div>
                 <b style={{ fontSize: "17px", display: "block" }}>
-                  Farhana Rahman
+                  {resolvedUser.name}
                 </b>
                 <small style={{ color: "var(--muted)", fontSize: "12px" }}>
-                  farhana@std.du.ac.bd
+                  {resolvedUser.email}
                 </small>
                 <div
                   style={{
@@ -823,7 +1121,12 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
                     marginTop: "2px",
                   }}
                 >
-                  University of Dhaka · Verified Student 🛡️
+                  {resolvedUser.university} ·{" "}
+                  {resolvedUser.verified
+                    ? "Verified Student 🛡️"
+                    : resolvedUser.studentId
+                    ? "Verification Pending ⏳"
+                    : "Email Verified"}
                 </div>
               </div>
             </div>
@@ -841,19 +1144,25 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
             >
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
                 <span style={{ color: "var(--muted)" }}>Student ID:</span>
-                <b>2021-DU-8491</b>
+                <b>{resolvedUser.studentId || "Not submitted yet"}</b>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
                 <span style={{ color: "var(--muted)" }}>Department:</span>
-                <b>Computer Science & Eng.</b>
+                <b>{resolvedUser.department || "Not provided yet"}</b>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
                 <span style={{ color: "var(--muted)" }}>Campus Status:</span>
-                <b style={{ color: "var(--teal)" }}>Verified Member ✓</b>
+                <b style={{ color: "var(--teal)" }}>
+                  {resolvedUser.verified
+                    ? "Verified Member ✓"
+                    : resolvedUser.studentId
+                    ? "In Review"
+                    : "Pending Step 3"}
+                </b>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span style={{ color: "var(--muted)" }}>Member Since:</span>
-                <b>October 2026</b>
+                <b>{formatMemberSince(resolvedUser.createdAt)}</b>
               </div>
             </div>
 
@@ -873,11 +1182,16 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
               </b>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
                 <span>Active Rentals:</span>
-                <span style={{ color: "var(--ink)", fontWeight: 600 }}>1 item (Scientific calculator)</span>
+                <span style={{ color: "var(--ink)", fontWeight: 600 }}>
+                  {isDemoUser ? "1 item (Scientific calculator)" : `${activeRentalsCount} items`}
+                </span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span>Live Listings:</span>
-                <span style={{ color: "var(--ink)", fontWeight: 600 }}>2 items (Canon EOS 200D)</span>
+                <span style={{ color: "var(--ink)", fontWeight: 600 }}>
+                  {liveListingsCount} item{liveListingsCount === 1 ? "" : "s"}
+                  {firstListing?.name ? ` (${firstListing.name})` : ""}
+                </span>
               </div>
             </div>
 

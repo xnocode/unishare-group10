@@ -1,41 +1,32 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React from "react";
 import Link from "next/link";
 import "./landing.css";
 import CampusHomeDashboard from "./CampusHomeDashboard";
+import {
+  clearClientSession,
+  useIsHydrated,
+  useLocalStorageRaw,
+} from "./lib/user-client";
 
 export default function Home() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [hasMounted, setHasMounted] = useState(false);
+  const hasMounted = useIsHydrated();
+  const rawLoggedIn = useLocalStorageRaw("unishare_logged_in");
 
-  useEffect(() => {
-    setHasMounted(true);
-    try {
-      const loggedIn =
-        localStorage.getItem("unishare_logged_in") === "true" ||
-        document.cookie.includes("unishare_logged_in=true") ||
-        (typeof window !== "undefined" &&
-          new URLSearchParams(window.location.search).get("view") === "campus");
-      setIsLoggedIn(loggedIn);
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
+  const isLoggedIn =
+    hasMounted &&
+    (rawLoggedIn === "true" ||
+      document.cookie.includes("unishare_logged_in=true") ||
+      (typeof window !== "undefined" &&
+        new URLSearchParams(window.location.search).get("view") === "campus"));
 
   const handleLogout = () => {
-    try {
-      localStorage.removeItem("unishare_logged_in");
-      localStorage.removeItem("unishare_user");
-      document.cookie = "unishare_logged_in=; path=/; max-age=0";
-    } catch (e) {
-      console.error(e);
-    }
-    setIsLoggedIn(false);
+    clearClientSession();
   };
 
   // If user is logged in, show the Campus Home Dashboard!
-  if (hasMounted && isLoggedIn) {
+  if (isLoggedIn) {
     return <CampusHomeDashboard onLogout={handleLogout} />;
   }
 
