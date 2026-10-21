@@ -4,16 +4,18 @@ import {
   deriveNameFromEmail,
   hashPassword,
   isValidEmail,
-  isValidPassword,
   normalizeEmail,
   PENDING_RESET_COOKIE,
   PendingResetPayload,
   setVerifiedAccountCookie,
+  setVerifiedAccountCookieFromUser,
+  toPublicUser,
   VERIFIED_ACCOUNT_COOKIE,
   VerifiedAccountPayload,
   verifySignedPayload,
 } from "@/app/lib/auth";
 import { consumeOtpCode } from "@/app/lib/otp-service";
+import { validatePasswordChoice } from "@/app/lib/validation";
 
 export async function POST(req: NextRequest) {
   try {
@@ -34,9 +36,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!isValidPassword(password)) {
+    const pwCheck = validatePasswordChoice(password);
+    if (!pwCheck.valid) {
       return NextResponse.json(
-        { error: "Password needs 8+ characters, a letter, and a number." },
+        { error: pwCheck.error || "Password needs 8+ characters, a letter, and a number." },
         { status: 400 }
       );
     }
@@ -63,12 +66,17 @@ export async function POST(req: NextRequest) {
 
     const newHash = hashPassword(password);
     let savedUser: {
+      id: string;
       email: string;
       fullName: string;
       university: string | null;
       universityId: string | null;
       isCustomUniversity: boolean;
       studentId: string | null;
+      department: string | null;
+      programme: string | null;
+      academicSession: string | null;
+      createdAt: Date | null;
       emailVerified: boolean;
       verified: boolean;
       tokenBalance: number;
@@ -94,18 +102,7 @@ export async function POST(req: NextRequest) {
     res.cookies.set(PENDING_RESET_COOKIE, "", { path: "/", maxAge: 0 });
 
     if (savedUser) {
-      setVerifiedAccountCookie(res, {
-        email: savedUser.email,
-        fullName: savedUser.fullName,
-        university: savedUser.university || "University of Dhaka",
-        universityId: savedUser.universityId || "du",
-        isCustomUniversity: savedUser.isCustomUniversity,
-        studentId: savedUser.studentId,
-        passwordHash: newHash,
-        emailVerified: true,
-        verified: savedUser.verified,
-        tokenBalance: savedUser.tokenBalance,
-      });
+      setVerifiedAccountCookieFromUser(res, toPublicUser(savedUser), newHash);
     } else if (signedAcc && signedAcc.email === email) {
       setVerifiedAccountCookie(res, {
         ...signedAcc,

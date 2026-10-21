@@ -6,7 +6,7 @@ import {
   normalizeEmail,
   PENDING_VERIFY_COOKIE,
   PendingVerifyPayload,
-  setVerifiedAccountCookie,
+  setVerifiedAccountCookieFromUser,
   toPublicUser,
   verifySignedPayload,
 } from "@/app/lib/auth";
@@ -57,6 +57,10 @@ export async function POST(req: NextRequest) {
       universityId: string | null;
       isCustomUniversity: boolean;
       studentId: string | null;
+      department: string | null;
+      programme: string | null;
+      academicSession: string | null;
+      createdAt: Date | null;
       passwordHash: string;
       emailVerified: boolean;
       verified: boolean;
@@ -72,6 +76,7 @@ export async function POST(req: NextRequest) {
             emailVerified: true,
             ...(matchingPending
               ? {
+                  fullName: matchingPending.fullName || existing.fullName,
                   university: existing.university || matchingPending.university,
                   universityId:
                     existing.universityId || matchingPending.universityId,
@@ -108,6 +113,10 @@ export async function POST(req: NextRequest) {
         universityId: matchingPending.universityId,
         isCustomUniversity: matchingPending.isCustomUniversity,
         studentId: null,
+        department: null,
+        programme: null,
+        academicSession: null,
+        createdAt: new Date(),
         passwordHash: matchingPending.passwordHash,
         emailVerified: true,
         verified: false,
@@ -129,18 +138,7 @@ export async function POST(req: NextRequest) {
     });
 
     applySessionCookies(res, publicUser, true);
-    setVerifiedAccountCookie(res, {
-      email: publicUser.email,
-      fullName: publicUser.fullName,
-      university: publicUser.university,
-      universityId: publicUser.universityId,
-      isCustomUniversity: publicUser.isCustomUniversity,
-      studentId: publicUser.studentId,
-      passwordHash: userRecord.passwordHash,
-      emailVerified: true,
-      verified: userRecord.verified,
-      tokenBalance: publicUser.tokenBalance,
-    });
+    setVerifiedAccountCookieFromUser(res, publicUser, userRecord.passwordHash);
     res.cookies.set(PENDING_VERIFY_COOKIE, "", { path: "/", maxAge: 0 });
 
     return res;

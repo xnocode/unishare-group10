@@ -2,16 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/app/lib/db";
 import {
   applySessionCookies,
+  DEMO_EMAIL,
   isValidEmail,
   normalizeEmail,
   SESSION_COOKIE,
   SessionPayload,
-  setVerifiedAccountCookie,
+  setVerifiedAccountCookieFromUser,
   toPublicUser,
   VERIFIED_ACCOUNT_COOKIE,
   VerifiedAccountPayload,
   verifySignedPayload,
 } from "@/app/lib/auth";
+import {
+  validateDepartment,
+  validateFullName,
+  validateStudentId,
+} from "@/app/lib/validation";
 
 export async function POST(req: NextRequest) {
   try {
@@ -23,6 +29,8 @@ export async function POST(req: NextRequest) {
       department?: string;
       programme?: string;
       academicSession?: string;
+      idCardFileName?: string;
+      faceFileName?: string;
     };
 
     const session = verifySignedPayload<SessionPayload>(
@@ -37,19 +45,46 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const fullName = (body.fullName || "").trim();
-    const studentId = (body.studentId || "").trim();
-    const department = (body.department || "").trim();
-    const programme = (body.programme || "").trim();
-    const academicSession = (body.academicSession || "").trim();
-    const university = (body.university || session?.university || "").trim();
-
-    if (!fullName || !studentId || !department) {
+    const nameCheck = validateFullName(body.fullName || "");
+    if (!nameCheck.valid) {
       return NextResponse.json(
-        { error: "Please fill in your full name, student ID, and department." },
+        { error: nameCheck.error || "Please enter your real full name." },
         { status: 400 }
       );
     }
+
+    const idCheck = validateStudentId(body.studentId || "");
+    if (!idCheck.valid) {
+      return NextResponse.json(
+        { error: idCheck.error || "Please enter your genuine student ID." },
+        { status: 400 }
+      );
+    }
+
+    const deptCheck = validateDepartment(body.department || "");
+    if (!deptCheck.valid) {
+      return NextResponse.json(
+        { error: deptCheck.error || "Please enter a valid academic department." },
+        { status: 400 }
+      );
+    }
+
+    if (
+      email !== DEMO_EMAIL &&
+      (!(body.idCardFileName || "").trim() || !(body.faceFileName || "").trim())
+    ) {
+      return NextResponse.json(
+        { error: "Please upload both your student ID card photo and face photo." },
+        { status: 400 }
+      );
+    }
+
+    const fullName = nameCheck.normalized;
+    const studentId = idCheck.normalized;
+    const department = deptCheck.normalized;
+    const programme = (body.programme || "").trim() || "BSc (Honours)";
+    const academicSession = (body.academicSession || "").trim() || "2023–2024";
+    const university = (body.university || session?.university || "").trim();
 
     let updatedUser: {
       id: string;
@@ -59,6 +94,10 @@ export async function POST(req: NextRequest) {
       universityId: string | null;
       isCustomUniversity: boolean;
       studentId: string | null;
+      department: string | null;
+      programme: string | null;
+      academicSession: string | null;
+      createdAt: Date | null;
       passwordHash: string;
       emailVerified: boolean;
       verified: boolean;
@@ -100,6 +139,10 @@ export async function POST(req: NextRequest) {
         universityId: matchingAccount.universityId,
         isCustomUniversity: matchingAccount.isCustomUniversity,
         studentId,
+        department,
+        programme,
+        academicSession,
+        createdAt: matchingAccount.createdAt ? new Date(matchingAccount.createdAt) : new Date(),
         passwordHash: matchingAccount.passwordHash,
         emailVerified: true,
         verified: matchingAccount.verified,
@@ -115,6 +158,10 @@ export async function POST(req: NextRequest) {
           fullName,
           university: university || "University of Dhaka",
           studentId,
+          department,
+          programme,
+          academicSession,
+          createdAt: new Date(),
           verified: false,
           emailVerified: true,
           tokenBalance: 50,
@@ -124,18 +171,7 @@ export async function POST(req: NextRequest) {
     applySessionCookies(res, publicUser, true);
 
     if (updatedUser?.passwordHash) {
-      setVerifiedAccountCookie(res, {
-        email: publicUser.email,
-        fullName: publicUser.fullName,
-        university: publicUser.university,
-        universityId: publicUser.universityId,
-        isCustomUniversity: publicUser.isCustomUniversity,
-        studentId: publicUser.studentId,
-        passwordHash: updatedUser.passwordHash,
-        emailVerified: publicUser.emailVerified,
-        verified: publicUser.verified,
-        tokenBalance: publicUser.tokenBalance,
-      });
+      setVerifiedAccountCookieFromUser(res, publicUser, updatedUser.passwordHash);
     }
 
     return res;

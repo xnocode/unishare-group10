@@ -2,10 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/app/lib/db";
 import {
   DEMO_EMAIL,
-  deriveNameFromEmail,
   hashPassword,
   isValidEmail,
-  isValidPassword,
   normalizeEmail,
   OTP_EXPIRY_MS,
   PENDING_VERIFY_COOKIE,
@@ -17,10 +15,16 @@ import {
   BD_UNIVERSITIES,
   matchesUniversityEmail,
 } from "@/app/lib/bd-universities";
+import {
+  validateCustomUniversityName,
+  validateFullName,
+  validatePasswordChoice,
+} from "@/app/lib/validation";
 
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json().catch(() => ({}))) as {
+      fullName?: string;
       email?: string;
       password?: string;
       universityName?: string;
@@ -28,17 +32,44 @@ export async function POST(req: NextRequest) {
       isCustomUniversity?: boolean;
     };
 
+    const nameCheck = validateFullName(body.fullName || "");
+    if (!nameCheck.valid) {
+      return NextResponse.json(
+        { error: nameCheck.error || "Please enter your real full name." },
+        { status: 400 }
+      );
+    }
+
     const email = normalizeEmail(body.email || "");
     const password = body.password || "";
     const rawUniName = (body.universityName || "").trim();
     const rawUniId = (body.universityId || "").trim();
-    const isCustom = Boolean(body.isCustomUniversity) || !rawUniId || rawUniId === "custom";
+    const isCustom =
+      Boolean(body.isCustomUniversity) || !rawUniId || rawUniId === "custom";
 
-    if (!rawUniName || rawUniName.length < 2) {
+    if (!rawUniName) {
       return NextResponse.json(
-        { error: "Please select your university or type your university name." },
+        { error: "Please select your university or enter your institution name." },
         { status: 400 }
       );
+    }
+
+    const listedUni = !isCustom
+      ? BD_UNIVERSITIES.find((u) => u.id === rawUniId)
+      : undefined;
+
+    let resolvedUniName = rawUniName;
+    if (!listedUni) {
+      const customCheck = validateCustomUniversityName(rawUniName);
+      if (!customCheck.valid) {
+        return NextResponse.json(
+          { error: customCheck.error || "Please enter a valid institution name." },
+          { status: 400 }
+        );
+      }
+      resolvedUniName = customCheck.normalized;
+    } else {
+      resolvedUniName = listedUni.name;
     }
 
     if (!isValidEmail(email)) {
@@ -48,43 +79,32 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const listedUni = !isCustom
-      ? BD_UNIVERSITIES.find((u) => u.id === rawUniId)
-      : undefined;
-
     if (listedUni && !matchesUniversityEmail(email, listedUni)) {
       const domainLabel = listedUni.domains.map((d) => `@${d}`).join(" or ");
       return NextResponse.json(
         {
-          error: `Please use your ${listedUni.shortName} email (${domainLabel}), or choose custom university entry if unlisted.`,
+          error: `Please use your ${listedUni.shortName} email (${domainLabel}).`,
         },
         { status: 400 }
       );
     }
 
-    if (!isValidPassword(password)) {
+    const pwCheck = validatePasswordChoice(password);
+    if (!pwCheck.valid) {
       return NextResponse.json(
-        {
-          error:
-            "Password must be at least 8 characters long and include a letter and a number.",
-        },
+        { error: pwCheck.error || "Choose a valid password." },
         { status: 400 }
       );
     }
 
-    const resolvedUniName = listedUni ? listedUni.name : rawUniName;
     const resolvedUniId = listedUni ? listedUni.id : "custom";
     const resolvedIsCustom = !listedUni;
 
     let existingVerified = false;
-    let existingUserName: string | null = null;
     try {
       const existing = await db.user.findUnique({ where: { email } });
-      if (existing) {
-        existingUserName = existing.fullName;
-        if (existing.emailVerified || existing.verified) {
-          existingVerified = true;
-        }
+      if (existing && (existing.emailVerified || existing.verified)) {
+        existingVerified = true;
       }
     } catch (err) {
       console.warn("DB duplicate check warning:", err);
@@ -101,12 +121,13 @@ export async function POST(req: NextRequest) {
     }
 
     const passwordHash = hashPassword(password);
-    const fullName = existingUserName || deriveNameFromEmail(email);
+    const fullName = nameCheck.normalized;
 
     try {
       await db.user.upsert({
         where: { email },
         update: {
+          fullName,
           passwordHash,
           university: resolvedUniName,
           universityId: resolvedUniId,

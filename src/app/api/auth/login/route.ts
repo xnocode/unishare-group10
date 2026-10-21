@@ -6,7 +6,7 @@ import {
   hashPassword,
   isValidEmail,
   normalizeEmail,
-  setVerifiedAccountCookie,
+  setVerifiedAccountCookieFromUser,
   toPublicUser,
   VERIFIED_ACCOUNT_COOKIE,
   VerifiedAccountPayload,
@@ -41,6 +41,10 @@ export async function POST(req: NextRequest) {
       universityId: string | null;
       isCustomUniversity: boolean;
       studentId: string | null;
+      department: string | null;
+      programme: string | null;
+      academicSession: string | null;
+      createdAt: Date | null;
       passwordHash: string;
       emailVerified: boolean;
       verified: boolean;
@@ -68,6 +72,9 @@ export async function POST(req: NextRequest) {
               universityId: signedAccount.universityId,
               isCustomUniversity: signedAccount.isCustomUniversity,
               studentId: signedAccount.studentId,
+              department: signedAccount.department ?? null,
+              programme: signedAccount.programme ?? null,
+              academicSession: signedAccount.academicSession ?? null,
               passwordHash: signedAccount.passwordHash,
               emailVerified: signedAccount.emailVerified,
               verified: signedAccount.verified,
@@ -79,6 +86,9 @@ export async function POST(req: NextRequest) {
               universityId: signedAccount.universityId,
               isCustomUniversity: signedAccount.isCustomUniversity,
               studentId: signedAccount.studentId,
+              department: signedAccount.department ?? null,
+              programme: signedAccount.programme ?? null,
+              academicSession: signedAccount.academicSession ?? null,
               passwordHash: signedAccount.passwordHash,
               emailVerified: signedAccount.emailVerified,
               verified: signedAccount.verified,
@@ -94,6 +104,10 @@ export async function POST(req: NextRequest) {
             universityId: signedAccount.universityId,
             isCustomUniversity: signedAccount.isCustomUniversity,
             studentId: signedAccount.studentId,
+            department: signedAccount.department ?? null,
+            programme: signedAccount.programme ?? null,
+            academicSession: signedAccount.academicSession ?? null,
+            createdAt: signedAccount.createdAt ? new Date(signedAccount.createdAt) : new Date(),
             passwordHash: signedAccount.passwordHash,
             emailVerified: signedAccount.emailVerified,
             verified: signedAccount.verified,
@@ -114,6 +128,10 @@ export async function POST(req: NextRequest) {
         universityId: "du",
         isCustomUniversity: false,
         studentId: "2023-114-028",
+        department: "Computer Science & Engineering",
+        programme: "BSc (Honours)",
+        academicSession: "2023–2024",
+        createdAt: new Date("2026-10-14T00:00:00.000Z"),
         passwordHash: demoHash,
         emailVerified: true,
         verified: true,
@@ -162,18 +180,7 @@ export async function POST(req: NextRequest) {
     });
 
     applySessionCookies(res, publicUser, rememberMe);
-    setVerifiedAccountCookie(res, {
-      email: publicUser.email,
-      fullName: publicUser.fullName,
-      university: publicUser.university,
-      universityId: publicUser.universityId,
-      isCustomUniversity: publicUser.isCustomUniversity,
-      studentId: publicUser.studentId,
-      passwordHash: userRecord.passwordHash,
-      emailVerified: publicUser.emailVerified,
-      verified: publicUser.verified,
-      tokenBalance: publicUser.tokenBalance,
-    });
+    setVerifiedAccountCookieFromUser(res, publicUser, userRecord.passwordHash);
 
     return res;
   } catch (err) {
