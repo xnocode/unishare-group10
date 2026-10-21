@@ -1,9 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppNavbar from "../components/AppNavbar";
+import {
+  clearClientSession,
+  getUserScopedKey,
+  useCurrentUser,
+  useLocalStorageRaw,
+  useRequireAuth,
+  writeUserScopedJson,
+} from "../lib/user-client";
 import "./notifications.css";
 
 interface NotificationItem {
@@ -129,41 +137,96 @@ function NotificationIcon({ type }: { type: NotificationItem["icon"] }) {
 
 export default function NotificationsPage() {
   const router = useRouter();
-  const [items, setItems] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
+  const { resolvedUser, isDemoUser } = useCurrentUser();
   const [activeTab, setActiveTab] = useState<"all" | "unread">("all");
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const isAuthenticated = useRequireAuth("/notifications");
 
-  useEffect(() => {
+  const notificationsKey = getUserScopedKey(
+    "unishare_notifications",
+    resolvedUser.email,
+    isDemoUser
+  );
+  const rawNotificationsJson = useLocalStorageRaw(notificationsKey);
+
+  const defaultItems: NotificationItem[] = useMemo(() => {
+    if (isDemoUser) return INITIAL_NOTIFICATIONS;
+    return [
+      {
+        id: 1,
+        unread: true,
+        icon: "wallet",
+        title: `Welcome to ${resolvedUser.university} on UniShare`,
+        body: `Your account (${resolvedUser.email}) is active with ${resolvedUser.tokenBalance} starter tokens ready to spend on campus rentals or rides.`,
+        meta: "Just now · Account created",
+        actionText: "Open wallet →",
+        actionHref: "/wallet",
+      },
+      {
+        id: 2,
+        unread: !resolvedUser.verified,
+        icon: "boxcheck",
+        title: resolvedUser.studentId
+          ? `Student ID ${resolvedUser.studentId} recorded`
+          : "Complete your student ID verification",
+        body: resolvedUser.department
+          ? `Department: ${resolvedUser.department} · ${resolvedUser.university}.`
+          : `Submit your university ID card and face photo for ${resolvedUser.university}.`,
+        meta: "Verification · Campus trust",
+        actionText: resolvedUser.verified
+          ? "View status →"
+          : resolvedUser.studentId
+          ? "View status →"
+          : "Verify now →",
+        actionHref: resolvedUser.verified
+          ? "/verification-approved"
+          : resolvedUser.studentId
+          ? "/verification-pending"
+          : "/student-verification",
+      },
+      {
+        id: 3,
+        unread: false,
+        icon: "coins",
+        title: "Share an item from your dorm",
+        body: `List calculators, books, cameras, or accessories for verified ${resolvedUser.university} peers.`,
+        meta: "Marketplace · Earn tokens",
+        actionText: "Add a product →",
+        actionHref: "/my-products",
+      },
+    ];
+  }, [
+    isDemoUser,
+    resolvedUser.department,
+    resolvedUser.email,
+    resolvedUser.studentId,
+    resolvedUser.tokenBalance,
+    resolvedUser.university,
+    resolvedUser.verified,
+  ]);
+
+  const items: NotificationItem[] = useMemo(() => {
+    if (!rawNotificationsJson) return defaultItems;
     try {
-      const loggedIn =
-        localStorage.getItem("unishare_logged_in") === "true" ||
-        document.cookie.includes("unishare_logged_in=true");
-      if (!loggedIn) {
-        router.replace("/login?redirect=/notifications");
-      } else {
-        setIsAuthenticated(true);
-      }
+      const parsed = JSON.parse(rawNotificationsJson);
+      return Array.isArray(parsed) ? (parsed as NotificationItem[]) : defaultItems;
     } catch {
-      setIsAuthenticated(true);
+      return defaultItems;
     }
-  }, [router]);
+  }, [rawNotificationsJson, defaultItems]);
 
   const unreadCount = items.filter((item) => item.unread).length;
 
   const handleMarkAllAsRead = () => {
-    setItems((prev) => prev.map((item) => ({ ...item, unread: false })));
+    writeUserScopedJson(
+      notificationsKey,
+      items.map((item) => ({ ...item, unread: false }))
+    );
   };
 
   const displayedItems = activeTab === "unread" ? items.filter((item) => item.unread) : items;
 
   const handleLogout = () => {
-    try {
-      localStorage.removeItem("unishare_logged_in");
-      localStorage.removeItem("unishare_user");
-      document.cookie = "unishare_logged_in=; path=/; max-age=0";
-    } catch (e) {
-      console.error(e);
-    }
+    clearClientSession();
     router.push("/login");
   };
 
@@ -201,7 +264,7 @@ export default function NotificationsPage() {
           <span>Notifications</span>
         </div>
 
-        <div className="eyebrow">University of Dhaka · Verified students only</div>
+        <div className="eyebrow">{resolvedUser.university} · Verified students only</div>
 
         <div className="title-row">
           <div>

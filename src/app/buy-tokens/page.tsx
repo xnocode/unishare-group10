@@ -1,9 +1,16 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppNavbar from "../components/AppNavbar";
+import {
+  clearClientSession,
+  getUserScopedKey,
+  useCurrentUser,
+  useLocalStorageRaw,
+  useRequireAuth,
+} from "../lib/user-client";
 import "./buy-tokens.css";
 
 interface PackageOption {
@@ -32,28 +39,44 @@ const PACKAGES: PackageOption[] = [
 
 export default function BuyTokensPage() {
   const router = useRouter();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { resolvedUser, isDemoUser, firstName } = useCurrentUser();
+  const isAuthenticated = useRequireAuth("/buy-tokens");
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedTokens, setSelectedTokens] = useState(250);
   const [selectedPayment, setSelectedPayment] = useState("bKash");
   const [senderPhone, setSenderPhone] = useState("017XXXXXXXX");
   const [trxId, setTrxId] = useState("");
+  const [paymentRef, setPaymentRef] = useState("000001");
   const [toastMsg, setToastMsg] = useState("");
   const [showToast, setShowToast] = useState(false);
 
-  useEffect(() => {
+  const rawWalletJson = useLocalStorageRaw(
+    getUserScopedKey("unishare_wallet", resolvedUser.email, isDemoUser)
+  );
+  const balance = useMemo(() => {
+    if (!rawWalletJson) return resolvedUser.tokenBalance;
     try {
-      const loggedIn = localStorage.getItem("unishare_logged_in") === "true";
-      if (!loggedIn) {
-        router.replace("/login?redirect=/buy-tokens");
-      } else {
-        setIsAuthenticated(true);
-      }
-    } catch (e) {
-      console.error(e);
-      router.replace("/login?redirect=/buy-tokens");
+      const parsed = JSON.parse(rawWalletJson) as { balance?: number };
+      return parsed.balance ?? resolvedUser.tokenBalance;
+    } catch {
+      return resolvedUser.tokenBalance;
     }
-  }, [router]);
+  }, [rawWalletJson, resolvedUser.tokenBalance]);
+
+  const uniPrefix = (
+    resolvedUser.universityId ||
+    resolvedUser.university
+      .split(/\s+/)
+      .map((w) => w[0])
+      .join("")
+      .slice(0, 4) ||
+    "UNI"
+  )
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+  const refTag = `${uniPrefix || "UNI"}-${firstName
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")}`;
 
   const triggerToast = (msg: string) => {
     setToastMsg(msg);
@@ -62,13 +85,7 @@ export default function BuyTokensPage() {
   };
 
   const handleLogout = () => {
-    try {
-      localStorage.removeItem("unishare_logged_in");
-      localStorage.removeItem("unishare_user");
-      document.cookie = "unishare_logged_in=; path=/; max-age=0";
-    } catch (err) {
-      console.error(err);
-    }
+    clearClientSession();
     router.push("/login");
   };
 
@@ -84,6 +101,7 @@ export default function BuyTokensPage() {
       triggerToast("Please enter your payment Transaction ID (TrxID)");
       return;
     }
+    setPaymentRef(Date.now().toString().slice(-6));
     setCurrentStep(5);
     triggerToast("Payment submitted for review!");
   };
@@ -108,6 +126,7 @@ export default function BuyTokensPage() {
     <div className="unishare-buy-tokens">
       <AppNavbar
         activeNav="wallet"
+        user={{ tokenBalance: balance }}
         onLogout={handleLogout}
         onSos={() =>
           triggerToast("Emergency Campus SOS: Campus security contacted.")
@@ -153,7 +172,7 @@ export default function BuyTokensPage() {
               Choose how many tokens you’d like to add to your wallet.
             </p>
           </div>
-          <span className="pill">500 available tokens</span>
+          <span className="pill">{balance} available tokens</span>
         </div>
 
         {/* Campus Banner */}
@@ -170,12 +189,14 @@ export default function BuyTokensPage() {
               <path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6l8-3z" />
               <path d="M8.5 12l2.5 2.5 4.5-5" />
             </svg>
-            <b>University of Dhaka</b>
+            <b>{resolvedUser.university}</b>
             <span>
               Your wallet for sharing with verified students on your campus.
             </span>
           </div>
-          <div className="r">Verified student</div>
+          <div className="r">
+            {resolvedUser.verified ? "Verified student" : "Student member"}
+          </div>
         </div>
 
         {/* 5-Step Stepper */}
@@ -573,7 +594,7 @@ export default function BuyTokensPage() {
                   marginBottom: "8px",
                 }}
               >
-                <span>DU Student Verification Discount:</span>
+                <span>{resolvedUser.university} Student Discount:</span>
                 <span style={{ color: "var(--teal)", fontWeight: 600 }}>0% fee waiver</span>
               </div>
               <hr style={{ border: 0, borderTop: "1px solid var(--line)", margin: "12px 0" }} />
@@ -638,7 +659,7 @@ export default function BuyTokensPage() {
               </b>
               <p style={{ margin: 0, fontSize: "12px", color: "var(--muted)" }}>
                 Send <b>৳{selectedTokens}</b> via {selectedPayment} &quot;Send Money&quot; to UniShare Campus Account:{" "}
-                <b style={{ color: "var(--ink)" }}>01712-345678</b> (Reference: DU-FARHANA).
+                <b style={{ color: "var(--ink)" }}>01712-345678</b> (Reference: {refTag}).
               </p>
             </div>
 
@@ -726,7 +747,7 @@ export default function BuyTokensPage() {
             </div>
             <h3 style={{ fontSize: "22px" }}>Payment Submitted for Review</h3>
             <p style={{ maxWidth: "440px", margin: "8px auto 20px" }}>
-              Thank you, Farhana! Your top-up of <b>{selectedTokens} tokens</b> is currently being verified by the DU campus team.
+              Thank you, {firstName}! Your top-up of <b>{selectedTokens} tokens</b> is currently being verified by the {resolvedUser.university} campus team.
             </p>
             <div
               style={{
@@ -739,7 +760,7 @@ export default function BuyTokensPage() {
                 marginBottom: "24px",
               }}
             >
-              Reference: <b>DU-{Date.now().toString().slice(-6)}</b> · Status: <span style={{ color: "var(--teal)", fontWeight: 700 }}>Under Review</span>
+              Reference: <b>{uniPrefix || "UNI"}-{paymentRef}</b> · Status: <span style={{ color: "var(--teal)", fontWeight: 700 }}>Under Review</span>
             </div>
             <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
               <Link className="btn primary" href="/wallet">
@@ -770,7 +791,7 @@ export default function BuyTokensPage() {
             <b>Tokens arrive after review, not when you select a package.</b>
             <span>
               Pay externally by bank or mobile payment, submit your payment
-              reference, and wait for approval. Your available balance stays at 500
+              reference, and wait for approval. Your available balance stays at {balance}
               tokens until the purchase is approved.
             </span>
           </div>
@@ -796,7 +817,7 @@ export default function BuyTokensPage() {
             <div>
               <b>Tokens stay on campus</b>
               <p>
-                Use your balance for rentals, rides and transfers with verified DU
+                Use your balance for rentals, rides and transfers with verified {resolvedUser.university}
                 students.
               </p>
             </div>

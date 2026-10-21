@@ -4,8 +4,18 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { DEFAULT_ITEMS, MarketplaceItem, UserProfile } from '../marketplace/marketplace-data';
+import { DEFAULT_ITEMS, MarketplaceItem } from '../marketplace/marketplace-data';
 import AppNavbar from '../components/AppNavbar';
+import {
+  clearClientSession,
+  DEMO_USER,
+  getUserScopedKey,
+  saveClientUser,
+  useCurrentUser,
+  useIsHydrated,
+  useLocalStorageRaw,
+  writeUserScopedJson,
+} from '../lib/user-client';
 import '../marketplace/marketplace.css';
 import './product-details.css';
 
@@ -17,51 +27,53 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
   const router = useRouter();
 
   // Authentication State
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [authChecked, setAuthChecked] = useState(false);
+  const { user, resolvedUser, isDemoUser } = useCurrentUser();
+  const authChecked = useIsHydrated();
 
   // Product & Interaction State
   const [rentalDays, setRentalDays] = useState(1);
-  const [favorites, setFavorites] = useState<Record<string, boolean>>({});
   const [borrowRequested, setBorrowRequested] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastVisible, setToastVisible] = useState(false);
 
-  // Load User & Favorites on Client Mount
-  useEffect(() => {
+  const favoritesKey = getUserScopedKey(
+    'unishare_favorites',
+    resolvedUser.email,
+    isDemoUser
+  );
+  const recentKey = getUserScopedKey(
+    'unishare_recently_viewed',
+    resolvedUser.email,
+    isDemoUser
+  );
+  const walletKey = getUserScopedKey(
+    'unishare_wallet',
+    resolvedUser.email,
+    isDemoUser
+  );
+
+  const rawFavsJson = useLocalStorageRaw(favoritesKey);
+  const rawWalletJson = useLocalStorageRaw(walletKey);
+  const rawCustomItemsJson = useLocalStorageRaw('unishare_marketplace_items');
+
+  const favorites: Record<string, boolean> = useMemo(() => {
+    if (!rawFavsJson) return {};
     try {
-      const storedUser = localStorage.getItem('unishare_user');
-      const isLoggedIn =
-        localStorage.getItem('unishare_logged_in') === 'true' ||
-        document.cookie.includes('unishare_logged_in=true') ||
-        document.cookie.includes('unishare_token=');
-
-      if (storedUser) {
-        setUser(JSON.parse(storedUser));
-      } else if (isLoggedIn) {
-        const fallback: UserProfile = {
-          name: 'Farhana Rahman',
-          email: 'farhana@std.du.ac.bd',
-          initials: 'FR',
-          university: 'University of Dhaka',
-          verified: true,
-          department: 'Computer Science & Engineering',
-          tokenBalance: 420,
-        };
-        setUser(fallback);
-        localStorage.setItem('unishare_user', JSON.stringify(fallback));
-      }
-
-      const storedFavs = localStorage.getItem('unishare_favorites');
-      if (storedFavs) {
-        setFavorites(JSON.parse(storedFavs));
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setAuthChecked(true);
+      return JSON.parse(rawFavsJson) as Record<string, boolean>;
+    } catch {
+      return {};
     }
-  }, []);
+  }, [rawFavsJson]);
+
+  const walletBalance = useMemo(() => {
+    if (rawWalletJson) {
+      try {
+        const parsed = JSON.parse(rawWalletJson) as { balance?: number };
+        if (parsed.balance !== undefined) return parsed.balance;
+      } catch {}
+    }
+    return resolvedUser.tokenBalance;
+  }, [rawWalletJson, resolvedUser.tokenBalance]);
 
   // Determine the active item
   const item: MarketplaceItem = useMemo(() => {
@@ -71,17 +83,13 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
       if (q) targetId = q;
     }
 
-    // Check custom listed items in localStorage
-    if (typeof window !== 'undefined') {
+    if (rawCustomItemsJson) {
       try {
-        const custom = localStorage.getItem('unishare_marketplace_items');
-        if (custom) {
-          const parsed = JSON.parse(custom) as MarketplaceItem[];
-          const match = parsed.find(
-            (it) => it.id === targetId || it.name.toLowerCase().replace(/[^a-z0-9]/g, '-').includes((targetId || '').toLowerCase())
-          );
-          if (match) return match;
-        }
+        const parsed = JSON.parse(rawCustomItemsJson) as MarketplaceItem[];
+        const match = parsed.find(
+          (it) => it.id === targetId || it.name.toLowerCase().replace(/[^a-z0-9]/g, '-').includes((targetId || '').toLowerCase())
+        );
+        if (match) return match;
       } catch (err) {
         console.error(err);
       }
@@ -98,21 +106,21 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
     }
 
     return DEFAULT_ITEMS[0];
-  }, [productId]);
+  }, [productId, rawCustomItemsJson]);
 
   // Record item in recently viewed
   useEffect(() => {
     if (item && typeof window !== 'undefined') {
       try {
-        const storedRecent = localStorage.getItem('unishare_recently_viewed');
+        const storedRecent = localStorage.getItem(recentKey);
         const list: string[] = storedRecent ? JSON.parse(storedRecent) : [];
         const updated = [item.name, ...list.filter((n) => n !== item.name)].slice(0, 10);
-        localStorage.setItem('unishare_recently_viewed', JSON.stringify(updated));
+        localStorage.setItem(recentKey, JSON.stringify(updated));
       } catch (e) {
         console.error(e);
       }
     }
-  }, [item]);
+  }, [item, recentKey]);
 
   // Toast Helper
   const showToast = (msg: string) => {
@@ -126,12 +134,7 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
   // Toggle Favorite
   const handleToggleFavorite = () => {
     const updated = { ...favorites, [item.name]: !favorites[item.name] };
-    setFavorites(updated);
-    try {
-      localStorage.setItem('unishare_favorites', JSON.stringify(updated));
-    } catch (e) {
-      console.error(e);
-    }
+    writeUserScopedJson(favoritesKey, updated);
     showToast(updated[item.name] ? `Added "${item.name}" to Favorites` : `Removed from Favorites`);
   };
 
@@ -143,18 +146,7 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
 
   // Demo Login Helper
   const handleDemoLogin = () => {
-    const demoProfile: UserProfile = {
-      name: 'Farhana Rahman',
-      email: 'farhana@std.du.ac.bd',
-      initials: 'FR',
-      university: 'University of Dhaka',
-      verified: true,
-      department: 'Computer Science & Engineering',
-      tokenBalance: 420,
-    };
-    setUser(demoProfile);
-    localStorage.setItem('unishare_logged_in', 'true');
-    localStorage.setItem('unishare_user', JSON.stringify(demoProfile));
+    saveClientUser(DEMO_USER);
     document.cookie = 'unishare_logged_in=true; path=/; max-age=86400';
     document.cookie = `unishare_token=demo_token_${Date.now()}; path=/; max-age=604800; SameSite=Lax`;
     showToast('Signed in as Farhana Rahman (DU Verified)');
@@ -162,11 +154,7 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
 
   // Logout Handler
   const handleLogout = () => {
-    localStorage.removeItem('unishare_logged_in');
-    localStorage.removeItem('unishare_user');
-    document.cookie = 'unishare_logged_in=; path=/; max-age=0';
-    document.cookie = 'unishare_token=; path=/; max-age=0; SameSite=Lax';
-    setUser(null);
+    clearClientSession();
     showToast('Logged out of UniShare.');
     setTimeout(() => {
       router.push('/login');
@@ -224,9 +212,9 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
     <div className="product-detail-page unishare-marketplace">
       <AppNavbar
         activeNav="marketplace"
-        user={user}
+        user={{ tokenBalance: walletBalance }}
         onLogout={handleLogout}
-        onSos={() => showToast('Emergency Campus SOS: Dhaka University Proctorial Team contacted.')}
+        onSos={() => showToast(`Emergency Campus SOS: ${resolvedUser.university} Proctorial Team contacted.`)}
       />
 
       {/* Main Container */}
@@ -242,7 +230,7 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
 
         {/* Eyebrow */}
         <div className="eyebrow" style={{ marginTop: 14 }}>
-          University of Dhaka · Verified students only
+          {resolvedUser.university} · Verified students only
         </div>
 
         {/* Back Link */}
@@ -327,7 +315,7 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
                 </div>
                 <div className="pd-spec-meta">
                   <span className="pd-spec-label">Verification</span>
-                  <span className="pd-spec-val">DU Student Verified Only</span>
+                  <span className="pd-spec-val">Student Verified Only</span>
                 </div>
               </div>
             </div>
@@ -342,12 +330,12 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                       <path d="M20 6L9 17l-5-5" />
                     </svg>
-                    <span>Verified DU student</span>
+                    <span>Verified {resolvedUser.university} student</span>
                   </div>
                 </div>
               </div>
               <div style={{ textAlign: 'right', fontSize: 12, color: 'var(--muted)' }}>
-                <span>University of Dhaka</span>
+                <span>{resolvedUser.university}</span>
                 <br />
                 <span style={{ color: 'var(--brand)', fontWeight: 600 }}>Meet at {item.area}</span>
               </div>
@@ -488,7 +476,7 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
                 <rect x="2" y="5" width="20" height="14" rx="2" />
                 <path d="M2 10h20" />
               </svg>
-              <span>Your wallet: <strong>{user?.tokenBalance ?? 420} tokens</strong> available</span>
+              <span>Your wallet: <strong>{walletBalance} tokens</strong> available</span>
             </div>
           </aside>
         </div>

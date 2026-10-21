@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppNavbar from "../components/AppNavbar";
+import { useCurrentUser } from "../lib/user-client";
 import "./rides.css";
 
 // -------------------------------------------------------------
@@ -181,17 +182,7 @@ const QUICK_CAMPUS_DESTINATIONS = [
 
 export default function RidesPage() {
   const router = useRouter();
-
-  // Active User Profile
-  const [currentUser, setCurrentUser] = useState({
-    name: "Farhana Rahman",
-    email: "farhana@std.du.ac.bd",
-    initials: "FR",
-    university: "University of Dhaka",
-    verified: true,
-    tokenBalance: 420,
-    heldDepositTokens: 100,
-  });
+  const { resolvedUser: currentUser } = useCurrentUser();
 
   // Tab State
   const [activeTab, setActiveTab] = useState<"find" | "requests" | "created">("find");
@@ -243,26 +234,6 @@ export default function RidesPage() {
     setToastVisible(true);
     setTimeout(() => setToastVisible(false), 2400);
   };
-
-  // Sync profile from localStorage if available
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("unishare_user");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setCurrentUser((prev) => ({
-          ...prev,
-          name: parsed.name || prev.name,
-          email: parsed.email || prev.email,
-          initials: parsed.initials || prev.initials,
-          university: parsed.university || prev.university,
-          tokenBalance: parsed.tokenBalance !== undefined ? parsed.tokenBalance : prev.tokenBalance,
-        }));
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -541,11 +512,11 @@ export default function RidesPage() {
           <div>
             <div className="eyebrow">YOUR CAMPUS, SAME DIRECTION</div>
             <h1>Same way? Share the ride.</h1>
-            <div className="sub">Car or rickshaw, find your way to campus with a fellow DU student.</div>
+            <div className="sub">Car or rickshaw, find your way to campus with a fellow {currentUser.university} student.</div>
           </div>
           <button
             className="btn"
-            onClick={() => showToast("Offer a ride: verified DU student driver verification portal opening soon.")}
+            onClick={() => showToast(`Offer a ride: verified ${currentUser.university} driver portal opening soon.`)}
           >
             <svg viewBox="0 0 24 24">
               <path d="M12 5v14M5 12h14" />
@@ -562,8 +533,8 @@ export default function RidesPage() {
               <path d="m9 12 2 2 4-4" />
             </svg>
             <div>
-              <div className="t">University of Dhaka</div>
-              <div className="d">Only your university. Every ride here is from a verified DU student.</div>
+              <div className="t">{currentUser.university}</div>
+              <div className="d">Only your university. Every ride here is from a verified {currentUser.university} student.</div>
             </div>
           </div>
           <div style={{ display: "flex", gap: "18px", alignItems: "center" }}>
@@ -922,7 +893,15 @@ export default function RidesPage() {
                   <div className="field select-field">
                     <select
                       value={genderFilter}
-                      onChange={(e) => setGenderFilter(e.target.value as any)}
+                      onChange={(e) =>
+                        setGenderFilter(
+                          e.target.value as
+                            | "any"
+                            | "women_only"
+                            | "men_only"
+                            | "no_preference"
+                        )
+                      }
                     >
                       <option value="any">Any preference</option>
                       <option value="women_only">Women only</option>
@@ -941,7 +920,11 @@ export default function RidesPage() {
                   <div className="field select-field">
                     <select
                       value={vehicleFilter}
-                      onChange={(e) => setVehicleFilter(e.target.value as any)}
+                      onChange={(e) =>
+                        setVehicleFilter(
+                          e.target.value as "all" | "Car" | "Rickshaw"
+                        )
+                      }
                     >
                       <option value="all">All vehicles</option>
                       <option value="Car">Car</option>
@@ -977,10 +960,10 @@ export default function RidesPage() {
                 <div className="found-rides-header">
                   <div>
                     <h2>Available Campus Rides ({searchResults.length})</h2>
-                    <p>Verified University of Dhaka students heading your way. Click &quot;Request Ride&quot; to connect.</p>
+                    <p>Verified {currentUser.university} students heading your way. Click &quot;Request Ride&quot; to connect.</p>
                   </div>
                   <div style={{ fontSize: "12.5px", color: "var(--teal)", fontWeight: "600" }}>
-                    ✓ 2×2 Grid · Verified DU Only
+                    ✓ 2×2 Grid · Verified Campus Only
                   </div>
                 </div>
 
@@ -1126,7 +1109,7 @@ export default function RidesPage() {
                 <div className="found-rides-header">
                   <div>
                     <h2>My Ride Requests ({myRequests.length})</h2>
-                    <p>Your requested campus rides with verified DU companions. Chat directly or start your ride.</p>
+                    <p>Your requested campus rides with verified {currentUser.university} companions. Chat directly or start your ride.</p>
                   </div>
                   <div style={{ fontSize: "12.5px", color: "var(--teal)", fontWeight: "600" }}>
                     💬 Direct Messaging Active
@@ -1229,12 +1212,12 @@ export default function RidesPage() {
               My Created Rides (0)
             </h3>
             <p style={{ color: "var(--mute)", fontSize: "14px", maxWidth: "460px", margin: "0 auto 18px" }}>
-              You have not posted any rides yet. Verified DU student driver verification portal is opening soon.
+              You have not posted any rides yet. Verified {currentUser.university} driver portal is opening soon.
             </p>
             <button
               type="button"
               className="btn"
-              onClick={() => showToast("Offer a ride: verified DU student driver portal opening soon.")}
+              onClick={() => showToast(`Offer a ride: verified ${currentUser.university} driver portal opening soon.`)}
             >
               Offer a Ride
             </button>

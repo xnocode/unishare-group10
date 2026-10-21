@@ -1,9 +1,18 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppNavbar from "../components/AppNavbar";
+import {
+  clearClientSession,
+  getUserScopedKey,
+  saveClientUser,
+  useCurrentUser,
+  useLocalStorageRaw,
+  useRequireAuth,
+  writeUserScopedJson,
+} from "../lib/user-client";
 import "./wallet.css";
 
 // SVG helper for all wallet icons
@@ -166,9 +175,7 @@ const INITIAL_TRANSACTIONS: Transaction[] = [
 
 export default function WalletPage() {
   const router = useRouter();
-  const [balance, setBalance] = useState(500);
-  const [heldDeposit, setHeldDeposit] = useState(100);
-  const [transactions, setTransactions] = useState<Transaction[]>(INITIAL_TRANSACTIONS);
+  const { resolvedUser, isDemoUser } = useCurrentUser();
   const [toastMsg, setToastMsg] = useState("");
   const [showToast, setShowToast] = useState(false);
 
@@ -176,39 +183,82 @@ export default function WalletPage() {
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [selectedPack, setSelectedPack] = useState(250);
   const [showTransferModal, setShowTransferModal] = useState(false);
-  const [transferRecipient, setTransferRecipient] = useState("Nafis Ahmed (Calculators)");
+  const [customRecipient, setCustomRecipient] = useState("");
   const [transferAmount, setTransferAmount] = useState("50");
 
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [favoritesCount, setFavoritesCount] = useState<number>(2);
+  const isAuthenticated = useRequireAuth("/wallet");
 
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("unishare_favorites");
-      if (stored) {
-        const parsed: Record<string, boolean> = JSON.parse(stored);
-        const count = Object.values(parsed).filter(Boolean).length;
-        setFavoritesCount(count);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
+  const walletKey = getUserScopedKey(
+    "unishare_wallet",
+    resolvedUser.email,
+    isDemoUser
+  );
+  const rawWalletJson = useLocalStorageRaw(walletKey);
+  const rawFavoritesJson = useLocalStorageRaw(
+    getUserScopedKey("unishare_favorites", resolvedUser.email, isDemoUser)
+  );
 
-  useEffect(() => {
+  const favoritesCount = useMemo(() => {
+    if (!rawFavoritesJson) return isDemoUser ? 2 : 0;
     try {
-      const loggedIn = localStorage.getItem("unishare_logged_in") === "true";
-      if (!loggedIn) {
-        // Not logged in -> redirect to login first!
-        router.replace("/login?redirect=/wallet");
-      } else {
-        setIsAuthenticated(true);
-      }
-    } catch (e) {
-      console.error(e);
-      router.replace("/login?redirect=/wallet");
+      const parsed = JSON.parse(rawFavoritesJson) as Record<string, boolean>;
+      return Object.values(parsed).filter(Boolean).length;
+    } catch {
+      return isDemoUser ? 2 : 0;
     }
-  }, [router]);
+  }, [rawFavoritesJson, isDemoUser]);
+
+  const walletState = useMemo(() => {
+    const defaultBalance = resolvedUser.tokenBalance ?? (isDemoUser ? 420 : 50);
+    const defaultHeld = isDemoUser ? 100 : 0;
+    const defaultTransactions: Transaction[] = isDemoUser
+      ? INITIAL_TRANSACTIONS
+      : [
+          {
+            id: "tx-welcome",
+            icon: "coin",
+            title: "Welcome token balance",
+            subtitle: `${resolvedUser.university} · Starter campus credit`,
+            amount: `+${defaultBalance} tokens`,
+            badge: "Completed",
+          },
+        ];
+
+    if (!rawWalletJson) {
+      return {
+        balance: defaultBalance,
+        heldDeposit: defaultHeld,
+        transactions: defaultTransactions,
+      };
+    }
+    try {
+      const parsed = JSON.parse(rawWalletJson) as {
+        balance?: number;
+        heldDeposit?: number;
+        transactions?: Transaction[];
+      };
+      return {
+        balance: parsed.balance ?? defaultBalance,
+        heldDeposit: parsed.heldDeposit ?? defaultHeld,
+        transactions: Array.isArray(parsed.transactions)
+          ? parsed.transactions
+          : defaultTransactions,
+      };
+    } catch {
+      return {
+        balance: defaultBalance,
+        heldDeposit: defaultHeld,
+        transactions: defaultTransactions,
+      };
+    }
+  }, [rawWalletJson, resolvedUser.tokenBalance, resolvedUser.university, isDemoUser]);
+
+  const { balance, heldDeposit, transactions } = walletState;
+  const transferRecipient =
+    customRecipient ||
+    (isDemoUser
+      ? "Nafis Ahmed (Calculators)"
+      : `Verified ${resolvedUser.university} Peer`);
 
   const triggerToast = (msg: string) => {
     setToastMsg(msg);
@@ -217,18 +267,12 @@ export default function WalletPage() {
   };
 
   const handleLogout = () => {
-    try {
-      localStorage.removeItem("unishare_logged_in");
-      localStorage.removeItem("unishare_user");
-      document.cookie = "unishare_logged_in=; path=/; max-age=0";
-    } catch (err) {
-      console.error(err);
-    }
+    clearClientSession();
     router.push("/login");
   };
 
   const confirmBuyTokens = () => {
-    setBalance((prev) => prev + selectedPack);
+    const nextBalance = balance + selectedPack;
     const newTx: Transaction = {
       id: `tx-${Date.now()}`,
       icon: "coin",
@@ -237,7 +281,12 @@ export default function WalletPage() {
       amount: `+${selectedPack} tokens`,
       badge: "Completed",
     };
-    setTransactions((prev) => [newTx, ...prev]);
+    writeUserScopedJson(walletKey, {
+      balance: nextBalance,
+      heldDeposit,
+      transactions: [newTx, ...transactions],
+    });
+    saveClientUser({ ...resolvedUser, tokenBalance: nextBalance });
     setShowBuyModal(false);
     triggerToast(`Successfully purchased ${selectedPack} tokens!`);
   };
@@ -252,16 +301,21 @@ export default function WalletPage() {
       triggerToast("Insufficient available tokens.");
       return;
     }
-    setBalance((prev) => prev - amt);
+    const nextBalance = balance - amt;
     const newTx: Transaction = {
       id: `tx-${Date.now()}`,
       icon: "hand",
       title: `Transfer to ${transferRecipient}`,
-      subtitle: "Just now · Instant campus peer transfer",
+      subtitle: `Just now · ${resolvedUser.university} peer transfer`,
       amount: `−${amt} tokens`,
       badge: "Completed",
     };
-    setTransactions((prev) => [newTx, ...prev]);
+    writeUserScopedJson(walletKey, {
+      balance: nextBalance,
+      heldDeposit,
+      transactions: [newTx, ...transactions],
+    });
+    saveClientUser({ ...resolvedUser, tokenBalance: nextBalance });
     setShowTransferModal(false);
     triggerToast(`Sent ${amt} tokens to ${transferRecipient}!`);
   };
@@ -315,12 +369,12 @@ export default function WalletPage() {
         <div className="banner">
           <WalletIcon name="shield" size={22} />
           <div>
-            <b>University of Dhaka</b> &nbsp;Your wallet for sharing with verified
+            <b>{resolvedUser.university}</b> &nbsp;Your wallet for sharing with verified
             students on your campus.
           </div>
           <span className="v">
             <WalletIcon name="check" size={14} style={{ marginRight: "4px" }} />
-            Verified student
+            {resolvedUser.verified ? "Verified student" : "Student member"}
           </span>
         </div>
 
@@ -367,8 +421,8 @@ export default function WalletPage() {
               spend.
             </p>
             <div className="r">
-              <span>Scientific calculator</span>
-              <b>100 tokens</b>
+              <span>{heldDeposit > 0 ? "Scientific calculator" : "No active rental"}</span>
+              <b>{heldDeposit} tokens</b>
             </div>
             <small>
               Released once the return is confirmed and the deposit is cleared.
@@ -550,20 +604,30 @@ export default function WalletPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <h3>Transfer Tokens</h3>
-            <p>Transfer tokens to another verified University of Dhaka student.</p>
+            <p>Transfer tokens to another verified {resolvedUser.university} student.</p>
             <label style={{ fontSize: "12px", color: "var(--muted)", display: "block", marginBottom: "4px" }}>
               Recipient
             </label>
-            <select
-              className="input-field"
-              value={transferRecipient}
-              onChange={(e) => setTransferRecipient(e.target.value)}
-            >
-              <option value="Nafis Ahmed (Calculators)">Nafis Ahmed (Calculators)</option>
-              <option value="Arif Hossain (Rides)">Arif Hossain (Rides)</option>
-              <option value="Sakib Hasan (Footballs)">Sakib Hasan (Footballs)</option>
-              <option value="Maliha Islam (Laptop chargers)">Maliha Islam (Laptop chargers)</option>
-            </select>
+            {isDemoUser ? (
+              <select
+                className="input-field"
+                value={transferRecipient}
+                onChange={(e) => setCustomRecipient(e.target.value)}
+              >
+                <option value="Nafis Ahmed (Calculators)">Nafis Ahmed (Calculators)</option>
+                <option value="Arif Hossain (Rides)">Arif Hossain (Rides)</option>
+                <option value="Sakib Hasan (Footballs)">Sakib Hasan (Footballs)</option>
+                <option value="Maliha Islam (Laptop chargers)">Maliha Islam (Laptop chargers)</option>
+              </select>
+            ) : (
+              <input
+                type="text"
+                className="input-field"
+                placeholder={`Verified ${resolvedUser.university} student name or email`}
+                value={customRecipient}
+                onChange={(e) => setCustomRecipient(e.target.value)}
+              />
+            )}
             <label style={{ fontSize: "12px", color: "var(--muted)", display: "block", marginBottom: "4px" }}>
               Amount (tokens)
             </label>

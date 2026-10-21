@@ -1,9 +1,17 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppNavbar from "../components/AppNavbar";
+import {
+  clearClientSession,
+  getUserScopedKey,
+  useCurrentUser,
+  useLocalStorageRaw,
+  useRequireAuth,
+  writeUserScopedJson,
+} from "../lib/user-client";
 import "./my-products.css";
 
 interface ProductItem {
@@ -82,11 +90,36 @@ const INITIAL_PRODUCTS: ProductItem[] = [
 
 export default function MyProductsPage() {
   const router = useRouter();
-  const [products, setProducts] = useState<ProductItem[]>(INITIAL_PRODUCTS);
+  const { resolvedUser, isDemoUser } = useCurrentUser();
   const [filterTab, setFilterTab] = useState<"all" | "active" | "paused" | "draft">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [sortOption, setSortOption] = useState<"recent" | "low" | "high">("recent");
+
+  const productsKey = getUserScopedKey(
+    "unishare_my_products",
+    resolvedUser.email,
+    isDemoUser
+  );
+  const rawProductsJson = useLocalStorageRaw(productsKey);
+
+  const products: ProductItem[] = useMemo(() => {
+    if (!rawProductsJson) return isDemoUser ? INITIAL_PRODUCTS : [];
+    try {
+      const parsed = JSON.parse(rawProductsJson);
+      return Array.isArray(parsed)
+        ? (parsed as ProductItem[])
+        : isDemoUser
+        ? INITIAL_PRODUCTS
+        : [];
+    } catch {
+      return isDemoUser ? INITIAL_PRODUCTS : [];
+    }
+  }, [rawProductsJson, isDemoUser]);
+
+  const setProducts = (updater: (prev: ProductItem[]) => ProductItem[]) => {
+    writeUserScopedJson(productsKey, updater(products));
+  };
 
   // Modals & toast states
   const [toastMsg, setToastMsg] = useState("");
@@ -106,22 +139,7 @@ export default function MyProductsPage() {
   const [editRate, setEditRate] = useState("60");
   const [editDeposit, setEditDeposit] = useState("300");
 
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-
-  useEffect(() => {
-    try {
-      const loggedIn =
-        localStorage.getItem("unishare_logged_in") === "true" ||
-        document.cookie.includes("unishare_logged_in=true");
-      if (!loggedIn) {
-        router.replace("/login?redirect=/my-products");
-      } else {
-        setIsAuthenticated(true);
-      }
-    } catch {
-      setIsAuthenticated(true);
-    }
-  }, [router]);
+  const isAuthenticated = useRequireAuth("/my-products");
 
   const triggerToast = (msg: string) => {
     setToastMsg(msg);
@@ -177,7 +195,7 @@ export default function MyProductsPage() {
               ...p,
               state: "active",
               availText: "Available today",
-              note: "Published to DU Campus shelf today",
+              note: `Published to ${resolvedUser.university} shelf today`,
             }
           : p
       )
@@ -241,7 +259,7 @@ export default function MyProductsPage() {
         ? "Add availability to finish your listing"
         : "Listed by you today",
       availText: asDraft ? "Not published" : "Available today",
-      owner: "Farhana Rahman · You",
+      owner: `${resolvedUser.name} · You`,
     };
     setProducts((prev) => [newItem, ...prev]);
     setShowAddModal(false);
@@ -251,11 +269,7 @@ export default function MyProductsPage() {
 
   const handleLogout = (e: React.MouseEvent) => {
     e.preventDefault();
-    try {
-      localStorage.removeItem("unishare_logged_in");
-      localStorage.removeItem("unishare_user");
-      document.cookie = "unishare_logged_in=; path=/; max-age=0";
-    } catch {}
+    clearClientSession();
     router.push("/login");
   };
 
@@ -363,7 +377,7 @@ export default function MyProductsPage() {
         <div className="head">
           <div>
             <div className="eyebrow">
-              University of Dhaka · Verified students only
+              {resolvedUser.university} · Verified students only
             </div>
             <h1>My products</h1>
             <p className="lede">
@@ -667,7 +681,7 @@ export default function MyProductsPage() {
             <path d="M9 12l2 2 4-4" />
           </svg>
           <div>
-            <b>Your listings are visible only to verified DU students.</b>
+            <b>Your listings are visible only to verified {resolvedUser.university} students.</b>
             <span>
               Keep condition, photos and availability up to date. Pausing stops
               new requests without cancelling confirmed rentals.
@@ -693,7 +707,7 @@ export default function MyProductsPage() {
             href="#"
             onClick={(e) => {
               e.preventDefault();
-              triggerToast("University of Dhaka Sharing Honor Code.");
+              triggerToast(`${resolvedUser.university} Sharing Honor Code.`);
             }}
           >
             Terms
@@ -702,7 +716,7 @@ export default function MyProductsPage() {
             href="#"
             onClick={(e) => {
               e.preventDefault();
-              triggerToast("Campus Helpdesk: support@unishare.du.ac.bd");
+              triggerToast("Campus Helpdesk: support@unishare.online");
             }}
           >
             Get help
@@ -743,7 +757,7 @@ export default function MyProductsPage() {
               Add a new product
             </h3>
             <p style={{ fontSize: "12px", color: "var(--muted)", marginBottom: "16px" }}>
-              Share items you own with fellow verified DU students.
+              Share items you own with fellow verified {resolvedUser.university} students.
             </p>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -1084,13 +1098,14 @@ export default function MyProductsPage() {
                   placeItems: "center",
                 }}
               >
-                FR
+                {resolvedUser.initials}
               </div>
               <div>
-                <b style={{ fontSize: "16px", display: "block" }}>Farhana Rahman</b>
-                <small style={{ color: "var(--muted)", fontSize: "12px" }}>farhana@std.du.ac.bd</small>
+                <b style={{ fontSize: "16px", display: "block" }}>{resolvedUser.name}</b>
+                <small style={{ color: "var(--muted)", fontSize: "12px" }}>{resolvedUser.email}</small>
                 <div style={{ fontSize: "11px", color: "var(--teal)", fontWeight: 700, marginTop: "2px" }}>
-                  University of Dhaka · Verified Member 🛡️
+                  {resolvedUser.university} ·{" "}
+                  {resolvedUser.verified ? "Verified Member 🛡️" : "Student Member"}
                 </div>
               </div>
             </div>
@@ -1107,11 +1122,11 @@ export default function MyProductsPage() {
             >
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span style={{ color: "var(--muted)" }}>Student ID:</span>
-                <b>2021-DU-8491</b>
+                <b>{resolvedUser.studentId || "Not submitted yet"}</b>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span style={{ color: "var(--muted)" }}>Department:</span>
-                <b>Computer Science &amp; Eng.</b>
+                <b>{resolvedUser.department || "Not provided yet"}</b>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span style={{ color: "var(--muted)" }}>Active Products:</span>

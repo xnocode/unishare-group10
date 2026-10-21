@@ -1,25 +1,75 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { DEFAULT_ITEMS, MarketplaceItem, UserProfile } from "../marketplace/marketplace-data";
+import { DEFAULT_ITEMS, MarketplaceItem } from "../marketplace/marketplace-data";
 import AppNavbar from "../components/AppNavbar";
+import {
+  clearClientSession,
+  DEMO_USER,
+  getUserScopedKey,
+  saveClientUser,
+  useCurrentUser,
+  useIsHydrated,
+  useLocalStorageRaw,
+  writeUserScopedJson,
+} from "../lib/user-client";
 import "../marketplace/marketplace.css";
 import "./favorites.css";
 
 export default function FavoritesPage() {
   const router = useRouter();
+  const { user, resolvedUser, isDemoUser } = useCurrentUser();
+  const authChecked = useIsHydrated();
 
-  // Authentication & User State
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [authChecked, setAuthChecked] = useState(false);
-  const [walletBalance, setWalletBalance] = useState(500);
+  const favoritesKey = getUserScopedKey(
+    "unishare_favorites",
+    resolvedUser.email,
+    isDemoUser
+  );
+  const walletKey = getUserScopedKey(
+    "unishare_wallet",
+    resolvedUser.email,
+    isDemoUser
+  );
+  const rawFavsJson = useLocalStorageRaw(favoritesKey);
+  const rawWalletJson = useLocalStorageRaw(walletKey);
+  const rawCustomItemsJson = useLocalStorageRaw("unishare_marketplace_items");
 
-  // Favorites & Items State
-  const [favorites, setFavorites] = useState<Record<string, boolean>>({});
-  const [items, setItems] = useState<MarketplaceItem[]>(DEFAULT_ITEMS);
+  const favorites: Record<string, boolean> = useMemo(() => {
+    if (!rawFavsJson) {
+      return isDemoUser
+        ? { "Scientific calculator": true, "Match-day football": true }
+        : {};
+    }
+    try {
+      return JSON.parse(rawFavsJson) as Record<string, boolean>;
+    } catch {
+      return {};
+    }
+  }, [rawFavsJson, isDemoUser]);
+
+  const items: MarketplaceItem[] = useMemo(() => {
+    if (!rawCustomItemsJson) return DEFAULT_ITEMS;
+    try {
+      const parsed = JSON.parse(rawCustomItemsJson);
+      return Array.isArray(parsed) ? (parsed as MarketplaceItem[]) : DEFAULT_ITEMS;
+    } catch {
+      return DEFAULT_ITEMS;
+    }
+  }, [rawCustomItemsJson]);
+
+  const walletBalance = useMemo(() => {
+    if (rawWalletJson) {
+      try {
+        const parsed = JSON.parse(rawWalletJson) as { balance?: number };
+        if (parsed.balance !== undefined) return parsed.balance;
+      } catch {}
+    }
+    return resolvedUser.tokenBalance;
+  }, [rawWalletJson, resolvedUser.tokenBalance]);
 
   // Feedback State
   const [toastMessage, setToastMessage] = useState("");
@@ -32,63 +82,6 @@ export default function FavoritesPage() {
       setToastVisible(false);
     }, 2400);
   };
-
-  // Client Mount: Load Auth, Wallet & Favorites
-  useEffect(() => {
-    try {
-      const storedUser = localStorage.getItem("unishare_user");
-      const isLoggedIn =
-        localStorage.getItem("unishare_logged_in") === "true" ||
-        document.cookie.includes("unishare_logged_in=true") ||
-        document.cookie.includes("unishare_token=");
-
-      if (storedUser) {
-        const parsed = JSON.parse(storedUser) as UserProfile;
-        setUser(parsed);
-        if (parsed.tokenBalance !== undefined) {
-          setWalletBalance(parsed.tokenBalance);
-        }
-      } else if (isLoggedIn) {
-        const fallback: UserProfile = {
-          name: "Farhana Rahman",
-          email: "farhana@std.du.ac.bd",
-          initials: "FR",
-          university: "University of Dhaka",
-          verified: true,
-          department: "Computer Science & Engineering",
-          tokenBalance: 500,
-        };
-        setUser(fallback);
-        setWalletBalance(500);
-        localStorage.setItem("unishare_user", JSON.stringify(fallback));
-      }
-
-      // Load custom items
-      const customItems = localStorage.getItem("unishare_marketplace_items");
-      if (customItems) {
-        setItems(JSON.parse(customItems));
-      }
-
-      // Load favorites
-      const storedFavs = localStorage.getItem("unishare_favorites");
-      if (storedFavs) {
-        const parsedFavs = JSON.parse(storedFavs);
-        setFavorites(parsedFavs);
-      } else {
-        // Initial friendly default
-        const defaultFavs: Record<string, boolean> = {
-          "Scientific calculator": true,
-          "Match-day football": true,
-        };
-        setFavorites(defaultFavs);
-        localStorage.setItem("unishare_favorites", JSON.stringify(defaultFavs));
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setAuthChecked(true);
-    }
-  }, []);
 
   // Filtered favorite items list
   const favoriteItems = useMemo(() => {
@@ -104,30 +97,13 @@ export default function FavoritesPage() {
   const handleRemoveFavorite = (itemName: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     const updated = { ...favorites, [itemName]: false };
-    setFavorites(updated);
-    try {
-      localStorage.setItem("unishare_favorites", JSON.stringify(updated));
-    } catch (err) {
-      console.error(err);
-    }
+    writeUserScopedJson(favoritesKey, updated);
     showToast(`Removed "${itemName}" from Favorites`);
   };
 
   // Demo Login Helper
   const handleDemoLogin = () => {
-    const demoProfile: UserProfile = {
-      name: "Farhana Rahman",
-      email: "farhana@std.du.ac.bd",
-      initials: "FR",
-      university: "University of Dhaka",
-      verified: true,
-      department: "Computer Science & Engineering",
-      tokenBalance: 500,
-    };
-    setUser(demoProfile);
-    setWalletBalance(500);
-    localStorage.setItem("unishare_logged_in", "true");
-    localStorage.setItem("unishare_user", JSON.stringify(demoProfile));
+    saveClientUser(DEMO_USER);
     document.cookie = "unishare_logged_in=true; path=/; max-age=86400";
     document.cookie = `unishare_token=demo_token_${Date.now()}; path=/; max-age=604800; SameSite=Lax`;
     showToast("Signed in as Farhana Rahman (DU Verified)");
@@ -135,11 +111,7 @@ export default function FavoritesPage() {
 
   // Logout Handler
   const handleLogout = () => {
-    localStorage.removeItem("unishare_logged_in");
-    localStorage.removeItem("unishare_user");
-    document.cookie = "unishare_logged_in=; path=/; max-age=0";
-    document.cookie = "unishare_token=; path=/; max-age=0; SameSite=Lax";
-    setUser(null);
+    clearClientSession();
     showToast("Logged out of UniShare.");
     setTimeout(() => {
       router.push("/login");
@@ -192,9 +164,9 @@ export default function FavoritesPage() {
     <div className="unishare-favorites-page unishare-marketplace">
       <AppNavbar
         activeNav="favorites"
-        user={{ ...user, tokenBalance: walletBalance }}
+        user={{ tokenBalance: walletBalance }}
         onLogout={handleLogout}
-        onSos={() => showToast("DU Campus Safety Hotline: 01700-000000 · Proctor Office")}
+        onSos={() => showToast(`${resolvedUser.university} Campus Safety Hotline: 01700-000000 · Proctor Office`)}
       />
 
       {/* Main Content Area */}
@@ -210,7 +182,7 @@ export default function FavoritesPage() {
 
         {/* Eyebrow */}
         <div className="eyebrow" style={{ marginTop: 14 }}>
-          University of Dhaka · Verified students only
+          {resolvedUser.university} · Verified students only
         </div>
 
         {/* Back Link */}
@@ -403,7 +375,7 @@ export default function FavoritesPage() {
             <path d="M9 12l2 2 4-4" />
           </svg>
           <span>
-            <strong>Public Campus Spots & Deposit Protection:</strong> Always meet the item owner in a public DU location (e.g. Science Library, TSC, or Curzon Hall). Your token deposit stays securely held until the item is returned in agreed condition.
+            <strong>Public Campus Spots &amp; Deposit Protection:</strong> Always meet the item owner in a safe, public {resolvedUser.university} campus spot. Your token deposit stays securely held until the item is returned in agreed condition.
           </span>
         </div>
       </main>

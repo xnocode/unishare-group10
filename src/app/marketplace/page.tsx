@@ -1,7 +1,7 @@
 'use strict';
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -10,20 +10,26 @@ import {
   CATEGORIES,
   PICKUP_AREAS,
   MarketplaceItem,
-  UserProfile,
 } from './marketplace-data';
 import AppNavbar from '../components/AppNavbar';
+import {
+  clearClientSession,
+  DEMO_USER,
+  getUserScopedKey,
+  saveClientUser,
+  useCurrentUser,
+  useIsHydrated,
+  useLocalStorageRaw,
+  writeUserScopedJson,
+} from '../lib/user-client';
 import './marketplace.css';
 
 export default function MarketplacePage() {
   const router = useRouter();
-
-  // Authentication State
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [authChecked, setAuthChecked] = useState(false);
+  const { user, resolvedUser, isDemoUser } = useCurrentUser();
+  const authChecked = useIsHydrated();
 
   // Marketplace State
-  const [items, setItems] = useState<MarketplaceItem[]>(DEFAULT_ITEMS);
   const [selectedTab, setSelectedTab] = useState<'all' | 'fav' | 'recent' | 'you'>('all');
   const [selectedCategory, setSelectedCategory] = useState('All items');
   const [searchQuery, setSearchQuery] = useState('');
@@ -33,9 +39,65 @@ export default function MarketplacePage() {
   const [selectedSort, setSelectedSort] = useState('rec');
   const [rentalDate, setRentalDate] = useState('');
 
-  // Favorites & Recently Viewed State
-  const [favorites, setFavorites] = useState<Record<string, boolean>>({});
-  const [recentlyViewed, setRecentlyViewed] = useState<string[]>([]);
+  const favoritesKey = getUserScopedKey(
+    'unishare_favorites',
+    resolvedUser.email,
+    isDemoUser
+  );
+  const recentKey = getUserScopedKey(
+    'unishare_recently_viewed',
+    resolvedUser.email,
+    isDemoUser
+  );
+  const walletKey = getUserScopedKey(
+    'unishare_wallet',
+    resolvedUser.email,
+    isDemoUser
+  );
+
+  const rawItemsJson = useLocalStorageRaw('unishare_marketplace_items');
+  const rawFavsJson = useLocalStorageRaw(favoritesKey);
+  const rawRecentJson = useLocalStorageRaw(recentKey);
+  const rawWalletJson = useLocalStorageRaw(walletKey);
+
+  const items: MarketplaceItem[] = useMemo(() => {
+    if (!rawItemsJson) return DEFAULT_ITEMS;
+    try {
+      const parsed = JSON.parse(rawItemsJson);
+      return Array.isArray(parsed) ? (parsed as MarketplaceItem[]) : DEFAULT_ITEMS;
+    } catch {
+      return DEFAULT_ITEMS;
+    }
+  }, [rawItemsJson]);
+
+  const favorites: Record<string, boolean> = useMemo(() => {
+    if (!rawFavsJson) return {};
+    try {
+      return JSON.parse(rawFavsJson) as Record<string, boolean>;
+    } catch {
+      return {};
+    }
+  }, [rawFavsJson]);
+
+  const recentlyViewed: string[] = useMemo(() => {
+    if (!rawRecentJson) return [];
+    try {
+      const parsed = JSON.parse(rawRecentJson);
+      return Array.isArray(parsed) ? (parsed as string[]) : [];
+    } catch {
+      return [];
+    }
+  }, [rawRecentJson]);
+
+  const walletBalance = useMemo(() => {
+    if (rawWalletJson) {
+      try {
+        const parsed = JSON.parse(rawWalletJson) as { balance?: number };
+        if (parsed.balance !== undefined) return parsed.balance;
+      } catch {}
+    }
+    return resolvedUser.tokenBalance;
+  }, [rawWalletJson, resolvedUser.tokenBalance]);
 
   // Modals & Toast State
   const [showListItemModal, setShowListItemModal] = useState(false);
@@ -59,70 +121,9 @@ export default function MarketplacePage() {
     }, 2400);
   };
 
-  // Auth Initialization & LocalStorage on Client Mount
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem('unishare_user');
-      const isLoggedIn =
-        localStorage.getItem('unishare_logged_in') === 'true' ||
-        document.cookie.includes('unishare_logged_in=true') ||
-        document.cookie.includes('unishare_token=');
-
-      if (stored) {
-        setUser(JSON.parse(stored));
-      } else if (isLoggedIn) {
-        // Fallback profile if session cookie/flag exists
-        const fallbackUser: UserProfile = {
-          name: 'Farhana Rahman',
-          email: 'farhana@std.du.ac.bd',
-          initials: 'FR',
-          university: 'University of Dhaka',
-          verified: true,
-          department: 'Computer Science & Engineering',
-          tokenBalance: 420,
-        };
-        setUser(fallbackUser);
-        localStorage.setItem('unishare_user', JSON.stringify(fallbackUser));
-      }
-
-      // Load saved favorites
-      const storedFavs = localStorage.getItem('unishare_favorites');
-      if (storedFavs) {
-        setFavorites(JSON.parse(storedFavs));
-      }
-
-      // Load recently viewed
-      const storedRecent = localStorage.getItem('unishare_recently_viewed');
-      if (storedRecent) {
-        setRecentlyViewed(JSON.parse(storedRecent));
-      }
-
-      // Load custom listed items
-      const storedItems = localStorage.getItem('unishare_marketplace_items');
-      if (storedItems) {
-        setItems(JSON.parse(storedItems));
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setAuthChecked(true);
-    }
-  }, []);
-
   // Demo Login Helper
   const handleDemoLogin = () => {
-    const demoProfile: UserProfile = {
-      name: 'Farhana Rahman',
-      email: 'farhana@std.du.ac.bd',
-      initials: 'FR',
-      university: 'University of Dhaka',
-      verified: true,
-      department: 'Computer Science & Engineering',
-      tokenBalance: 420,
-    };
-    setUser(demoProfile);
-    localStorage.setItem('unishare_logged_in', 'true');
-    localStorage.setItem('unishare_user', JSON.stringify(demoProfile));
+    saveClientUser(DEMO_USER);
     document.cookie = 'unishare_logged_in=true; path=/; max-age=86400';
     document.cookie = `unishare_token=demo_token_${Date.now()}; path=/; max-age=604800; SameSite=Lax`;
     showToast('Signed in as Farhana Rahman (DU Verified)');
@@ -130,11 +131,7 @@ export default function MarketplacePage() {
 
   // Logout Handler
   const handleLogout = () => {
-    localStorage.removeItem('unishare_logged_in');
-    localStorage.removeItem('unishare_user');
-    document.cookie = 'unishare_logged_in=; path=/; max-age=0';
-    document.cookie = 'unishare_token=; path=/; max-age=0; SameSite=Lax';
-    setUser(null);
+    clearClientSession();
     showToast('Logged out of UniShare.');
     setTimeout(() => {
       router.push('/login');
@@ -144,29 +141,15 @@ export default function MarketplacePage() {
   // Toggle Favorite
   const toggleFavorite = (itemName: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    setFavorites((prev) => {
-      const updated = { ...prev, [itemName]: !prev[itemName] };
-      try {
-        localStorage.setItem('unishare_favorites', JSON.stringify(updated));
-      } catch (err) {
-        console.error(err);
-      }
-      showToast(updated[itemName] ? `Added "${itemName}" to Favorites` : `Removed from Favorites`);
-      return updated;
-    });
+    const updated = { ...favorites, [itemName]: !favorites[itemName] };
+    writeUserScopedJson(favoritesKey, updated);
+    showToast(updated[itemName] ? `Added "${itemName}" to Favorites` : `Removed from Favorites`);
   };
 
   // Open Item Detail - Direct move to product details page
   const handleOpenItem = (item: MarketplaceItem) => {
-    try {
-      const storedRecent = localStorage.getItem('unishare_recently_viewed');
-      const list: string[] = storedRecent ? JSON.parse(storedRecent) : [];
-      const updated = [item.name, ...list.filter((n) => n !== item.name)].slice(0, 10);
-      localStorage.setItem('unishare_recently_viewed', JSON.stringify(updated));
-    } catch (e) {
-      console.error(e);
-    }
-    setRecentlyViewed((prev) => [item.name, ...prev.filter((n) => n !== item.name)]);
+    const updated = [item.name, ...recentlyViewed.filter((n) => n !== item.name)].slice(0, 10);
+    writeUserScopedJson(recentKey, updated);
     router.push(`/product-details/${item.id}`);
   };
 
@@ -182,22 +165,15 @@ export default function MarketplacePage() {
       price: Number(newItemPrice) || 20,
       deposit: Number(newItemDeposit) || 50,
       area: newItemArea,
-      owner: user ? user.name : 'Farhana Rahman',
-      initials: user ? user.initials : 'FR',
+      owner: resolvedUser.name,
+      initials: resolvedUser.initials,
       image: '/images/landing/calculator.jpeg',
       available: true,
-      description: newItemDesc.trim() || 'Listed by verified DU student.',
+      description: newItemDesc.trim() || `Listed by verified ${resolvedUser.university} student.`,
     };
 
-    setItems((prev) => {
-      const updated = [newItem, ...prev];
-      try {
-        localStorage.setItem('unishare_marketplace_items', JSON.stringify(updated));
-      } catch (err) {
-        console.error(err);
-      }
-      return updated;
-    });
+    const updated = [newItem, ...items];
+    writeUserScopedJson('unishare_marketplace_items', updated);
     setShowListItemModal(false);
     setNewItemName('');
     setNewItemDesc('');
@@ -309,9 +285,9 @@ export default function MarketplacePage() {
     <div className="unishare-marketplace">
       <AppNavbar
         activeNav="marketplace"
-        user={user}
+        user={{ tokenBalance: walletBalance }}
         onLogout={handleLogout}
-        onSos={() => showToast('Emergency Campus SOS: Dhaka University Proctorial Team contacted.')}
+        onSos={() => showToast(`Emergency Campus SOS: ${resolvedUser.university} Proctorial Team contacted.`)}
       />
 
       {/* Main Body */}
@@ -326,11 +302,11 @@ export default function MarketplacePage() {
         </nav>
 
         {/* Hero Section */}
-        <div className="kicker">UNIVERSITY OF DHAKA · VERIFIED STUDENTS ONLY</div>
+        <div className="kicker">{resolvedUser.university.toUpperCase()} · VERIFIED STUDENTS ONLY</div>
         <div className="hero-row">
           <div>
             <h1>Your campus, one shared shelf.</h1>
-            <p className="hero-sub">Borrow what you need. Lend what you have. All from verified DU students.</p>
+            <p className="hero-sub">Borrow what you need. Lend what you have. All from verified {resolvedUser.university} students.</p>
           </div>
           <button className="btn" onClick={() => setShowListItemModal(true)}>
             List an item
@@ -345,7 +321,7 @@ export default function MarketplacePage() {
           </svg>
           <div className="banner-text">
             <b>Only your university. Always a verified student.</b>
-            <p>Every item here belongs to a University of Dhaka student. Meet on campus and pay with tokens.</p>
+            <p>Every item here belongs to a {resolvedUser.university} student. Meet on campus and pay with tokens.</p>
           </div>
         </div>
 
@@ -532,7 +508,7 @@ export default function MarketplacePage() {
         {/* Section Title & Counter */}
         <div className="section-bar">
           <h2>Available around campus</h2>
-          <span>{filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'} · DU students only</span>
+          <span>{filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'} · {resolvedUser.university} students only</span>
         </div>
 
         {/* 3-Column Shelf Grid */}
@@ -596,7 +572,7 @@ export default function MarketplacePage() {
                     <span className="owner-avatar">{item.initials}</span>
                     <div className="owner-info">
                       <strong>{item.owner}</strong>
-                      <small>Verified DU student</small>
+                      <small>Verified {resolvedUser.university} student</small>
                     </div>
                     <svg
                       className="verified-check"
@@ -671,7 +647,7 @@ export default function MarketplacePage() {
 
             <div className="kicker" style={{ marginTop: 0 }}>PEER-TO-PEER LENDING</div>
             <h2>List an item for borrowing</h2>
-            <p className="modal-sub">Earn tokens by sharing your gadget, sports gear, or book with DU peers.</p>
+            <p className="modal-sub">Earn tokens by sharing your gadget, sports gear, or book with {resolvedUser.university} peers.</p>
 
             <form onSubmit={handleCreateListing}>
               <div className="form-group">

@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import AppNavbar from "../components/AppNavbar";
+import { useCurrentUser } from "../lib/user-client";
 import "../campus-home.css";
 
 interface EmergencyContact {
@@ -15,18 +16,9 @@ interface EmergencyContact {
   updatedAt?: string;
 }
 
-interface UserProfile {
-  name: string;
-  email: string;
-  initials: string;
-  university: string;
-  verified: boolean;
-  tokenBalance: number;
-}
-
 // Helper to format any Bangladeshi or international phone number for WhatsApp
 function formatForWhatsApp(phoneStr: string): string {
-  let digits = phoneStr.replace(/\D/g, "");
+  const digits = phoneStr.replace(/\D/g, "");
   if (digits.startsWith("880")) {
     return digits;
   }
@@ -40,15 +32,7 @@ function formatForWhatsApp(phoneStr: string): string {
 }
 
 export default function SOSSetupPage() {
-  // Authenticated student state
-  const [currentUser, setCurrentUser] = useState<UserProfile>({
-    name: "Farhana Rahman",
-    email: "farhana@std.du.ac.bd",
-    initials: "FR",
-    university: "University of Dhaka",
-    verified: true,
-    tokenBalance: 500,
-  });
+  const { resolvedUser: currentUser, isHydrated } = useCurrentUser();
 
   // Single Emergency Contact State (Max 1)
   const [contact, setContact] = useState<EmergencyContact | null>(null);
@@ -72,33 +56,10 @@ export default function SOSSetupPage() {
     }, 3500);
   };
 
-  // Load User & Saved Emergency Contact
-  const loadData = async () => {
+  // Load Saved Emergency Contact
+  const loadData = useCallback(async () => {
+    if (!isHydrated || !currentUser.email) return;
     setIsLoading(true);
-    let resolvedEmail = currentUser.email;
-
-    try {
-      const rawUser = localStorage.getItem("unishare_user");
-      if (rawUser) {
-        const parsed = JSON.parse(rawUser);
-        if (parsed.email) resolvedEmail = parsed.email;
-        setCurrentUser({
-          name: parsed.name || "Farhana Rahman",
-          email: resolvedEmail,
-          initials: (parsed.name || "FR")
-            .split(" ")
-            .map((s: string) => s[0])
-            .join("")
-            .slice(0, 2)
-            .toUpperCase(),
-          university: parsed.university || "University of Dhaka",
-          verified: true,
-          tokenBalance: parsed.tokenBalance ?? 500,
-        });
-      }
-    } catch {
-      // ignore
-    }
 
     try {
       const rawContacts = localStorage.getItem("unishare_emergency_contacts");
@@ -109,7 +70,9 @@ export default function SOSSetupPage() {
       if (rawContact && rawContact.includes("1939853593")) {
         localStorage.removeItem("unishare_emergency_contact");
       }
-      const res = await fetch(`/api/emergency-contacts?email=${encodeURIComponent(resolvedEmail)}`);
+      const res = await fetch(
+        `/api/emergency-contacts?email=${encodeURIComponent(currentUser.email)}`
+      );
       const data = await res.json();
       if (data.success && Array.isArray(data.contacts) && data.contacts.length > 0) {
         setContact(data.contacts[0]);
@@ -123,11 +86,14 @@ export default function SOSSetupPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [currentUser.email, isHydrated]);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    const t = setTimeout(() => {
+      void loadData();
+    }, 0);
+    return () => clearTimeout(t);
+  }, [loadData]);
 
   // Open Edit Form pre-filled
   const handleOpenEdit = () => {
@@ -328,7 +294,7 @@ export default function SOSSetupPage() {
       <main className="wrap" style={{ maxWidth: "1000px", margin: "0 auto", padding: "0 24px 60px" }}>
         
         {/* HERO SECTION MATCHING CAMPUS HOME */}
-        <div className="eyebrow">CAMPUS SAFETY SETTINGS</div>
+        <div className="eyebrow">{currentUser.university} · CAMPUS SAFETY SETTINGS</div>
         <div className="hero" style={{ marginTop: "6px", marginBottom: "22px" }}>
           <div>
             <h1>Emergency Contact Setup</h1>
