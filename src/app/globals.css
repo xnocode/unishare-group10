@@ -13,9 +13,6 @@
 
   --background: #ffffff;
   --foreground: var(--ink);
-}
-
-@theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-brand: var(--brand);

@@ -12,7 +12,8 @@ export type ActiveNavKey =
   | "rides"
   | "wallet"
   | "favorites"
-  | "notifications";
+  | "notifications"
+  | "sos";
 
 export interface NavUser {
   name?: string;
@@ -322,13 +323,34 @@ export default function AppNavbar({
                     <p className="ut-sos-desc">
                       Proctor &amp; Campus Security Helpline: <strong>01700-000000</strong> ({resolvedUser.university}).
                     </p>
-                    <button
-                      type="button"
-                      className="ut-sos-action"
-                      onClick={handleSosDispatch}
-                    >
-                      Notify Campus Security
-                    </button>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                      <Link
+                        href="/sos"
+                        className="ut-sos-action"
+                        style={{
+                          textDecoration: "none",
+                          textAlign: "center",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                        onClick={() => setSosOpen(false)}
+                      >
+                        Open SOS Emergency Center
+                      </Link>
+                      <button
+                        type="button"
+                        className="ut-sos-action"
+                        style={{
+                          background: "#ffffff",
+                          color: "#b3261e",
+                          border: "1.5px solid #b3261e",
+                        }}
+                        onClick={handleSosDispatch}
+                      >
+                        Quick Alert Campus Security
+                      </button>
+                    </div>
                     {sosSent && (
                       <div className="ut-sos-status" role="status">
                         Emergency alert logged with campus safety desk.
@@ -422,6 +444,16 @@ export default function AppNavbar({
                       <span>Buy tokens</span>
                     </Link>
 
+                    <Link
+                      href="/sos"
+                      className="ut-menu-item"
+                      role="menuitem"
+                      onClick={() => setProfileOpen(false)}
+                    >
+                      <NavIcon name="shield" />
+                      <span>Emergency SOS</span>
+                    </Link>
+
                     <div className="ut-divider" />
 
                     <button
@@ -467,6 +499,7 @@ export default function AppNavbar({
             ...NAV_ITEMS,
             { key: "my-products" as ActiveNavKey, label: "My products", href: "/my-products" },
             { key: "favorites" as ActiveNavKey, label: "Favorites", href: "/favorites" },
+            { key: "sos" as ActiveNavKey, label: "Emergency SOS", href: "/sos" },
           ].map((item) => (
             <Link
               key={item.key}
@@ -474,7 +507,7 @@ export default function AppNavbar({
               className={`ut-mobile-link ${activeNav === item.key ? "active" : ""}`}
               onClick={() => setMobileOpen(false)}
             >
-              <NavIcon name={item.key === "my-products" ? "box" : item.key === "favorites" ? "heart" : item.key} />
+              <NavIcon name={item.key === "my-products" ? "box" : item.key === "favorites" ? "heart" : item.key === "sos" ? "shield" : item.key} />
               <span>{item.label}</span>
             </Link>
           ))}
