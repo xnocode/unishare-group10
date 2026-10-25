@@ -23,22 +23,29 @@ function getFallbackContacts(userId: string): MemoryContact[] {
 }
 
 // Helper to determine the authenticated user from request
-async function getAuthenticatedUser(req: NextRequest, bodyEmail?: string) {
+async function getAuthenticatedUser(
+  req: NextRequest,
+  bodyEmail?: string,
+  bodyName?: string
+) {
   let email = req.headers.get("x-user-email");
+  let cookieName = bodyName;
 
   if (!email && bodyEmail) {
     email = bodyEmail;
   }
 
-  if (!email) {
-    const userCookie = req.cookies.get("unishare_user")?.value;
-    if (userCookie) {
-      try {
-        const parsed = JSON.parse(decodeURIComponent(userCookie));
-        if (parsed.email) email = parsed.email;
-      } catch {
-        // ignore JSON parse error
-      }
+  const userCookie = req.cookies.get("unishare_user")?.value;
+  if (userCookie) {
+    try {
+      const parsed = JSON.parse(decodeURIComponent(userCookie)) as {
+        email?: string;
+        name?: string;
+      };
+      if (!email && parsed.email) email = parsed.email;
+      if (!cookieName && parsed.name) cookieName = parsed.name;
+    } catch {
+      // ignore JSON parse error
     }
   }
 
@@ -53,6 +60,10 @@ async function getAuthenticatedUser(req: NextRequest, bodyEmail?: string) {
   }
 
   email = email.trim().toLowerCase();
+  const resolvedName =
+    (cookieName || "").trim() ||
+    (email.includes("farhana") ? "Farhana Rahman" : "Campus Student");
+  const isDemo = email === "farhana@std.du.ac.bd";
 
   try {
     let user = await db.user.findUnique({
@@ -63,11 +74,11 @@ async function getAuthenticatedUser(req: NextRequest, bodyEmail?: string) {
       user = await db.user.create({
         data: {
           email,
-          fullName: email.includes("farhana") ? "Farhana Rahman" : "Campus Student",
-          studentId: "DU-2023-8841",
+          fullName: resolvedName,
+          studentId: isDemo ? "DU-2023-8841" : null,
           passwordHash: "student_verified_auth",
-          verified: true,
-          tokenBalance: 420,
+          verified: isDemo,
+          tokenBalance: isDemo ? 420 : 50,
         },
       });
     }
@@ -78,11 +89,11 @@ async function getAuthenticatedUser(req: NextRequest, bodyEmail?: string) {
     return {
       id: "u-" + Buffer.from(email).toString("hex").slice(0, 16),
       email,
-      fullName: email.includes("farhana") ? "Farhana Rahman" : "Campus Student",
-      studentId: "DU-2023-8841",
+      fullName: resolvedName,
+      studentId: isDemo ? "DU-2023-8841" : null,
       passwordHash: "student_verified_auth",
-      verified: true,
-      tokenBalance: 420,
+      verified: isDemo,
+      tokenBalance: isDemo ? 420 : 50,
       createdAt: new Date(),
     };
   }
@@ -100,7 +111,7 @@ export async function GET(req: NextRequest) {
       });
 
       // Sync with fallback store
-      fallbackStore.set(user.id, contacts as any);
+      fallbackStore.set(user.id, contacts as MemoryContact[]);
 
       return NextResponse.json({
         success: true,
@@ -168,7 +179,7 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      let targetPriority = typeof priority === "number" ? Math.max(1, Math.min(3, priority)) : existingCount + 1;
+      const targetPriority = typeof priority === "number" ? Math.max(1, Math.min(3, priority)) : existingCount + 1;
 
       const existingContacts = await db.emergencyContact.findMany({
         where: { userId: user.id },
@@ -204,7 +215,7 @@ export async function POST(req: NextRequest) {
         orderBy: { priority: "asc" },
       });
 
-      fallbackStore.set(user.id, updatedList as any);
+      fallbackStore.set(user.id, updatedList as MemoryContact[]);
 
       return NextResponse.json({
         success: true,
@@ -223,7 +234,7 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      let targetPriority = typeof priority === "number" ? Math.max(1, Math.min(5, priority)) : contacts.length + 1;
+      const targetPriority = typeof priority === "number" ? Math.max(1, Math.min(5, priority)) : contacts.length + 1;
 
       // Shift existing down if priority taken
       for (const c of contacts) {
@@ -304,7 +315,7 @@ export async function PUT(req: NextRequest) {
           orderBy: { priority: "asc" },
         });
 
-        fallbackStore.set(user.id, refreshed as any);
+        fallbackStore.set(user.id, refreshed as MemoryContact[]);
 
         return NextResponse.json({
           success: true,
@@ -389,7 +400,7 @@ export async function PUT(req: NextRequest) {
         orderBy: { priority: "asc" },
       });
 
-      fallbackStore.set(user.id, allContacts as any);
+      fallbackStore.set(user.id, allContacts as MemoryContact[]);
 
       return NextResponse.json({
         success: true,
@@ -456,7 +467,7 @@ export async function PATCH(req: NextRequest) {
         orderBy: { priority: "asc" },
       });
 
-      fallbackStore.set(user.id, allContacts as any);
+      fallbackStore.set(user.id, allContacts as MemoryContact[]);
 
       return NextResponse.json({ success: true, contacts: allContacts });
     } catch (dbErr) {
@@ -512,7 +523,7 @@ export async function DELETE(req: NextRequest) {
         orderBy: { priority: "asc" },
       });
 
-      fallbackStore.set(user.id, remaining as any);
+      fallbackStore.set(user.id, remaining as MemoryContact[]);
 
       return NextResponse.json({
         success: true,

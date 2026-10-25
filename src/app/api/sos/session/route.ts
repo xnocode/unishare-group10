@@ -9,24 +9,32 @@ import {
   generateSecureTrackingToken,
 } from "@/app/lib/telephony";
 import { sendUltraMsgWhatsApp } from "@/app/lib/ultramsg";
+import { signPayload } from "@/app/lib/auth";
 
 // Helper to resolve authenticated student
-async function getAuthenticatedUser(req: NextRequest, bodyEmail?: string) {
+async function getAuthenticatedUser(
+  req: NextRequest,
+  bodyEmail?: string,
+  bodyName?: string
+) {
   let email = req.headers.get("x-user-email");
+  let cookieName = bodyName;
 
   if (!email && bodyEmail) {
     email = bodyEmail;
   }
 
-  if (!email) {
-    const userCookie = req.cookies.get("unishare_user")?.value;
-    if (userCookie) {
-      try {
-        const parsed = JSON.parse(decodeURIComponent(userCookie));
-        if (parsed.email) email = parsed.email;
-      } catch {
-        // ignore parse error
-      }
+  const userCookie = req.cookies.get("unishare_user")?.value;
+  if (userCookie) {
+    try {
+      const parsed = JSON.parse(decodeURIComponent(userCookie)) as {
+        email?: string;
+        name?: string;
+      };
+      if (!email && parsed.email) email = parsed.email;
+      if (!cookieName && parsed.name) cookieName = parsed.name;
+    } catch {
+      // ignore parse error
     }
   }
 
@@ -41,6 +49,10 @@ async function getAuthenticatedUser(req: NextRequest, bodyEmail?: string) {
   }
 
   email = email.trim().toLowerCase();
+  const isDemo = email === "farhana@std.du.ac.bd";
+  const resolvedName =
+    (cookieName || "").trim() ||
+    (isDemo ? "Farhana Rahman" : "Campus Student");
 
   try {
     let user = await db.user.findUnique({
@@ -51,11 +63,11 @@ async function getAuthenticatedUser(req: NextRequest, bodyEmail?: string) {
       user = await db.user.create({
         data: {
           email,
-          fullName: email.includes("farhana") ? "Farhana Rahman" : "Campus Student",
-          studentId: "DU-2023-8841",
+          fullName: resolvedName,
+          studentId: isDemo ? "DU-2023-8841" : null,
           passwordHash: "student_verified_auth",
-          verified: true,
-          tokenBalance: 420,
+          verified: isDemo,
+          tokenBalance: isDemo ? 420 : 50,
         },
       });
     }
@@ -66,11 +78,11 @@ async function getAuthenticatedUser(req: NextRequest, bodyEmail?: string) {
     return {
       id: "u-" + Buffer.from(email).toString("hex").slice(0, 16),
       email,
-      fullName: email.includes("farhana") ? "Farhana Rahman" : "Campus Student",
-      studentId: "DU-2023-8841",
+      fullName: resolvedName,
+      studentId: isDemo ? "DU-2023-8841" : null,
       passwordHash: "student_verified_auth",
-      verified: true,
-      tokenBalance: 420,
+      verified: isDemo,
+      tokenBalance: isDemo ? 420 : 50,
       createdAt: new Date(),
     };
   }
@@ -153,18 +165,44 @@ export async function GET(req: NextRequest) {
 // POST: Manage Emergency Session Lifecycle & Calling Steps
 export async function POST(req: NextRequest) {
   try {
-    const user = await getAuthenticatedUser(req);
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
+    const user = await getAuthenticatedUser(req, body?.email, body?.studentName);
     const action = body.action || "START";
 
     const telephony = getTelephonyProviderInfo();
 
-    // 1. START SESSION: Create active emergency session with tracking token & automatic SMS
+    // 1. START SESSION: Create active emergency session with tracking token & automatic SMS/WhatsApp
     if (action === "START") {
-      const contacts = await db.emergencyContact.findMany({
-        where: { userId: user.id },
-        orderBy: { priority: "asc" },
-      });
+      const fallbackContact =
+        body?.fallbackContact &&
+        typeof body.fallbackContact.phoneNumber === "string" &&
+        body.fallbackContact.phoneNumber.trim()
+          ? {
+              id: String(body.fallbackContact.id || "local-primary"),
+              name: String(body.fallbackContact.name || "Emergency Contact"),
+              phoneNumber: String(body.fallbackContact.phoneNumber).trim(),
+              priority: 1,
+            }
+          : null;
+
+      let contacts: Array<{
+        id: string;
+        name: string;
+        phoneNumber: string;
+        priority: number;
+      }> = [];
+      try {
+        contacts = await db.emergencyContact.findMany({
+          where: { userId: user.id },
+          orderBy: { priority: "asc" },
+        });
+      } catch (dbErr) {
+        console.warn("SOS emergencyContact lookup fallback:", dbErr);
+      }
+
+      if (contacts.length === 0 && fallbackContact) {
+        contacts = [fallbackContact];
+      }
 
       if (contacts.length === 0) {
         return NextResponse.json(
@@ -173,33 +211,42 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Requirement 9: Prevent duplicate SOS requests if an emergency session is already ACTIVE
-      const existingActiveSession = await db.emergencySession.findFirst({
-        where: { userId: user.id, status: "ACTIVE" },
-        include: {
-          callAttempts: { orderBy: { createdAt: "asc" } },
-          smsDispatches: { orderBy: { createdAt: "asc" } },
-          locationUpdates: { orderBy: { timestamp: "desc" }, take: 10 },
-        },
-      });
+      const origin = req.headers.get("origin") || req.nextUrl.origin || "http://localhost:3000";
+      const studentDisplayName =
+        (typeof body?.studentName === "string" && body.studentName.trim()) ||
+        user.fullName;
+
+      // Check existing active session (resilient to read-only DB in serverless)
+      let existingActiveSession = null;
+      try {
+        existingActiveSession = await db.emergencySession.findFirst({
+          where: { userId: user.id, status: "ACTIVE" },
+          include: {
+            callAttempts: { orderBy: { createdAt: "asc" } },
+            smsDispatches: { orderBy: { createdAt: "asc" } },
+            locationUpdates: { orderBy: { timestamp: "desc" }, take: 10 },
+          },
+        });
+      } catch (dbErr) {
+        console.warn("SOS active session lookup fallback:", dbErr);
+      }
 
       if (existingActiveSession) {
-        const origin = req.headers.get("origin") || req.nextUrl.origin || "http://localhost:3000";
         const trackingUrl = existingActiveSession.trackingToken
           ? `${origin}/sos/track/${existingActiveSession.trackingToken}`
           : `${origin}/sos`;
 
-        // Automatically dispatch WhatsApp alert via UltraMsg on every trigger
         const primaryContact = contacts[0];
-        if (primaryContact) {
-          sendUltraMsgWhatsApp({
-            toPhoneNumber: primaryContact.phoneNumber,
-            studentName: user.fullName,
-            trackingUrl,
-          }).catch((err) => {
-            console.warn("UltraMsg automated dispatch error on active session:", err);
-          });
-        }
+        const whatsappResult = primaryContact
+          ? await sendUltraMsgWhatsApp({
+              toPhoneNumber: primaryContact.phoneNumber,
+              studentName: studentDisplayName,
+              trackingUrl,
+            }).catch((err) => {
+              console.warn("UltraMsg automated dispatch error on active session:", err);
+              return { success: false, error: "UltraMsg dispatch failed" };
+            })
+          : null;
 
         return NextResponse.json({
           success: true,
@@ -209,6 +256,7 @@ export async function POST(req: NextRequest) {
           trackingUrl,
           trackingToken: existingActiveSession.trackingToken,
           smsDispatches: existingActiveSession.smsDispatches,
+          whatsappResult,
           alreadyActive: true,
           message: "An active emergency session is already in progress. Re-attaching to prevent duplicate requests.",
         });
@@ -216,31 +264,76 @@ export async function POST(req: NextRequest) {
 
       // Generate cryptographically secure tracking token (Requirement 5 & 10)
       const trackingToken = generateSecureTrackingToken();
-      const origin = req.headers.get("origin") || req.nextUrl.origin || "http://localhost:3000";
-      const trackingUrl = `${origin}/sos/track/${trackingToken}`;
+      const hasCoords =
+        typeof body.latitude === "number" &&
+        Number.isFinite(body.latitude) &&
+        typeof body.longitude === "number" &&
+        Number.isFinite(body.longitude);
 
-      const session = await db.emergencySession.create({
-        data: {
-          userId: user.id,
-          status: "ACTIVE",
-          callingStatus: "ESCALATING",
-          triggerReason: body.triggerReason || "SOS Emergency Confirmed",
-          trackingToken,
-          gpsStatus: "PENDING",
-        },
-      });
+      let session: {
+        id: string;
+        createdAt: Date;
+        trackingToken: string | null;
+      } = {
+        id: `sos-${Date.now()}`,
+        createdAt: new Date(),
+        trackingToken,
+      };
+      let serverlessFallback = false;
+
+      try {
+        session = await db.emergencySession.create({
+          data: {
+            userId: user.id,
+            status: "ACTIVE",
+            callingStatus: "ESCALATING",
+            triggerReason: body.triggerReason || "SOS Emergency Confirmed",
+            trackingToken,
+            gpsStatus: hasCoords ? "CONNECTED" : "PENDING",
+            ...(hasCoords
+              ? {
+                  latestLatitude: body.latitude,
+                  latestLongitude: body.longitude,
+                  latestAccuracy:
+                    typeof body.accuracy === "number" ? body.accuracy : null,
+                  latestLocationAt: new Date(),
+                }
+              : {}),
+          },
+        });
+      } catch (dbErr) {
+        serverlessFallback = true;
+        console.warn("SOS session DB create skipped (serverless fallback):", dbErr);
+      }
+
+      const trackingUrl = serverlessFallback
+        ? `${origin}/sos/track/${trackingToken}?fallback=${encodeURIComponent(
+            signPayload({
+              token: trackingToken,
+              studentName: studentDisplayName,
+              studentId: user.studentId || null,
+              lat: hasCoords ? body.latitude : null,
+              lng: hasCoords ? body.longitude : null,
+              accuracy:
+                typeof body.accuracy === "number" ? body.accuracy : null,
+              createdAt: session.createdAt.toISOString(),
+              exp: Date.now() + 2 * 60 * 60 * 1000,
+            })
+          )}`
+        : `${origin}/sos/track/${trackingToken}`;
 
       // 1-Click Automated WhatsApp Alert Dispatch via UltraMsg Cloud Gateway
       const primaryContact = contacts[0];
-      if (primaryContact) {
-        sendUltraMsgWhatsApp({
-          toPhoneNumber: primaryContact.phoneNumber,
-          studentName: user.fullName,
-          trackingUrl,
-        }).catch((err) => {
-          console.warn("UltraMsg automated WhatsApp dispatch error:", err);
-        });
-      }
+      const whatsappPromise = primaryContact
+        ? sendUltraMsgWhatsApp({
+            toPhoneNumber: primaryContact.phoneNumber,
+            studentName: studentDisplayName,
+            trackingUrl,
+          }).catch((err) => {
+            console.warn("UltraMsg automated WhatsApp dispatch error:", err);
+            return { success: false, error: "UltraMsg dispatch failed" };
+          })
+        : Promise.resolve(null);
 
       // Requirement 6 & 7: Send emergency SMS concurrently in parallel
       const smsPromises = contacts.map(async (contact) => {
@@ -248,12 +341,22 @@ export async function POST(req: NextRequest) {
           const smsResult = await sendEmergencySms({
             toPhoneNumber: contact.phoneNumber,
             recipientName: contact.name,
-            studentName: user.fullName,
+            studentName: studentDisplayName,
             trackingUrl,
             activatedAt: session.createdAt,
             callbackBaseUrl: origin,
             simulatedOutcome: body.simulatedSmsOutcome,
           });
+
+          if (serverlessFallback) {
+            return {
+              id: `sms-${Date.now()}`,
+              recipientName: contact.name,
+              phoneNumber: contact.phoneNumber,
+              status: smsResult.status,
+              provider: smsResult.provider,
+            };
+          }
 
           return await db.emergencySmsDispatch.create({
             data: {
@@ -268,8 +371,8 @@ export async function POST(req: NextRequest) {
               errorMessage: smsResult.errorMessage,
               sentAt:
                 smsResult.status === "SENT" ||
-                  smsResult.status === "DELIVERED" ||
-                  smsResult.status === "MOCK_SENT"
+                smsResult.status === "DELIVERED" ||
+                smsResult.status === "MOCK_SENT"
                   ? new Date()
                   : null,
             },
@@ -278,7 +381,11 @@ export async function POST(req: NextRequest) {
           return null;
         }
       });
-      const resolvedDispatches = await Promise.all(smsPromises);
+
+      const [whatsappResult, resolvedDispatches] = await Promise.all([
+        whatsappPromise,
+        Promise.all(smsPromises),
+      ]);
       const smsDispatches = resolvedDispatches.filter(Boolean);
 
       return NextResponse.json({
@@ -289,7 +396,9 @@ export async function POST(req: NextRequest) {
         trackingUrl,
         trackingToken,
         smsDispatches,
-        message: "Active emergency session established. Emergency SMS sent to all saved contacts.",
+        whatsappResult,
+        serverlessFallback,
+        message: "Active emergency session established. Emergency alerts dispatched to saved contacts.",
       });
     }
 

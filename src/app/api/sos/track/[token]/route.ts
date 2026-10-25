@@ -1,5 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/app/lib/db";
+import { verifySignedPayload } from "@/app/lib/auth";
+
+interface FallbackTrackingPayload {
+  token: string;
+  studentName: string;
+  studentId: string | null;
+  lat: number | null;
+  lng: number | null;
+  accuracy: number | null;
+  createdAt: string;
+  exp: number;
+}
 
 // GET: Secure Emergency Tracking Endpoint for authorized emergency contacts
 // Accessed via cryptographically secure, unguessable token
@@ -17,28 +29,70 @@ export async function GET(
       );
     }
 
-    const session = await db.emergencySession.findUnique({
-      where: { trackingToken: token },
-      include: {
-        user: {
-          select: {
-            fullName: true,
-            studentId: true,
-            email: true,
+    let session = null;
+    try {
+      session = await db.emergencySession.findUnique({
+        where: { trackingToken: token },
+        include: {
+          user: {
+            select: {
+              fullName: true,
+              studentId: true,
+              email: true,
+            },
+          },
+          locationUpdates: {
+            orderBy: { timestamp: "desc" },
+            take: 25,
+          },
+          callAttempts: {
+            orderBy: { createdAt: "desc" },
+            take: 6,
           },
         },
-        locationUpdates: {
-          orderBy: { timestamp: "desc" },
-          take: 25,
-        },
-        callAttempts: {
-          orderBy: { createdAt: "desc" },
-          take: 6,
-        },
-      },
-    });
+      });
+    } catch (dbErr) {
+      console.warn("Tracking lookup DB warning:", dbErr);
+    }
 
     if (!session) {
+      const fallbackToken = req.nextUrl.searchParams.get("fallback");
+      const fallback = verifySignedPayload<FallbackTrackingPayload>(fallbackToken);
+      if (
+        fallback &&
+        fallback.token === token &&
+        typeof fallback.exp === "number" &&
+        fallback.exp > Date.now()
+      ) {
+        const hasCoords =
+          typeof fallback.lat === "number" && typeof fallback.lng === "number";
+        const latestLoc = hasCoords
+          ? {
+              latitude: fallback.lat as number,
+              longitude: fallback.lng as number,
+              accuracy: fallback.accuracy,
+              timestamp: fallback.createdAt,
+            }
+          : null;
+        return NextResponse.json({
+          success: true,
+          isExpired: false,
+          session: {
+            id: `serverless-${token.slice(0, 8)}`,
+            status: "ACTIVE",
+            callingStatus: "ESCALATING",
+            triggerReason: "SOS Emergency Confirmed",
+            createdAt: fallback.createdAt,
+            studentName: fallback.studentName || "UniShare Student",
+            studentId: fallback.studentId || undefined,
+            gpsStatus: hasCoords ? "CONNECTED" : "PENDING",
+            latestLocation: latestLoc,
+            breadcrumbs: latestLoc ? [latestLoc] : [],
+            recentCalls: [],
+          },
+        });
+      }
+
       return NextResponse.json(
         { success: false, error: "Emergency tracking link is invalid or does not exist." },
         { status: 404 }
