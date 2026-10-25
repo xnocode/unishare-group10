@@ -359,7 +359,7 @@ export default function SOSPage() {
     }
   };
 
-  // 5-Second Cancellation Countdown & Activation
+  // 1-Click Instant SOS Emergency Activation
   const handleTriggerSOS = () => {
     if (activeSession && activeSession.status === "ACTIVE") {
       setIsCallingActive(true);
@@ -374,23 +374,8 @@ export default function SOSPage() {
       return;
     }
 
-    setCountdownSeconds(5);
-    setShowCountdownModal(true);
-
-    if (countdownTimerRef.current) {
-      clearInterval(countdownTimerRef.current);
-    }
-
-    countdownTimerRef.current = setInterval(() => {
-      setCountdownSeconds((prev) => {
-        if (prev <= 1) {
-          if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
-          handleConfirmSOS();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    // Immediate 1-click execution: Directly dispatches emergency call and live tracking link
+    handleConfirmSOS();
   };
 
   const handleCancelCountdown = () => {
@@ -1045,10 +1030,10 @@ export default function SOSPage() {
                 <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--ink)" }}>
                   {activeSession?.status === "ACTIVE"
                     ? "Tap button above to end emergency and mark safe"
-                    : "Tap to initiate 5-second countdown & start calling"}
+                    : "1-Click Instant SOS: Call Priority 1 & Send Live Location"}
                 </div>
                 <div style={{ fontSize: "12px", color: "var(--muted)", maxWidth: "340px" }}>
-                  Includes 5-second cancellation countdown before any phone calls or SMS messages are dispatched.
+                  Instantly calls Priority 1 contact and dispatches live GPS tracking link with a single tap.
                 </div>
               </div>
 

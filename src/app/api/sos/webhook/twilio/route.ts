@@ -12,7 +12,15 @@ export async function GET(req: NextRequest) {
 <Response>
   <Pause length="1"/>
   <Say voice="alice" language="en-US">
-    Urgent Campus Emergency Notification from UniShare. Student ${student} has activated an SOS emergency request. You are listed as priority ${priority} emergency contact. Please check your messages for live tracking or contact university security immediately.
+    Urgent Emergency Alert from UniShare Campus Safety.
+    Your daughter or son, student ${student}, is in danger and has activated an emergency SOS alert.
+    We have sent a live GPS location tracking link to your mobile phone via SMS.
+    Please check your messages immediately to track their real-time location and ensure their safety.
+    If you need immediate assistance, contact campus security at 0 1 7 1 1 3 7 4 7 4 7, or dial 9 9 9.
+  </Say>
+  <Pause length="1"/>
+  <Say voice="alice" language="en-US">
+    Repeating: Student ${student} is in danger. A live location tracking link has been sent to your mobile phone.
   </Say>
   <Pause length="2"/>
 </Response>`;

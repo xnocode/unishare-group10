@@ -374,7 +374,7 @@ export async function sendEmergencySms(params: {
     ? new Date(params.activatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-  const messageBody = `EMERGENCY ALERT: UniShare student ${params.studentName} has activated an urgent SOS emergency request at ${timeStr}. Live GPS location & status tracking: ${params.trackingUrl} . If in immediate danger, contact campus security (01711-374747) or dial 999.`;
+  const messageBody = `URGENT SOS: UniShare student ${params.studentName} is in danger and has activated an emergency SOS alert at ${timeStr}. We have sent their live GPS location. Track live here: ${params.trackingUrl} . If in immediate danger, contact campus security (01711-374747) or dial 999.`;
 
   // 1. Live Twilio SMS Sending
   if (info.isLive) {
