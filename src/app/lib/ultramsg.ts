@@ -9,7 +9,7 @@ export interface UltraMsgSendResult {
 }
 
 export function formatPhoneForUltraMsg(phone: string): string {
-  let digits = phone.replace(/\D/g, "");
+  const digits = phone.replace(/\D/g, "");
   if (digits.startsWith("880")) return digits;
   if (digits.startsWith("88") && !digits.startsWith("880")) return "880" + digits.slice(2);
   if (digits.startsWith("0")) return "880" + digits.slice(1);
@@ -21,8 +21,8 @@ export async function sendUltraMsgWhatsApp(params: {
   studentName: string;
   trackingUrl: string;
 }): Promise<UltraMsgSendResult> {
-  const instanceId = process.env.ULTRAMSG_INSTANCE_ID || "instance196655";
-  const token = process.env.ULTRAMSG_TOKEN || "9fomfj5w2huw7adz";
+  const instanceId = (process.env.ULTRAMSG_INSTANCE_ID || "instance196655").trim();
+  const token = (process.env.ULTRAMSG_TOKEN || "9fomfj5w2huw7adz").trim();
 
   if (!instanceId || !token) {
     return { success: false, error: "UltraMsg credentials not configured" };

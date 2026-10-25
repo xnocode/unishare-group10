@@ -2,6 +2,8 @@
 // Supports Twilio live voice telephony with asynchronous status callbacks, polling verification,
 // call cancellation, and transparent Mock Calling Mode with manual dialer fallback.
 
+import crypto from "crypto";
+
 export interface TelephonyCallResult {
   provider: "TWILIO" | "MOCK_SIMULATOR";
   isLive: boolean;
@@ -93,7 +95,6 @@ export function validateTwilioWebhookSignature(params: {
   }
 
   try {
-    const crypto = require("crypto");
     const sortedKeys = Object.keys(params.formData).sort();
     let data = params.url;
     for (const key of sortedKeys) {
@@ -324,7 +325,6 @@ export interface SmsDispatchResult {
 // Generates an unguessable, high-entropy 48-hex-character tracking token
 export function generateSecureTrackingToken(): string {
   try {
-    const crypto = require("crypto");
     return crypto.randomBytes(24).toString("hex");
   } catch {
     return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
