@@ -113,6 +113,16 @@ export function validateTwilioWebhookSignature(params: {
   }
 }
 
+// Normalizes phone numbers to standard international E.164 (+880...)
+export function normalizeToE164(phone: string): string {
+  if (!phone) return "";
+  const cleaned = phone.trim().replace(/[\s\-\(\)]/g, "");
+  if (cleaned.startsWith("+")) return cleaned;
+  if (cleaned.startsWith("880")) return "+" + cleaned;
+  if (cleaned.startsWith("0")) return "+88" + cleaned;
+  return "+" + cleaned;
+}
+
 // Places an emergency call
 export async function placeEmergencyCall(params: {
   toPhoneNumber: string;
@@ -125,30 +135,23 @@ export async function placeEmergencyCall(params: {
 }): Promise<TelephonyCallResult> {
   const info = getTelephonyProviderInfo();
 
-  // 1. Live Twilio Voice Calling
-  if (info.isLive) {
+  // 1. Live Twilio Voice Calling (unless a simulated test outcome is explicitly requested)
+  if (info.isLive && !params.simulatedOutcome) {
     try {
       const accountSid = process.env.TWILIO_ACCOUNT_SID!;
       const authToken = process.env.TWILIO_AUTH_TOKEN!;
       const fromNumber = process.env.TWILIO_PHONE_NUMBER!;
+      const normalizedTo = normalizeToE164(params.toPhoneNumber);
 
-      const twimlMessage = `
-        <Response>
-          <Pause length="1"/>
-          <Say voice="alice" language="en-US">
-            Urgent Campus Emergency Notification from UniShare.
-            Student ${params.studentName} has activated an SOS emergency request.
-            You are listed as priority ${params.priority} emergency contact.
-            Please stay on the line or contact university security immediately.
-          </Say>
-          <Pause length="2"/>
-        </Response>
-      `;
+      const appUrl = (process.env.NEXT_PUBLIC_APP_URL || params.callbackBaseUrl || "").replace(/\/$/, "");
+      const voiceUrl = appUrl.startsWith("http")
+        ? `${appUrl}/api/sos/webhook/twilio?student=${encodeURIComponent(params.studentName)}&priority=${params.priority}`
+        : "http://demo.twilio.com/docs/voice.xml";
 
       const formData = new URLSearchParams();
-      formData.append("To", params.toPhoneNumber);
+      formData.append("To", normalizedTo);
       formData.append("From", fromNumber);
-      formData.append("Twiml", twimlMessage);
+      formData.append("Url", voiceUrl);
 
       // Webhook callback registration for asynchronous call events
       if (params.callbackBaseUrl) {
@@ -379,9 +382,10 @@ export async function sendEmergencySms(params: {
       const accountSid = process.env.TWILIO_ACCOUNT_SID!;
       const authToken = process.env.TWILIO_AUTH_TOKEN!;
       const fromNumber = process.env.TWILIO_PHONE_NUMBER!;
+      const normalizedTo = normalizeToE164(params.toPhoneNumber);
 
       const formData = new URLSearchParams();
-      formData.append("To", params.toPhoneNumber);
+      formData.append("To", normalizedTo);
       formData.append("From", fromNumber);
       formData.append("Body", messageBody);
 

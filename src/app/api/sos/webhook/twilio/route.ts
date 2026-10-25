@@ -2,6 +2,27 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/app/lib/db";
 import { mapTwilioCallStatus, validateTwilioWebhookSignature } from "@/app/lib/telephony";
 
+// TwiML voice instruction provider for Twilio Url calls
+export async function GET(req: NextRequest) {
+  const url = new URL(req.url);
+  const student = url.searchParams.get("student") || "Campus Student";
+  const priority = url.searchParams.get("priority") || "1";
+
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Pause length="1"/>
+  <Say voice="alice" language="en-US">
+    Urgent Campus Emergency Notification from UniShare. Student ${student} has activated an SOS emergency request. You are listed as priority ${priority} emergency contact. Please check your messages for live tracking or contact university security immediately.
+  </Say>
+  <Pause length="2"/>
+</Response>`;
+
+  return new NextResponse(xml, {
+    status: 200,
+    headers: { "Content-Type": "text/xml; charset=utf-8" },
+  });
+}
+
 // Twilio asynchronous call status webhook handler
 export async function POST(req: NextRequest) {
   try {
