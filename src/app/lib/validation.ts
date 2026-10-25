@@ -275,6 +275,14 @@ export function validatePasswordChoice(password: string): {
     };
   }
 
+  if (new Set(lower).size < 4 || /^(.{1,3})\1+$/.test(lower)) {
+    return {
+      valid: false,
+      error:
+        "Choose a stronger password without repeated characters or simple repeating patterns.",
+    };
+  }
+
   return { valid: true };
 }
 
