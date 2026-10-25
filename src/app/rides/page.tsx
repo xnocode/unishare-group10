@@ -1,54 +1,97 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import AppNavbar from "../components/AppNavbar";
+import { useCurrentUser } from "../lib/user-client";
 import "./rides.css";
+
+interface GoogleLatLng {
+  lat: () => number;
+  lng: () => number;
+}
+
+interface GoogleMapMouseEvent {
+  latLng: GoogleLatLng;
+}
+
+interface GooglePlaceResult {
+  name?: string;
+  formatted_address?: string;
+  geometry?: { location?: GoogleLatLng };
+}
+
+interface GoogleDirectionsResult {
+  routes?: Array<{
+    summary?: string;
+    legs?: Array<{
+      distance?: { text?: string };
+      duration?: { text?: string };
+    }>;
+  }>;
+}
+
+interface GoogleMapsInstance {
+  panTo: (coords: { lat: number; lng: number }) => void;
+  setCenter: (coords: { lat: number; lng: number }) => void;
+  setZoom: (zoom: number) => void;
+  getZoom: () => number | undefined;
+  fitBounds: (bounds: unknown, padding?: number | Record<string, number>) => void;
+  addListener: (event: string, cb: (e: GoogleMapMouseEvent) => void) => void;
+}
+
+interface GoogleMarkerInstance {
+  setPosition: (coords: { lat: number; lng: number }) => void;
+  addListener: (event: string, cb: (e: GoogleMapMouseEvent) => void) => void;
+}
+
+interface GoogleDirectionsRendererInstance {
+  setDirections: (res: GoogleDirectionsResult) => void;
+}
+
+interface GoogleGeocoderInstance {
+  geocode: (
+    req: { location: { lat: number; lng: number } },
+    cb: (results: Array<{ formatted_address: string }> | null, status: string) => void
+  ) => void;
+}
+
+interface GoogleAutocompleteInstance {
+  addListener: (event: string, cb: () => void) => void;
+  getPlace: () => GooglePlaceResult;
+}
+
+interface GoogleMapsNamespace {
+  maps: {
+    Map: new (el: HTMLElement, opts: Record<string, unknown>) => GoogleMapsInstance;
+    Marker: new (opts: Record<string, unknown>) => GoogleMarkerInstance;
+    Geocoder: new () => GoogleGeocoderInstance;
+    Point: new (x: number, y: number) => unknown;
+    LatLngBounds: new () => { extend: (pt: { lat: number; lng: number }) => void };
+    SymbolPath: { CIRCLE: unknown };
+    DirectionsRenderer: new (opts: Record<string, unknown>) => GoogleDirectionsRendererInstance;
+    DirectionsService: new () => {
+      route: (
+        req: Record<string, unknown>,
+        cb: (result: GoogleDirectionsResult | null, status: string) => void
+      ) => void;
+    };
+    TravelMode: { DRIVING: string };
+    places?: {
+      Autocomplete: new (
+        input: HTMLInputElement,
+        opts: Record<string, unknown>
+      ) => GoogleAutocompleteInstance;
+    };
+  };
+}
 
 // Declare global Google Maps object for TypeScript
 declare global {
   interface Window {
-    google?: any;
+    google?: GoogleMapsNamespace;
     gm_authFailure?: () => void;
   }
 }
-
-// -------------------------------------------------------------
-// Comprehensive Bangladesh Locations for Autocomplete
-// -------------------------------------------------------------
-const BANGLADESH_LOCATIONS = [
-  "TSC, University of Dhaka",
-  "Curzon Hall, University of Dhaka",
-  "Science Library, Dhaka University",
-  "Arts Faculty, University of Dhaka",
-  "Shahbagh, Dhaka",
-  "Science Lab, Dhaka",
-  "Dhanmondi 27, Dhaka",
-  "Dhanmondi 32, Dhaka",
-  "Dhanmondi 15, Dhaka",
-  "Nilkhet Book Market, Dhaka",
-  "Farmgate, Dhaka",
-  "Mohammadpur Town Hall, Dhaka",
-  "Lalmatia, Dhaka",
-  "Panthapath, Dhaka",
-  "Tejgaon Industrial Area, Dhaka",
-  "Mohakhali DOHS, Dhaka",
-  "Banani 11, Dhaka",
-  "Gulshan 1, Dhaka",
-  "Gulshan 2, Dhaka",
-  "Badda / Merul Badda, Dhaka",
-  "Hatirjheel Promenade, Dhaka",
-  "Rampura Bridge, Dhaka",
-  "Banasree Block C, Dhaka",
-  "Bashundhara R/A (Gate 1), Dhaka",
-  "Mirpur 10 Circle, Dhaka",
-  "Mirpur 1, Dhaka",
-  "Mirpur 2, Dhaka",
-  "Uttara Sector 3, Dhaka",
-  "Uttara Sector 7, Dhaka",
-  "Savar / Jahangirnagar University",
-  "Old Dhaka / Sadarghat",
-  "Motijheel C/A, Dhaka",
-];
 
 const QUICK_CAMPUS_DESTINATIONS = [
   { label: "TSC, DU", fullName: "TSC, University of Dhaka", lat: 23.7317, lng: 90.3957 },
@@ -96,36 +139,7 @@ export default function RideSharingPage() {
   // -----------------------------------------------------------
   // 1. User & State
   // -----------------------------------------------------------
-  const [currentUser, setCurrentUser] = useState({
-    name: "Farhana Rahman",
-    email: "farhana@std.du.ac.bd",
-    initials: "FR",
-    university: "University of Dhaka",
-    verified: true,
-  });
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("unishare_user");
-      if (stored) {
-        const u = JSON.parse(stored);
-        setCurrentUser({
-          name: u.fullName || u.name || "Farhana Rahman",
-          email: u.email || "farhana@std.du.ac.bd",
-          initials: (u.fullName || u.name || "FR")
-            .split(" ")
-            .map((p: string) => p[0])
-            .join("")
-            .slice(0, 2)
-            .toUpperCase(),
-          university: u.university || "University of Dhaka",
-          verified: u.verified !== undefined ? Boolean(u.verified) : true,
-        });
-      }
-    } catch {
-      // ignore
-    }
-  }, []);
+  const { resolvedUser: currentUser } = useCurrentUser();
 
   // Journey Coordinates & Text
   const [pickup, setPickup] = useState("Dhanmondi 27, Dhaka");
@@ -145,7 +159,9 @@ export default function RideSharingPage() {
   // Map Picking Mode: "none" | "pickup" | "destination"
   const [mapPickMode, setMapPickMode] = useState<"none" | "pickup" | "destination">("none");
   const mapPickModeRef = useRef<"none" | "pickup" | "destination">("none");
-  mapPickModeRef.current = mapPickMode;
+  useEffect(() => {
+    mapPickModeRef.current = mapPickMode;
+  }, [mapPickMode]);
 
   // Live GPS Tracking
   const [isLocatingGps, setIsLocatingGps] = useState(false);
@@ -178,12 +194,12 @@ export default function RideSharingPage() {
 
   // Google Maps SDK Live Instance References
   const googleMapDivRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const pickupMarkerRef = useRef<any>(null);
-  const destMarkerRef = useRef<any>(null);
-  const gpsMarkerRef = useRef<any>(null);
-  const directionsRendererRef = useRef<any>(null);
-  const geocoderRef = useRef<any>(null);
+  const mapInstanceRef = useRef<GoogleMapsInstance | null>(null);
+  const pickupMarkerRef = useRef<GoogleMarkerInstance | null>(null);
+  const destMarkerRef = useRef<GoogleMarkerInstance | null>(null);
+  const gpsMarkerRef = useRef<GoogleMarkerInstance | null>(null);
+  const directionsRendererRef = useRef<GoogleDirectionsRendererInstance | null>(null);
+  const geocoderRef = useRef<GoogleGeocoderInstance | null>(null);
   const [isGoogleMapsReady, setIsGoogleMapsReady] = useState(false);
   const [zoomScale, setZoomScale] = useState(1);
 
@@ -193,6 +209,43 @@ export default function RideSharingPage() {
     setTimeout(() => setToastMessage(null), 3200);
   }, []);
 
+  // Reverse Geocode Helper
+  const reverseGeocode = useCallback(
+    (coords: { lat: number; lng: number }, isPickup: boolean) => {
+      if (!geocoderRef.current) {
+        // Canvas fallback
+        const nearest = DHAKA_CANVAS_LANDMARKS.reduce((prev, curr) => {
+          const d1 = Math.hypot(prev.lat - coords.lat, prev.lng - coords.lng);
+          const d2 = Math.hypot(curr.lat - coords.lat, curr.lng - coords.lng);
+          return d1 < d2 ? prev : curr;
+        });
+        if (isPickup) {
+          setPickup(nearest.name);
+          showToast(`📍 Pickup set: ${nearest.name}`);
+        } else {
+          setDestination(nearest.name);
+          showToast(`🎯 Destination set: ${nearest.name}`);
+        }
+        return;
+      }
+
+      geocoderRef.current.geocode({ location: coords }, (results, status) => {
+        let resolved = `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`;
+        if (status === "OK" && results?.[0]) {
+          resolved = results[0].formatted_address.replace(", Bangladesh", "");
+        }
+        if (isPickup) {
+          setPickup(resolved);
+          showToast(`📍 Pickup set: ${resolved.split(",")[0]}`);
+        } else {
+          setDestination(resolved);
+          showToast(`🎯 Destination set: ${resolved.split(",")[0]}`);
+        }
+      });
+    },
+    [showToast]
+  );
+
   // -----------------------------------------------------------
   // 2. Google Maps JavaScript API Loading
   // -----------------------------------------------------------
@@ -201,8 +254,8 @@ export default function RideSharingPage() {
 
     // Check if already loaded
     if (window.google?.maps) {
-      setIsGoogleMapsReady(true);
-      return;
+      const t = setTimeout(() => setIsGoogleMapsReady(true), 0);
+      return () => clearTimeout(t);
     }
 
     if (!apiKey) {
@@ -233,10 +286,12 @@ export default function RideSharingPage() {
   // -----------------------------------------------------------
   useEffect(() => {
     if (!isGoogleMapsReady || !googleMapDivRef.current || mapInstanceRef.current) return;
+    const gmaps = window.google?.maps;
+    if (!gmaps) return;
 
     try {
       const centerCoords = { lat: 23.7430, lng: 90.3840 }; // Center of Dhaka Central
-      const map = new window.google.maps.Map(googleMapDivRef.current, {
+      const map = new gmaps.Map(googleMapDivRef.current, {
         center: centerCoords,
         zoom: 13,
         styles: GOOGLE_MAPS_LIGHT_STYLES,
@@ -248,10 +303,10 @@ export default function RideSharingPage() {
       });
 
       mapInstanceRef.current = map;
-      geocoderRef.current = new window.google.maps.Geocoder();
+      geocoderRef.current = new gmaps.Geocoder();
 
       // Directions Renderer
-      const directionsRenderer = new window.google.maps.DirectionsRenderer({
+      const directionsRenderer = new gmaps.DirectionsRenderer({
         map,
         suppressMarkers: true,
         polylineOptions: {
@@ -263,7 +318,7 @@ export default function RideSharingPage() {
       directionsRendererRef.current = directionsRenderer;
 
       // Pickup Marker (Green Pin A)
-      pickupMarkerRef.current = new window.google.maps.Marker({
+      pickupMarkerRef.current = new gmaps.Marker({
         position: pickupCoords,
         map,
         title: "Pickup Spot",
@@ -275,14 +330,14 @@ export default function RideSharingPage() {
           strokeColor: "#ffffff",
           strokeWeight: 2,
           scale: 1.6,
-          anchor: new window.google.maps.Point(12, 22),
-          labelOrigin: new window.google.maps.Point(12, 9),
+          anchor: new gmaps.Point(12, 22),
+          labelOrigin: new gmaps.Point(12, 9),
         },
         draggable: true,
       });
 
       // Destination Marker (Red Pin B)
-      destMarkerRef.current = new window.google.maps.Marker({
+      destMarkerRef.current = new gmaps.Marker({
         position: destCoords,
         map,
         title: "Destination",
@@ -294,21 +349,21 @@ export default function RideSharingPage() {
           strokeColor: "#ffffff",
           strokeWeight: 2,
           scale: 1.6,
-          anchor: new window.google.maps.Point(12, 22),
-          labelOrigin: new window.google.maps.Point(12, 9),
+          anchor: new gmaps.Point(12, 22),
+          labelOrigin: new gmaps.Point(12, 9),
         },
         draggable: true,
       });
 
       // Allow dragging markers to update location
-      pickupMarkerRef.current.addListener("dragend", (e: any) => {
+      pickupMarkerRef.current.addListener("dragend", (e) => {
         const lat = e.latLng.lat();
         const lng = e.latLng.lng();
         setPickupCoords({ lat, lng });
         reverseGeocode({ lat, lng }, true);
       });
 
-      destMarkerRef.current.addListener("dragend", (e: any) => {
+      destMarkerRef.current.addListener("dragend", (e) => {
         const lat = e.latLng.lat();
         const lng = e.latLng.lng();
         setDestCoords({ lat, lng });
@@ -316,7 +371,7 @@ export default function RideSharingPage() {
       });
 
       // Click on Map to Select Pickup or Destination
-      map.addListener("click", (e: any) => {
+      map.addListener("click", (e) => {
         const lat = e.latLng.lat();
         const lng = e.latLng.lng();
 
@@ -384,41 +439,8 @@ export default function RideSharingPage() {
     } catch (err) {
       console.error("Google Maps initialization error:", err);
     }
-  }, [isGoogleMapsReady, showToast]);
-
-  // Reverse Geocode Helper
-  const reverseGeocode = (coords: { lat: number; lng: number }, isPickup: boolean) => {
-    if (!geocoderRef.current) {
-      // Canvas fallback
-      const nearest = DHAKA_CANVAS_LANDMARKS.reduce((prev, curr) => {
-        const d1 = Math.hypot(prev.lat - coords.lat, prev.lng - coords.lng);
-        const d2 = Math.hypot(curr.lat - coords.lat, curr.lng - coords.lng);
-        return d1 < d2 ? prev : curr;
-      });
-      if (isPickup) {
-        setPickup(nearest.name);
-        showToast(`📍 Pickup set: ${nearest.name}`);
-      } else {
-        setDestination(nearest.name);
-        showToast(`🎯 Destination set: ${nearest.name}`);
-      }
-      return;
-    }
-
-    geocoderRef.current.geocode({ location: coords }, (results: any, status: any) => {
-      let resolved = `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`;
-      if (status === "OK" && results?.[0]) {
-        resolved = results[0].formatted_address.replace(", Bangladesh", "");
-      }
-      if (isPickup) {
-        setPickup(resolved);
-        showToast(`📍 Pickup set: ${resolved.split(",")[0]}`);
-      } else {
-        setDestination(resolved);
-        showToast(`🎯 Destination set: ${resolved.split(",")[0]}`);
-      }
-    });
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isGoogleMapsReady, showToast, reverseGeocode]);
 
   // -----------------------------------------------------------
   // 4. Draw Route via Google Routes / DirectionsService
@@ -431,17 +453,19 @@ export default function RideSharingPage() {
     if (destMarkerRef.current) destMarkerRef.current.setPosition(destCoords);
 
     // Call Google Routes API
-    if (isGoogleMapsReady && window.google?.maps?.DirectionsService && directionsRendererRef.current) {
-      const directionsService = new window.google.maps.DirectionsService();
+    const directionsRenderer = directionsRendererRef.current;
+    const gmaps = window.google?.maps;
+    if (isGoogleMapsReady && gmaps?.DirectionsService && directionsRenderer) {
+      const directionsService = new gmaps.DirectionsService();
       directionsService.route(
         {
           origin: pickupCoords,
           destination: destCoords,
-          travelMode: window.google.maps.TravelMode.DRIVING,
+          travelMode: gmaps.TravelMode.DRIVING,
         },
-        (result: any, status: any) => {
+        (result, status) => {
           if (status === "OK" && result?.routes?.[0]?.legs?.[0]) {
-            directionsRendererRef.current.setDirections(result);
+            directionsRenderer.setDirections(result);
             const leg = result.routes[0].legs[0];
             setRouteInfo({
               distanceText: leg.distance?.text || "6.4 km",
@@ -489,13 +513,14 @@ export default function RideSharingPage() {
           mapInstanceRef.current.setZoom(15);
 
           // Add or update GPS Blue Marker
-          if (!gpsMarkerRef.current) {
-            gpsMarkerRef.current = new window.google.maps.Marker({
+          const gmaps = window.google?.maps;
+          if (!gpsMarkerRef.current && gmaps) {
+            gpsMarkerRef.current = new gmaps.Marker({
               position: currentCoord,
               map: mapInstanceRef.current,
               title: "Your GPS Location",
               icon: {
-                path: window.google.maps.SymbolPath.CIRCLE,
+                path: gmaps.SymbolPath.CIRCLE,
                 scale: 8,
                 fillColor: "#1a73e8",
                 fillOpacity: 1,
@@ -503,7 +528,7 @@ export default function RideSharingPage() {
                 strokeWeight: 2.5,
               },
             });
-          } else {
+          } else if (gpsMarkerRef.current) {
             gpsMarkerRef.current.setPosition(currentCoord);
           }
         }
@@ -596,7 +621,7 @@ export default function RideSharingPage() {
             {/* Header / Eyebrow */}
             <div>
               <div className="rides-header-eyebrow">
-                <span className="rides-badge-pill">Campus Ride Sharing</span>
+                <span className="rides-badge-pill">{currentUser.university}</span>
                 <span className="verified-indicator">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
@@ -606,7 +631,7 @@ export default function RideSharingPage() {
               </div>
               <div className="rides-title-block">
                 <h1>Destination Live Matching</h1>
-                <p>Find and travel with verified campus peers heading to the same destination.</p>
+                <p>Find and travel with verified {currentUser.university} peers heading to the same destination.</p>
               </div>
             </div>
 
@@ -891,7 +916,9 @@ export default function RideSharingPage() {
           <div className={`map-provider-status-badge ${isGoogleMapsReady ? "active" : "simulation"}`}>
             <span className="dot" />
             <span>
-              {isGoogleMapsReady ? "Google Maps JS SDK Active" : "Google Maps Campus Mode"}
+              {isGoogleMapsReady
+                ? `Google Maps JS SDK Active · ${currentUser.university}`
+                : `${currentUser.university} · Live Campus Map`}
             </span>
           </div>
 
@@ -935,8 +962,9 @@ export default function RideSharingPage() {
               type="button"
               className="map-control-btn"
               onClick={() => {
-                if (mapInstanceRef.current) {
-                  const bounds = new window.google.maps.LatLngBounds();
+                const gmaps = window.google?.maps;
+                if (mapInstanceRef.current && gmaps?.LatLngBounds) {
+                  const bounds = new gmaps.LatLngBounds();
                   bounds.extend(pickupCoords);
                   bounds.extend(destCoords);
                   mapInstanceRef.current.fitBounds(bounds, 80);
