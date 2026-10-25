@@ -153,17 +153,6 @@ export async function placeEmergencyCall(params: {
       formData.append("From", fromNumber);
       formData.append("Url", voiceUrl);
 
-      // Webhook callback registration for asynchronous call events
-      if (params.callbackBaseUrl) {
-        const webhookUrl = `${params.callbackBaseUrl.replace(/\/$/, "")}/api/sos/webhook/twilio`;
-        formData.append("StatusCallback", webhookUrl);
-        formData.append("StatusCallbackEvent", "initiated");
-        formData.append("StatusCallbackEvent", "ringing");
-        formData.append("StatusCallbackEvent", "answered");
-        formData.append("StatusCallbackEvent", "completed");
-        formData.append("StatusCallbackMethod", "POST");
-      }
-
       const response = await fetch(
         `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Calls.json`,
         {
@@ -388,11 +377,6 @@ export async function sendEmergencySms(params: {
       formData.append("To", normalizedTo);
       formData.append("From", fromNumber);
       formData.append("Body", messageBody);
-
-      if (params.callbackBaseUrl) {
-        const webhookUrl = `${params.callbackBaseUrl.replace(/\/$/, "")}/api/sos/webhook/twilio-sms`;
-        formData.append("StatusCallback", webhookUrl);
-      }
 
       const response = await fetch(
         `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
