@@ -456,9 +456,7 @@ export default function SOSPage() {
       `Initiating call to Priority #${contact.priority}: ${contact.name} (${contact.phoneNumber}) [Attempt ${attemptNumber}/2]...`
     );
 
-    // Realistic dial / ring simulation delay
-    await new Promise((resolve) => setTimeout(resolve, 1400));
-    setCurrentCallStatusText(`Ringing ${contact.name}...`);
+    setCurrentCallStatusText(`Calling ${contact.name} (${contact.phoneNumber})...`);
 
     try {
       const res = await fetch("/api/sos/session", {
@@ -507,7 +505,7 @@ export default function SOSPage() {
           const nextAttempt = next.nextAttemptNumber || 1;
 
           setCurrentCallStatusText(next.reason || "Advancing emergency escalation...");
-          await new Promise((resolve) => setTimeout(resolve, 2200));
+          await new Promise((resolve) => setTimeout(resolve, 800));
 
           if (nextIdx !== -1) {
             runEscalationLoop(sessionId, contactList, nextIdx, nextAttempt);

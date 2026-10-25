@@ -237,40 +237,44 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // Requirement 6 & 7: Send emergency SMS with student name, alert message, activation time & tracking URL
-      const smsDispatches = [];
-      for (const contact of contacts) {
-        const smsResult = await sendEmergencySms({
-          toPhoneNumber: contact.phoneNumber,
-          recipientName: contact.name,
-          studentName: user.fullName,
-          trackingUrl,
-          activatedAt: session.createdAt,
-          callbackBaseUrl: origin,
-          simulatedOutcome: body.simulatedSmsOutcome,
-        });
-
-        const record = await db.emergencySmsDispatch.create({
-          data: {
-            sessionId: session.id,
-            contactId: contact.id,
+      // Requirement 6 & 7: Send emergency SMS concurrently in parallel
+      const smsPromises = contacts.map(async (contact) => {
+        try {
+          const smsResult = await sendEmergencySms({
+            toPhoneNumber: contact.phoneNumber,
             recipientName: contact.name,
-            phoneNumber: contact.phoneNumber,
-            messageBody: smsResult.messageBody,
-            status: smsResult.status,
-            provider: smsResult.provider,
-            telephonySid: smsResult.telephonySid,
-            errorMessage: smsResult.errorMessage,
-            sentAt:
-              smsResult.status === "SENT" ||
+            studentName: user.fullName,
+            trackingUrl,
+            activatedAt: session.createdAt,
+            callbackBaseUrl: origin,
+            simulatedOutcome: body.simulatedSmsOutcome,
+          });
+
+          return await db.emergencySmsDispatch.create({
+            data: {
+              sessionId: session.id,
+              contactId: contact.id,
+              recipientName: contact.name,
+              phoneNumber: contact.phoneNumber,
+              messageBody: smsResult.messageBody,
+              status: smsResult.status,
+              provider: smsResult.provider,
+              telephonySid: smsResult.telephonySid,
+              errorMessage: smsResult.errorMessage,
+              sentAt:
+                smsResult.status === "SENT" ||
                 smsResult.status === "DELIVERED" ||
                 smsResult.status === "MOCK_SENT"
-                ? new Date()
-                : null,
-          },
-        });
-        smsDispatches.push(record);
-      }
+                  ? new Date()
+                  : null,
+            },
+          });
+        } catch {
+          return null;
+        }
+      });
+      const resolvedDispatches = await Promise.all(smsPromises);
+      const smsDispatches = resolvedDispatches.filter(Boolean);
 
       return NextResponse.json({
         success: true,
