@@ -1,7 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, use, Suspense } from "react";
-import Link from "next/link";
+import React, { useEffect, useState, use, Suspense, useCallback } from "react";
 import "../../sos.css";
 
 interface TrackingData {
@@ -55,10 +54,14 @@ function TrackingContent({
   const [secondsAgo, setSecondsAgo] = useState(0);
 
   // Fetch tracking data from secure API
-  const fetchTrackingData = async (initial = false) => {
+  const fetchTrackingData = useCallback(async (initial = false) => {
     if (initial) setIsLoading(true);
     try {
-      const res = await fetch(`/api/sos/track/${encodeURIComponent(token)}`);
+      const searchSuffix =
+        typeof window !== "undefined" ? window.location.search : "";
+      const res = await fetch(
+        `/api/sos/track/${encodeURIComponent(token)}${searchSuffix}`
+      );
       const data = await res.json();
 
       if (!res.ok || !data.success) {
@@ -88,20 +91,23 @@ function TrackingContent({
     } finally {
       if (initial) setIsLoading(false);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
-    fetchTrackingData(true);
-  }, [token]);
+    const t = setTimeout(() => {
+      void fetchTrackingData(true);
+    }, 0);
+    return () => clearTimeout(t);
+  }, [fetchTrackingData]);
 
   // Periodic polling every 4 seconds for live location refresh
   useEffect(() => {
     if (isExpired || error) return;
     const interval = setInterval(() => {
-      fetchTrackingData(false);
+      void fetchTrackingData(false);
     }, 4000);
     return () => clearInterval(interval);
-  }, [token, isExpired, error]);
+  }, [fetchTrackingData, isExpired, error]);
 
   // Second-counter for "Updated X seconds ago"
   useEffect(() => {

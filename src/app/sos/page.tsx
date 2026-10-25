@@ -2,7 +2,11 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import AppNavbar from "../components/AppNavbar";
-import { useCurrentUser } from "../lib/user-client";
+import {
+  getUserScopedKey,
+  useCurrentUser,
+  writeUserScopedJson,
+} from "../lib/user-client";
 import "../campus-home.css";
 
 interface EmergencyContact {
@@ -16,23 +20,13 @@ interface EmergencyContact {
   updatedAt?: string;
 }
 
-// Helper to format any Bangladeshi or international phone number for WhatsApp
-function formatForWhatsApp(phoneStr: string): string {
-  const digits = phoneStr.replace(/\D/g, "");
-  if (digits.startsWith("880")) {
-    return digits;
-  }
-  if (digits.startsWith("88") && !digits.startsWith("880")) {
-    return "880" + digits.slice(2);
-  }
-  if (digits.startsWith("0")) {
-    return "880" + digits.slice(1);
-  }
-  return "880" + digits;
-}
-
 export default function SOSSetupPage() {
-  const { resolvedUser: currentUser, isHydrated } = useCurrentUser();
+  const { resolvedUser: currentUser, isDemoUser, isHydrated } = useCurrentUser();
+  const contactsStorageKey = getUserScopedKey(
+    "unishare_emergency_contacts",
+    currentUser.email,
+    isDemoUser
+  );
 
   // Single Emergency Contact State (Max 1)
   const [contact, setContact] = useState<EmergencyContact | null>(null);
@@ -76,8 +70,10 @@ export default function SOSSetupPage() {
       const data = await res.json();
       if (data.success && Array.isArray(data.contacts) && data.contacts.length > 0) {
         setContact(data.contacts[0]);
+        writeUserScopedJson(contactsStorageKey, data.contacts);
       } else {
         setContact(null);
+        writeUserScopedJson(contactsStorageKey, []);
         setIsEditing(true); // Open form if empty
       }
     } catch (err) {
@@ -86,7 +82,7 @@ export default function SOSSetupPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [currentUser.email, isHydrated]);
+  }, [contactsStorageKey, currentUser.email, isHydrated]);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -171,15 +167,20 @@ export default function SOSSetupPage() {
 
       const data = await res.json();
       if (data.success) {
-        if (data.contact) {
-          setContact(data.contact);
-        } else if (Array.isArray(data.contacts) && data.contacts.length > 0) {
-          setContact(data.contacts[0]);
+        const nextContacts =
+          Array.isArray(data.contacts) && data.contacts.length > 0
+            ? data.contacts
+            : data.contact
+            ? [data.contact]
+            : [];
+        if (nextContacts.length > 0) {
+          setContact(nextContacts[0]);
         }
+        writeUserScopedJson(contactsStorageKey, nextContacts);
         setIsEditing(false);
         showToast("✓ Emergency contact saved successfully!");
 
-        // Trigger floating button reload
+        // Trigger navbar SOS listener reload
         window.dispatchEvent(new Event("storage"));
       } else {
         setFormError(data.error || "Failed to save emergency contact.");
@@ -207,6 +208,7 @@ export default function SOSSetupPage() {
       const data = await res.json();
       if (data.success) {
         setContact(null);
+        writeUserScopedJson(contactsStorageKey, []);
         setFormName("");
         setFormPhone("");
         setIsEditing(true);

@@ -1,12 +1,14 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   clearClientSession,
   deriveInitials,
+  getUserScopedKey,
   useCurrentUser,
+  useLocalStorageRaw,
 } from "../lib/user-client";
 import "./app-navbar.css";
 
@@ -145,7 +147,7 @@ export default function AppNavbar({
   onSos,
 }: AppNavbarProps) {
   const router = useRouter();
-  const { resolvedUser: currentUser } = useCurrentUser();
+  const { resolvedUser: currentUser, isDemoUser } = useCurrentUser();
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -186,7 +188,10 @@ export default function AppNavbar({
   };
 
   // Emergency SOS Dual-Action: 1-click -> Open /sos setup; Press & hold (2s) -> Dispatch Emergency Alert
-  const [sosContact, setSosContact] = useState<{ name: string; phoneNumber: string } | null>(null);
+  const [fetchedSosContact, setFetchedSosContact] = useState<{
+    name: string;
+    phoneNumber: string;
+  } | null>(null);
   const [isHolding, setIsHolding] = useState(false);
   const [holdProgress, setHoldProgress] = useState(0);
   const [isTriggering, setIsTriggering] = useState(false);
@@ -196,71 +201,60 @@ export default function AppNavbar({
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const triggeredRef = useRef(false);
 
-  const loadEmergencyContact = () => {
+  const contactsStorageKey = getUserScopedKey(
+    "unishare_emergency_contacts",
+    resolvedUser.email,
+    isDemoUser
+  );
+  const rawStoredContactsJson = useLocalStorageRaw(contactsStorageKey);
+
+  const storedSosContact = useMemo(() => {
+    if (!rawStoredContactsJson || rawStoredContactsJson.includes("1939853593")) {
+      return null;
+    }
     try {
-      const raw = localStorage.getItem("unishare_emergency_contacts");
-      if (raw) {
-        if (raw.includes("1939853593")) {
-          localStorage.removeItem("unishare_emergency_contacts");
-        } else {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setSosContact(parsed[0]);
-            return;
-          }
-        }
-      }
-      const singleRaw = localStorage.getItem("unishare_emergency_contact");
-      if (singleRaw) {
-        if (singleRaw.includes("1939853593")) {
-          localStorage.removeItem("unishare_emergency_contact");
-        } else {
-          setSosContact(JSON.parse(singleRaw));
-        }
+      const parsed = JSON.parse(rawStoredContactsJson) as Array<{
+        name?: string;
+        phoneNumber?: string;
+      }>;
+      if (Array.isArray(parsed) && parsed[0]?.phoneNumber) {
+        return {
+          name: parsed[0].name || "Emergency Contact",
+          phoneNumber: parsed[0].phoneNumber,
+        };
       }
     } catch {
-      // ignore
+      // ignore malformed storage
     }
-  };
+    return null;
+  }, [rawStoredContactsJson]);
+
+  const sosContact = storedSosContact || fetchedSosContact;
 
   useEffect(() => {
-    const t = setTimeout(loadEmergencyContact, 0);
-    if (resolvedUser.email) {
-      fetch(`/api/emergency-contacts?email=${encodeURIComponent(resolvedUser.email)}`)
-        .then((r) => r.json())
-        .then((d) => {
-          if (d?.contacts?.[0]) {
-            setSosContact(d.contacts[0]);
-          }
-        })
-        .catch(() => {});
-    }
+    if (!resolvedUser.email) return;
+    let active = true;
+    fetch(`/api/emergency-contacts?email=${encodeURIComponent(resolvedUser.email)}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (!active) return;
+        if (d?.contacts?.[0]) {
+          setFetchedSosContact(d.contacts[0]);
+        } else {
+          setFetchedSosContact(null);
+        }
+      })
+      .catch(() => {});
 
-    const handleStorage = () => loadEmergencyContact();
-    window.addEventListener("storage", handleStorage);
     return () => {
-      clearTimeout(t);
-      window.removeEventListener("storage", handleStorage);
+      active = false;
     };
   }, [resolvedUser.email]);
 
   const triggerSosEmergency = async () => {
     setIsTriggering(true);
     try {
-      let activeContact = sosContact;
-      if (!activeContact) {
-        try {
-          const raw = localStorage.getItem("unishare_emergency_contacts");
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed) && parsed.length > 0) activeContact = parsed[0];
-          }
-          if (!activeContact) {
-            const s = localStorage.getItem("unishare_emergency_contact");
-            if (s) activeContact = JSON.parse(s);
-          }
-        } catch {}
-      }
+      const activeContact = sosContact;
 
       if (!activeContact || !activeContact.phoneNumber) {
         setSosToast("⚠️ No emergency contact configured! Opening setup page...");
@@ -295,11 +289,11 @@ export default function AppNavbar({
         } catch {}
       }
 
-      // 2. Dispatch to /api/sos/session (which automatically triggers UltraMsg WhatsApp alert)
+      // 2. Dispatch to /api/sos/session (with fallbackContact & WhatsApp verification)
       const studentName = resolvedUser.name || "Campus Student";
       const studentEmail = resolvedUser.email || "student@unishare.online";
 
-      await fetch("/api/sos/session", {
+      const sessionRes = await fetch("/api/sos/session", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -307,12 +301,38 @@ export default function AppNavbar({
         },
         body: JSON.stringify({
           action: "START",
+          email: studentEmail,
+          studentName,
+          fallbackContact: activeContact,
           notes: "Triggered from top navbar SOS button (2-second hold)",
           latitude: lat,
           longitude: lng,
           accuracy,
         }),
       });
+      const sessionData = (await sessionRes.json().catch(() => ({}))) as {
+        success?: boolean;
+        trackingUrl?: string;
+        whatsappResult?: { success?: boolean; error?: string } | null;
+      };
+
+      let whatsappDispatched = Boolean(sessionData.whatsappResult?.success);
+      if (!sessionRes.ok || !sessionData.success || !whatsappDispatched) {
+        const waRes = await fetch("/api/sos/send-whatsapp", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            toPhoneNumber: activeContact.phoneNumber,
+            studentName,
+            trackingUrl:
+              sessionData.trackingUrl || `${window.location.origin}/sos`,
+          }),
+        }).catch(() => null);
+        const waData = waRes
+          ? ((await waRes.json().catch(() => ({}))) as { success?: boolean })
+          : {};
+        whatsappDispatched = Boolean(waData.success);
+      }
 
       // 3. Open phone dialer immediately with saved contact number
       const dialNumber = activeContact.phoneNumber.replace(/[^\d+]/g, "");
@@ -320,7 +340,12 @@ export default function AppNavbar({
         window.location.href = `tel:${dialNumber}`;
       }, 350);
 
-      setSosToast(`🚨 SOS DISPATCHED: WhatsApp alert sent to ${activeContact.name} (${activeContact.phoneNumber}) & dialpad opened!`);
+      setSosToast(
+        whatsappDispatched
+          ? `🚨 SOS DISPATCHED: WhatsApp alert sent to ${activeContact.name} (${activeContact.phoneNumber}) & dialpad opened!`
+          : `🚨 SOS dialpad opened for ${activeContact.name} (${activeContact.phoneNumber}). Check WhatsApp gateway logs if alert did not arrive.`
+      );
+      onSos?.();
       setTimeout(() => setSosToast(null), 5000);
     } catch (err) {
       console.error("SOS trigger error:", err);
