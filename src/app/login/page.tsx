@@ -40,6 +40,7 @@ export default function LoginPage() {
       localStorage.setItem("unishare_logged_in", "true");
       localStorage.setItem("unishare_user", JSON.stringify(userProfile));
       document.cookie = "unishare_logged_in=true; path=/; max-age=86400";
+      document.cookie = `unishare_user=${encodeURIComponent(JSON.stringify(userProfile))}; path=/; max-age=86400; SameSite=Lax`;
       document.cookie = `unishare_token=verified_token_${Date.now()}; path=/; max-age=604800; SameSite=Lax`;
     } catch (err) {
       console.error(err);

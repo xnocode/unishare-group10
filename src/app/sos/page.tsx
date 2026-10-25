@@ -723,7 +723,10 @@ export default function SOSPage() {
 
       const res = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-email": currentUser.email,
+        },
         body: JSON.stringify(payload),
       });
 
@@ -931,8 +934,8 @@ export default function SOSPage() {
                   {activeSession.callingStatus === "CONTACT_REACHED"
                     ? "✓ Contact Reached"
                     : activeSession.callingStatus === "ESCALATING"
-                    ? "Escalating Calls"
-                    : activeSession.callingStatus}
+                      ? "Escalating Calls"
+                      : activeSession.callingStatus}
                 </span>
 
                 <button

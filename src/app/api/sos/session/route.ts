@@ -10,8 +10,12 @@ import {
 } from "@/app/lib/telephony";
 
 // Helper to resolve authenticated student
-async function getAuthenticatedUser(req: NextRequest) {
+async function getAuthenticatedUser(req: NextRequest, bodyEmail?: string) {
   let email = req.headers.get("x-user-email");
+
+  if (!email && bodyEmail) {
+    email = bodyEmail;
+  }
 
   if (!email) {
     const userCookie = req.cookies.get("unishare_user")?.value;
@@ -37,24 +41,38 @@ async function getAuthenticatedUser(req: NextRequest) {
 
   email = email.trim().toLowerCase();
 
-  let user = await db.user.findUnique({
-    where: { email },
-  });
-
-  if (!user) {
-    user = await db.user.create({
-      data: {
-        email,
-        fullName: email.includes("farhana") ? "Farhana Rahman" : "Campus Student",
-        studentId: "DU-2023-8841",
-        passwordHash: "student_verified_auth",
-        verified: true,
-        tokenBalance: 420,
-      },
+  try {
+    let user = await db.user.findUnique({
+      where: { email },
     });
-  }
 
-  return user;
+    if (!user) {
+      user = await db.user.create({
+        data: {
+          email,
+          fullName: email.includes("farhana") ? "Farhana Rahman" : "Campus Student",
+          studentId: "DU-2023-8841",
+          passwordHash: "student_verified_auth",
+          verified: true,
+          tokenBalance: 420,
+        },
+      });
+    }
+
+    return user;
+  } catch (err) {
+    console.warn("Session user lookup fallback:", err);
+    return {
+      id: "u-" + Buffer.from(email).toString("hex").slice(0, 16),
+      email,
+      fullName: email.includes("farhana") ? "Farhana Rahman" : "Campus Student",
+      studentId: "DU-2023-8841",
+      passwordHash: "student_verified_auth",
+      verified: true,
+      tokenBalance: 420,
+      createdAt: new Date(),
+    };
+  }
 }
 
 // GET: Retrieve latest active session & telephony status
