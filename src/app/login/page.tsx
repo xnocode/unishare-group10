@@ -17,14 +17,12 @@ function LoginContent() {
 
   const [errorMsg, setErrorMsg] = useState("");
   const [unverifiedEmail, setUnverifiedEmail] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
     setUnverifiedEmail("");
-    setSuccessMsg("");
 
     const trimmedEmail = email.trim();
     if (!trimmedEmail || !password) {
@@ -73,17 +71,7 @@ function LoginContent() {
         }
       }
 
-      setSuccessMsg(
-        destination === "/marketplace"
-          ? "Logged in successfully! Redirecting to campus shelf..."
-          : destination === "/wallet"
-          ? "Logged in successfully! Redirecting to campus wallet..."
-          : "Logged in successfully! Redirecting to campus home..."
-      );
-
-      setTimeout(() => {
-        router.push(destination);
-      }, 350);
+      router.push(destination);
     } catch {
       setErrorMsg("Network error while logging in. Please try again.");
     } finally {
@@ -340,12 +328,6 @@ function LoginContent() {
                       </Link>
                     </>
                   )}
-                </div>
-              )}
-
-              {successMsg && (
-                <div className="ok" role="status" style={{ marginTop: "16px" }}>
-                  {successMsg}
                 </div>
               )}
 
