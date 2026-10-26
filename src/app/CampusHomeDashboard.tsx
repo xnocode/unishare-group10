@@ -9,69 +9,8 @@ import {
   getUserScopedKey,
   useCurrentUser,
   useLocalStorageRaw,
-  writeUserScopedJson,
 } from "./lib/user-client";
 import "./campus-home.css";
-
-interface ProductItem {
-  n: string;
-  c: string;
-  p: number;
-  a: string;
-  o: string;
-  i: string;
-  imgVar: string;
-}
-
-const ITEMS: ProductItem[] = [
-  {
-    n: "Scientific calculator",
-    c: "Calculators",
-    p: 40,
-    a: "Science Library",
-    o: "Nafis Ahmed",
-    i: "NA",
-    imgVar: "var(--img-calc)",
-  },
-  {
-    n: "Match-day football",
-    c: "Footballs",
-    p: 60,
-    a: "DU Central Field",
-    o: "Sakib Hasan",
-    i: "SH",
-    imgVar: "var(--img-ball)",
-  },
-  {
-    n: "Laptop charger · 65W",
-    c: "Laptop chargers",
-    p: 50,
-    a: "TSC",
-    o: "Maliha Islam",
-    i: "MI",
-    imgVar: "var(--img-chg)",
-  },
-  {
-    n: "AirPods with charging case",
-    c: "AirPods",
-    p: 80,
-    a: "Arts Building",
-    o: "Rafiul Karim",
-    i: "RK",
-    imgVar: "var(--img-pods)",
-  },
-];
-
-const CATEGORIES = [
-  "All items",
-  "Calculators",
-  "Footballs",
-  "Laptop chargers",
-  "Phone chargers",
-  "Earphones",
-  "AirPods",
-  "Cameras",
-];
 
 // SVG Helper matching the design
 function SvgIcon({
@@ -191,12 +130,7 @@ interface CampusHomeProps {
 
 export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
   const { resolvedUser, isDemoUser, firstName } = useCurrentUser();
-  const [selectedCat, setSelectedCat] = useState("All items");
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedArea, setSelectedArea] = useState("");
-  const [selectedPrice, setSelectedPrice] = useState("");
-  const [availOnly, setAvailOnly] = useState(true);
-  const [sortBy, setSortBy] = useState("rec");
   const [toastMsg, setToastMsg] = useState("");
   const [showToast, setShowToast] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -216,25 +150,10 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
     resolvedUser.email,
     isDemoUser
   );
-  const favoritesStorageKey = getUserScopedKey(
-    "unishare_favorites",
-    resolvedUser.email,
-    isDemoUser
-  );
 
   const rawProductsJson = useLocalStorageRaw(productsStorageKey);
   const rawWalletJson = useLocalStorageRaw(walletStorageKey);
   const rawNotificationsJson = useLocalStorageRaw(notificationsStorageKey);
-  const rawFavoritesJson = useLocalStorageRaw(favoritesStorageKey);
-
-  const favorites = useMemo(() => {
-    if (!rawFavoritesJson) return {} as Record<string, boolean>;
-    try {
-      return JSON.parse(rawFavoritesJson) as Record<string, boolean>;
-    } catch {
-      return {} as Record<string, boolean>;
-    }
-  }, [rawFavoritesJson]);
 
   const myProducts = useMemo(() => {
     if (!rawProductsJson) return null;
@@ -313,21 +232,6 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
         }
       : null;
 
-  const campusItems = useMemo(() => {
-    if (isDemoUser) return ITEMS;
-    return ITEMS.map((item) =>
-      item.a === "DU Central Field"
-        ? { ...item, a: "Central Sports Field" }
-        : item
-    );
-  }, [isDemoUser]);
-
-  const pickupAreas = useMemo(() => {
-    const set = new Set<string>();
-    campusItems.forEach((item) => set.add(item.a));
-    return Array.from(set);
-  }, [campusItems]);
-
   const triggerToast = (msg: string) => {
     setToastMsg(msg);
     setShowToast(true);
@@ -335,32 +239,6 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
       setShowToast(false);
     }, 1800);
   };
-
-  const toggleFavorite = (itemName: string) => {
-    const isFav = !favorites[itemName];
-    const updated = { ...favorites, [itemName]: isFav };
-    writeUserScopedJson(favoritesStorageKey, updated);
-    triggerToast(isFav ? "Added to Favorites" : "Removed from Favorites");
-  };
-
-  const filteredItems = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
-    const result = campusItems.filter((x) => {
-      const matchCat = selectedCat === "All items" || x.c === selectedCat;
-      const matchArea = !selectedArea || x.a === selectedArea;
-      const matchPrice = !selectedPrice || x.p <= Number(selectedPrice);
-      const matchQ =
-        !q || `${x.n} ${x.c} ${x.o} ${x.a}`.toLowerCase().includes(q);
-      return matchCat && matchArea && matchPrice && matchQ;
-    });
-
-    if (sortBy === "lo") {
-      result.sort((a, b) => a.p - b.p);
-    } else if (sortBy === "hi") {
-      result.sort((a, b) => b.p - a.p);
-    }
-    return result;
-  }, [campusItems, selectedCat, searchQuery, selectedArea, selectedPrice, sortBy]);
 
   const handleLogoutClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -677,140 +555,6 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
               </>
             )}
           </div>
-        </div>
-
-        {/* Recommended Products */}
-        <div className="sh" id="marketplace">
-          <div>
-            <h2>Recommended Products</h2>
-            <p>A little borrowing goes a long way. Find your everyday essentials.</p>
-          </div>
-          <Link className="more" href="/marketplace">
-            View all items <SvgIcon name="arrow" size={14} />
-          </Link>
-        </div>
-
-        {/* Filter Controls */}
-        <div className="filters">
-          <label className="sel">
-            <SvgIcon name="pin" size={13} />
-            <select
-              id="area"
-              aria-label="Pickup area"
-              value={selectedArea}
-              onChange={(e) => setSelectedArea(e.target.value)}
-            >
-              <option value="">Pickup area</option>
-              {pickupAreas.map((area) => (
-                <option key={area} value={area}>
-                  {area}
-                </option>
-              ))}
-            </select>
-            <SvgIcon name="chev" size={12} />
-          </label>
-
-          <label className="sel">
-            <select
-              id="price"
-              aria-label="Price per day"
-              style={{ paddingLeft: "12px" }}
-              value={selectedPrice}
-              onChange={(e) => setSelectedPrice(e.target.value)}
-            >
-              <option value="">Price per day</option>
-              <option value="50">Up to 50 tokens</option>
-              <option value="60">Up to 60 tokens</option>
-              <option value="80">Up to 80 tokens</option>
-            </select>
-            <SvgIcon name="chev" size={12} />
-          </label>
-
-          <button
-            className={`pillbtn ${availOnly ? "" : "off"}`}
-            id="avail"
-            aria-pressed={availOnly}
-            onClick={() => setAvailOnly(!availOnly)}
-          >
-            Available now
-          </button>
-
-          <span className="fl-sp" />
-
-          <label className="sel">
-            <select
-              id="sort"
-              aria-label="Sort"
-              style={{ paddingLeft: "12px" }}
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-            >
-              <option value="rec">Sort: Recommended</option>
-              <option value="lo">Price: low to high</option>
-              <option value="hi">Price: high to low</option>
-            </select>
-            <SvgIcon name="chev" size={12} />
-          </label>
-        </div>
-
-        {/* Category Chips */}
-        <div className="chips" id="chips">
-          {CATEGORIES.map((cat) => (
-            <button
-              key={cat}
-              className={`chip ${cat === selectedCat ? "on" : ""}`}
-              onClick={() => setSelectedCat(cat)}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-
-        {/* Items Grid */}
-        <div className="grid" id="grid">
-          {filteredItems.length > 0 ? (
-            filteredItems.map((item) => {
-              const isFav = !!favorites[item.n];
-              return (
-                <article key={item.n} className="pc">
-                  <div
-                    className="pim"
-                    style={{ backgroundImage: item.imgVar }}
-                  >
-                    <span className="av-t">Available today</span>
-                    <button
-                      className={`heart ${isFav ? "on" : ""}`}
-                      aria-label="Favorite"
-                      aria-pressed={isFav}
-                      onClick={() => toggleFavorite(item.n)}
-                    >
-                      <SvgIcon name="heart" size={13} />
-                    </button>
-                  </div>
-                  <div className="pb">
-                    <small>{item.c}</small>
-                    <h3>{item.n}</h3>
-                    <div className="pr">
-                      <b>{item.p}</b>tokens / day
-                    </div>
-                    <div className="loc">
-                      <SvgIcon name="pin" size={12} />
-                      {item.a}
-                    </div>
-                    <div className="ow">
-                      <span className="mini">{item.i}</span>
-                      {item.o}
-                      <SvgIcon name="check" size={12} />
-                    </div>
-                  </div>
-                </article>
-              );
-            })
-          ) : (
-            <div className="empty">
-              No items match right now. Try another category or clear your filters.
-            </div>
-          )}
         </div>
 
         {/* Upcoming Ride Card */}
