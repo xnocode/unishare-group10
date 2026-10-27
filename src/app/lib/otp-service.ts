@@ -1,11 +1,14 @@
+import { NextRequest } from "next/server";
 import { db } from "./db";
 import {
+  canonicalizeEmail,
   generateOtpCode,
   hashOtpCode,
   MAX_OTP_ATTEMPTS,
   normalizeEmail,
   OTP_EXPIRY_MS,
   OtpPurpose,
+  readKnownCanonicalEmails,
   RESEND_COOLDOWN_MS,
   verifyOtpHash,
 } from "./auth";
@@ -182,5 +185,34 @@ export async function consumeOtpCode(params: {
       : "No active confirmation code found for this email. Request a new code.",
     status: 400,
   };
+}
+
+/**
+ * Checks whether an email (including Gmail dot/+tag aliases) already belongs to
+ * a confirmed account in signed browser cookies or the database.
+ */
+export async function isEmailAlreadyRegistered(
+  req: NextRequest,
+  rawEmail: string
+): Promise<boolean> {
+  const canonicalInput = canonicalizeEmail(rawEmail);
+  if (!canonicalInput) return false;
+
+  if (readKnownCanonicalEmails(req).has(canonicalInput)) {
+    return true;
+  }
+
+  try {
+    const verifiedUsers = await db.user.findMany({
+      where: { OR: [{ emailVerified: true }, { verified: true }] },
+      select: { email: true },
+    });
+    return verifiedUsers.some(
+      (u) => canonicalizeEmail(u.email) === canonicalInput
+    );
+  } catch (err) {
+    console.warn("Duplicate account DB check warning:", err);
+    return false;
+  }
 }
 

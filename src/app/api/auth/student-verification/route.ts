@@ -5,6 +5,7 @@ import {
   DEMO_EMAIL,
   isValidEmail,
   normalizeEmail,
+  recordKnownAccountCookie,
   SESSION_COOKIE,
   SessionPayload,
   setVerifiedAccountCookieFromUser,
@@ -171,6 +172,7 @@ export async function POST(req: NextRequest) {
 
     const res = NextResponse.json({ ok: true, user: publicUser });
     applySessionCookies(res, publicUser, true);
+    recordKnownAccountCookie(req, res, publicUser.email);
 
     if (updatedUser?.passwordHash) {
       setVerifiedAccountCookieFromUser(res, publicUser, updatedUser.passwordHash);

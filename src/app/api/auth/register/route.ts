@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/app/lib/db";
 import {
-  DEMO_EMAIL,
   hashPassword,
   isValidEmail,
   normalizeEmail,
@@ -10,7 +9,7 @@ import {
   PendingVerifyPayload,
   signPayload,
 } from "@/app/lib/auth";
-import { issueOtpCode } from "@/app/lib/otp-service";
+import { isEmailAlreadyRegistered, issueOtpCode } from "@/app/lib/otp-service";
 import {
   BD_UNIVERSITIES,
   matchesUniversityEmail,
@@ -100,17 +99,7 @@ export async function POST(req: NextRequest) {
     const resolvedUniId = listedUni ? listedUni.id : "custom";
     const resolvedIsCustom = !listedUni;
 
-    let existingVerified = false;
-    try {
-      const existing = await db.user.findUnique({ where: { email } });
-      if (existing && (existing.emailVerified || existing.verified)) {
-        existingVerified = true;
-      }
-    } catch (err) {
-      console.warn("DB duplicate check warning:", err);
-    }
-
-    if (existingVerified || email === DEMO_EMAIL) {
+    if (await isEmailAlreadyRegistered(req, email)) {
       return NextResponse.json(
         {
           error:

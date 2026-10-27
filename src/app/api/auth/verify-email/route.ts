@@ -6,11 +6,12 @@ import {
   normalizeEmail,
   PENDING_VERIFY_COOKIE,
   PendingVerifyPayload,
+  recordKnownAccountCookie,
   setVerifiedAccountCookieFromUser,
   toPublicUser,
   verifySignedPayload,
 } from "@/app/lib/auth";
-import { consumeOtpCode } from "@/app/lib/otp-service";
+import { consumeOtpCode, isEmailAlreadyRegistered } from "@/app/lib/otp-service";
 
 export async function POST(req: NextRequest) {
   try {
@@ -26,6 +27,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: "Email address is required." },
         { status: 400 }
+      );
+    }
+
+    if (await isEmailAlreadyRegistered(req, email)) {
+      return NextResponse.json(
+        { error: "An account with this email already exists. Please log in instead." },
+        { status: 409 }
       );
     }
 
@@ -139,6 +147,7 @@ export async function POST(req: NextRequest) {
 
     applySessionCookies(res, publicUser, true);
     setVerifiedAccountCookieFromUser(res, publicUser, userRecord.passwordHash);
+    recordKnownAccountCookie(req, res, publicUser.email);
     res.cookies.set(PENDING_VERIFY_COOKIE, "", { path: "/", maxAge: 0 });
 
     return res;

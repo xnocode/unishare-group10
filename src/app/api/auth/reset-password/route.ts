@@ -7,6 +7,7 @@ import {
   normalizeEmail,
   PENDING_RESET_COOKIE,
   PendingResetPayload,
+  recordKnownAccountCookie,
   setVerifiedAccountCookie,
   setVerifiedAccountCookieFromUser,
   toPublicUser,
@@ -123,6 +124,8 @@ export async function POST(req: NextRequest) {
         tokenBalance: 50,
       });
     }
+
+    recordKnownAccountCookie(req, res, email);
 
     return res;
   } catch (err) {

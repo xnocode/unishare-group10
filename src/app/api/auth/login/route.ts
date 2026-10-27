@@ -6,6 +6,7 @@ import {
   hashPassword,
   isValidEmail,
   normalizeEmail,
+  recordKnownAccountCookie,
   setVerifiedAccountCookieFromUser,
   toPublicUser,
   VERIFIED_ACCOUNT_COOKIE,
@@ -181,6 +182,7 @@ export async function POST(req: NextRequest) {
 
     applySessionCookies(res, publicUser, rememberMe);
     setVerifiedAccountCookieFromUser(res, publicUser, userRecord.passwordHash);
+    recordKnownAccountCookie(req, res, publicUser.email);
 
     return res;
   } catch (err) {

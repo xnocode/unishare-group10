@@ -1,10 +1,11 @@
 import crypto from "crypto";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 export const SESSION_COOKIE = "unishare_session";
 export const PENDING_VERIFY_COOKIE = "unishare_pending_verify";
 export const PENDING_RESET_COOKIE = "unishare_pending_reset";
 export const VERIFIED_ACCOUNT_COOKIE = "unishare_verified_account";
+export const KNOWN_ACCOUNTS_COOKIE = "unishare_known_accounts";
 
 export const OTP_EXPIRY_MS = 15 * 60 * 1000;
 export const MAX_OTP_ATTEMPTS = 6;
@@ -25,6 +26,7 @@ export interface PublicUser {
   department: string | null;
   programme: string | null;
   academicSession: string | null;
+  gender?: string | null;
   createdAt: string | null;
   verified: boolean;
   emailVerified: boolean;
@@ -59,6 +61,7 @@ export interface VerifiedAccountPayload {
   department?: string | null;
   programme?: string | null;
   academicSession?: string | null;
+  gender?: string | null;
   createdAt?: string | null;
   passwordHash: string;
   emailVerified: boolean;
@@ -91,6 +94,34 @@ function getAuthSecret(): string {
 
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
+}
+
+/**
+ * Canonicalizes an email address for duplicate-account detection:
+ * strips `+tag` subaddressing and removes dots in Gmail/Googlemail local parts.
+ */
+export function canonicalizeEmail(email: string): string {
+  const normalized = normalizeEmail(email);
+  const atIdx = normalized.indexOf("@");
+  if (atIdx <= 0) return normalized;
+
+  let local = normalized.slice(0, atIdx);
+  let domain = normalized.slice(atIdx + 1);
+
+  if (domain === "googlemail.com") {
+    domain = "gmail.com";
+  }
+
+  const plusIdx = local.indexOf("+");
+  if (plusIdx > 0) {
+    local = local.slice(0, plusIdx);
+  }
+
+  if (domain === "gmail.com") {
+    local = local.replace(/\./g, "");
+  }
+
+  return `${local}@${domain}`;
 }
 
 export function isValidEmail(email: string): boolean {
@@ -253,6 +284,7 @@ export function toPublicUser(user: {
   department?: string | null;
   programme?: string | null;
   academicSession?: string | null;
+  gender?: string | null;
   createdAt?: Date | string | null;
   verified: boolean;
   emailVerified?: boolean;
@@ -280,6 +312,7 @@ export function toPublicUser(user: {
     department: user.department ?? null,
     programme: user.programme ?? null,
     academicSession: user.academicSession ?? null,
+    gender: user.gender ?? null,
     createdAt: createdAtIso,
     verified: Boolean(user.verified),
     emailVerified: Boolean(user.emailVerified ?? user.verified),
@@ -373,6 +406,7 @@ export function setVerifiedAccountCookieFromUser(
     department: publicUser.department,
     programme: publicUser.programme,
     academicSession: publicUser.academicSession,
+    gender: publicUser.gender ?? null,
     createdAt: publicUser.createdAt,
     passwordHash,
     emailVerified: publicUser.emailVerified,
@@ -390,5 +424,79 @@ export function clearSessionCookies(res: NextResponse) {
   ]) {
     res.cookies.set(name, "", { path: "/", maxAge: 0 });
   }
+}
+
+export interface KnownAccountsPayload {
+  emails: string[];
+  exp: number;
+}
+
+/**
+ * Collects canonicalized emails already confirmed in this browser from signed
+ * session, verified-account, and multi-account registry cookies.
+ */
+export function readKnownCanonicalEmails(req: NextRequest): Set<string> {
+  const known = new Set<string>([canonicalizeEmail(DEMO_EMAIL)]);
+
+  const verified = verifySignedPayload<VerifiedAccountPayload>(
+    req.cookies.get(VERIFIED_ACCOUNT_COOKIE)?.value
+  );
+  if (verified?.email && (verified.emailVerified || verified.verified)) {
+    known.add(canonicalizeEmail(verified.email));
+  }
+
+  const session = verifySignedPayload<SessionPayload>(
+    req.cookies.get(SESSION_COOKIE)?.value
+  );
+  if (session?.email && (session.emailVerified || session.verified)) {
+    known.add(canonicalizeEmail(session.email));
+  }
+
+  const registry = verifySignedPayload<KnownAccountsPayload>(
+    req.cookies.get(KNOWN_ACCOUNTS_COOKIE)?.value
+  );
+  if (registry && Array.isArray(registry.emails)) {
+    for (const entry of registry.emails) {
+      if (typeof entry === "string" && entry.trim()) {
+        known.add(canonicalizeEmail(entry));
+      }
+    }
+  }
+
+  return known;
+}
+
+/** Persists a confirmed email in a signed 30-day multi-account browser cookie. */
+export function recordKnownAccountCookie(
+  req: NextRequest,
+  res: NextResponse,
+  email: string
+) {
+  const canonical = canonicalizeEmail(email);
+  if (!canonical) return;
+
+  const existing = verifySignedPayload<KnownAccountsPayload>(
+    req.cookies.get(KNOWN_ACCOUNTS_COOKIE)?.value
+  );
+  const nextList = [
+    canonical,
+    ...(existing?.emails ?? []).filter(
+      (e) => typeof e === "string" && canonicalizeEmail(e) !== canonical
+    ),
+  ].slice(0, 25);
+
+  const maxAgeSeconds = 60 * 60 * 24 * 30;
+  const token = signPayload<KnownAccountsPayload>({
+    emails: nextList,
+    exp: Date.now() + maxAgeSeconds * 1000,
+  });
+
+  res.cookies.set(KNOWN_ACCOUNTS_COOKIE, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: maxAgeSeconds,
+  });
 }
 
