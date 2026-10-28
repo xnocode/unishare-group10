@@ -268,8 +268,8 @@ export async function POST(req: NextRequest) {
               errorMessage: smsResult.errorMessage,
               sentAt:
                 smsResult.status === "SENT" ||
-                smsResult.status === "DELIVERED" ||
-                smsResult.status === "MOCK_SENT"
+                  smsResult.status === "DELIVERED" ||
+                  smsResult.status === "MOCK_SENT"
                   ? new Date()
                   : null,
             },

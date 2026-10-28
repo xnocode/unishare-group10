@@ -62,13 +62,6 @@ export default function SOSSetupPage() {
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Verification OTP State
-  const [formVerified, setFormVerified] = useState(false);
-  const [verifyCodeSent, setVerifyCodeSent] = useState(false);
-  const [generatedOtp, setGeneratedOtp] = useState("");
-  const [inputOtp, setInputOtp] = useState("");
-  const [otpError, setOtpError] = useState("");
-
   // Toast feedback
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -134,10 +127,8 @@ export default function SOSSetupPage() {
       setFormName(contact.name);
       setFormPhone(contact.phoneNumber);
       setFormRelationship(contact.relationship || "Family / Guardian");
-      setFormVerified(true); // Existing verified contact
     }
     setFormError("");
-    setOtpError("");
     setIsEditing(true);
   };
 
@@ -147,40 +138,9 @@ export default function SOSSetupPage() {
       setIsEditing(false);
     }
     setFormError("");
-    setOtpError("");
   };
 
-  // Send Verification Code (OTP)
-  const handleSendVerificationCode = () => {
-    setOtpError("");
-    const cleaned = formPhone.trim().replace(/[\s\-\(\)]/g, "");
-    if (!cleaned || cleaned.length < 10) {
-      setFormError("Please enter a valid 11-digit mobile phone number first.");
-      return;
-    }
-    setFormError("");
-
-    // Generate random 4-digit verification code
-    const code = Math.floor(1000 + Math.random() * 9000).toString();
-    setGeneratedOtp(code);
-    setInputOtp(code); // Pre-fill code for 1-click convenience
-    setVerifyCodeSent(true);
-    setFormVerified(false);
-    showToast(`Verification code generated: ${code}`);
-  };
-
-  // Verify Code
-  const handleVerifyOtp = () => {
-    if (!inputOtp || inputOtp.trim() !== generatedOtp) {
-      setOtpError("Incorrect verification code. Please check and try again.");
-      return;
-    }
-    setFormVerified(true);
-    setOtpError("");
-    showToast("✓ Mobile number verified successfully!");
-  };
-
-  // Save / Update Emergency Contact
+  // Save / Update Emergency Contact (Direct 1-Click Save)
   const handleSaveContact = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError("");
@@ -192,12 +152,7 @@ export default function SOSSetupPage() {
 
     const cleanPhone = formPhone.trim().replace(/[\s\-\(\)]/g, "");
     if (!cleanPhone || cleanPhone.length < 10) {
-      setFormError("Please enter a valid mobile number (e.g., 019XXXXXXXX).");
-      return;
-    }
-
-    if (!formVerified) {
-      setFormError("Please click 'Verify Phone Number' to verify this mobile number first.");
+      setFormError("Please enter a valid 11-digit mobile number (e.g., 019XXXXXXXX).");
       return;
     }
 
@@ -280,8 +235,6 @@ export default function SOSSetupPage() {
         setContact(null);
         setFormName("");
         setFormPhone("");
-        setFormVerified(false);
-        setVerifyCodeSent(false);
         setIsEditing(true);
         showToast("Emergency contact removed.");
         window.dispatchEvent(new Event("storage"));
@@ -606,7 +559,7 @@ export default function SOSSetupPage() {
                 </div>
 
                 {/* Mobile Phone Number */}
-                <div style={{ marginBottom: "16px" }}>
+                <div style={{ marginBottom: "22px" }}>
                   <label style={{ display: "block", fontSize: "12.5px", fontWeight: 700, color: "#161b1a", marginBottom: "5px" }}>
                     Mobile Phone Number <span style={{ color: "#b3261e" }}>*</span>
                   </label>
@@ -615,118 +568,33 @@ export default function SOSSetupPage() {
                     required
                     placeholder="e.g., 019XXXXXXXX or +88019XXXXXXXX"
                     value={formPhone}
-                    onChange={(e) => {
-                      setFormPhone(e.target.value);
-                      setFormVerified(false);
-                      setVerifyCodeSent(false);
-                    }}
+                    onChange={(e) => setFormPhone(e.target.value)}
                     style={{
                       width: "100%",
                       padding: "10px 12px",
                       border: "1.5px solid #d5dcda",
                       borderRadius: "6px",
-                      fontSize: "14px",
+                      fontSize: "15px",
+                      fontWeight: 600,
                       outline: "none",
                       background: "#ffffff",
                     }}
                   />
-                </div>
-
-                {/* VERIFICATION SECTION */}
-                <div
-                  style={{
-                    background: "#f5f7f6",
-                    border: "1px solid #d5dcda",
-                    borderRadius: "8px",
-                    padding: "14px",
-                    marginBottom: "20px",
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                    <span style={{ fontSize: "12px", fontWeight: 700, color: "#161b1a", textTransform: "uppercase" }}>
-                      Phone Number Verification
-                    </span>
-                    {formVerified && (
-                      <span style={{ fontSize: "12px", fontWeight: 700, color: "#0d6b63" }}>
-                        ✓ Verified
-                      </span>
-                    )}
-                  </div>
-
-                  {!formVerified ? (
-                    <div>
-                      {!verifyCodeSent ? (
-                        <div>
-                          <p style={{ fontSize: "12.5px", color: "#4b5553", marginBottom: "10px" }}>
-                            Verify this mobile number to confirm it can receive WhatsApp &amp; emergency alerts.
-                          </p>
-                          <button
-                            type="button"
-                            className="btn"
-                            style={{ padding: "7px 14px", fontSize: "13px" }}
-                            onClick={handleSendVerificationCode}
-                          >
-                            Send Verification Code
-                          </button>
-                        </div>
-                      ) : (
-                        <div>
-                          <p style={{ fontSize: "12.5px", color: "#0d6b63", marginBottom: "8px", fontWeight: 600 }}>
-                            Enter the 4-digit code generated below to verify:
-                          </p>
-                          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                            <input
-                              type="text"
-                              maxLength={4}
-                              placeholder="4-digit code"
-                              value={inputOtp}
-                              onChange={(e) => setInputOtp(e.target.value)}
-                              style={{
-                                width: "130px",
-                                padding: "8px 10px",
-                                border: "1.5px solid #0d6b63",
-                                borderRadius: "6px",
-                                fontSize: "15px",
-                                fontWeight: 700,
-                                textAlign: "center",
-                                letterSpacing: "2px",
-                              }}
-                            />
-                            <button
-                              type="button"
-                              className="btn solid"
-                              style={{ padding: "8px 16px", fontSize: "13px" }}
-                              onClick={handleVerifyOtp}
-                            >
-                              Verify Code
-                            </button>
-                          </div>
-                          {otpError && (
-                            <div style={{ color: "#b91c1c", fontSize: "12px", marginTop: "6px" }}>
-                              {otpError}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div style={{ fontSize: "13px", color: "#0d6b63", fontWeight: 600 }}>
-                      ✓ Mobile number verified and ready to save.
-                    </div>
-                  )}
+                  <span style={{ fontSize: "12px", color: "#4b5553", marginTop: "4px", display: "block" }}>
+                    WhatsApp alert and phone dialer will connect to this number when SOS is pressed.
+                  </span>
                 </div>
 
                 {/* FORM ACTIONS */}
                 <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
                   <button
                     type="submit"
-                    disabled={isSubmitting || !formVerified}
+                    disabled={isSubmitting}
                     className="btn solid"
                     style={{
-                      padding: "10px 22px",
+                      padding: "10px 24px",
                       fontSize: "14px",
-                      opacity: !formVerified ? 0.6 : 1,
-                      cursor: !formVerified ? "not-allowed" : "pointer",
+                      fontWeight: 700,
                     }}
                   >
                     {isSubmitting ? "Saving..." : "✓ Save Emergency Contact"}
