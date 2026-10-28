@@ -454,6 +454,61 @@ export default function SOSPage() {
         }
 
         const next = data.nextStep;
+        const callSid = data.callAttempt?.telephonySid;
+
+        // If it's a live Twilio call, actively poll Twilio for up to 25 seconds while the phone rings
+        if (callSid && callSid.startsWith("CA") && !next?.escalationStopped) {
+          let callAnswered = false;
+          const pollStart = Date.now();
+          const maxWaitMs = 26000; // 26 seconds ringing window
+
+          while (Date.now() - pollStart < maxWaitMs) {
+            const elapsedSec = Math.floor((Date.now() - pollStart) / 1000);
+            const remainingSec = Math.max(0, 25 - elapsedSec);
+            setCurrentCallStatusText(
+              `Calling ${contact.name} (${contact.phoneNumber})... Phone is ringing. Awaiting pickup (${remainingSec}s)`
+            );
+
+            await new Promise((r) => setTimeout(r, 2000));
+
+            try {
+              const pollRes = await fetch("/api/sos/session", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "x-user-email": currentUser.email,
+                },
+                body: JSON.stringify({
+                  action: "CHECK_STATUS",
+                  callSid,
+                }),
+              });
+              const pollData = await pollRes.json();
+              const twilioStatus = pollData?.twilioStatus?.status;
+
+              if (twilioStatus === "ANSWERED") {
+                callAnswered = true;
+                setActiveSession((prev) => prev ? { ...prev, callingStatus: "CONTACT_REACHED" } : null);
+                setCurrentCallStatusText(
+                  `Contact Reached: ${contact.name} answered the phone! Bangla voice announcement is playing.`
+                );
+                setIsStepProcessing(false);
+                showToast(`✓ Contact reached: ${contact.name} answered the phone!`);
+                return;
+              }
+
+              if (twilioStatus === "BUSY" || twilioStatus === "FAILED" || twilioStatus === "UNANSWERED") {
+                break;
+              }
+            } catch {
+              // Ignore network polling glitch
+            }
+          }
+
+          if (callAnswered) {
+            return;
+          }
+        }
 
         if (next.escalationStopped || data.session?.callingStatus === "CONTACT_REACHED") {
           setActiveSession(data.session);
