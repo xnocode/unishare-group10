@@ -352,7 +352,7 @@ export default function SOSPage() {
     setShowEmergencyModal(true);
   };
 
-  // Confirm SOS from Popup: directly places real phone call and sends SMS with live tracking
+  // Confirm SOS from Popup: directly opens WhatsApp with live tracking and launches Phone Dialpad with saved contact
   const handleConfirmSOS = async () => {
     setShowEmergencyModal(false);
 
@@ -381,9 +381,9 @@ export default function SOSPage() {
         }
         setIsCallingActive(true);
         startLocationTracking(data.session.id);
-        showToast("🚨 EMERGENCY ACTIVATED: Real phone call and WhatsApp alert dispatched!");
+        showToast("🚨 EMERGENCY ACTIVATED: WhatsApp alert sent & Phone Dialpad opened!");
 
-        // Automatically open WhatsApp with the Live Tracking link and emergency alert for the primary contact
+        // 1. Automatically open WhatsApp with the Live Tracking link and emergency alert for the primary contact
         if (priorityContact) {
           const formattedPhone = formatForWhatsApp(priorityContact.phoneNumber);
           const finalTrackUrl = data.trackingUrl || `${window.location.origin}/sos/track/${data.session.trackingToken}`;
@@ -393,13 +393,19 @@ export default function SOSPage() {
             `📍 *রিয়েল-টাইম লাইভ জিপিএস লোকেশন দেখতে নিচের লিংকে ক্লিক করুন:*\n${finalTrackUrl}\n\n` +
             `দয়া করে এখনই ব্যবস্থা নিন অথবা প্রয়োজনে ৯৯৯ নম্বরে কল করুন।`
           );
-          setTimeout(() => {
-            window.open(`https://wa.me/${formattedPhone}?text=${waMsg}`, "_blank");
-          }, 400);
-        }
+          
+          window.open(`https://wa.me/${formattedPhone}?text=${waMsg}`, "_blank");
 
-        // Begin calling Priority 1 contact immediately
-        runEscalationLoop(data.session.id, contacts, 0, 1);
+          // 2. Open Phone Dialpad immediately with the saved emergency contact's number
+          const dialNumber = priorityContact.phoneNumber.replace(/[^\d+]/g, "");
+          setTimeout(() => {
+            window.location.href = `tel:${dialNumber}`;
+          }, 350);
+
+          setCurrentCallStatusText(
+            `Dialpad opened for ${priorityContact.name} (${priorityContact.phoneNumber}) · WhatsApp tracking dispatched.`
+          );
+        }
       } else {
         showToast(data.error || "Failed to create emergency session.");
       }
@@ -779,13 +785,13 @@ export default function SOSPage() {
               background: "#fee2e2",
               border: "2px solid #ef4444",
               borderRadius: "12px",
-              padding: "16px 20px",
+              padding: "18px 20px",
               marginBottom: "24px",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
               flexWrap: "wrap",
-              gap: "14px",
+              gap: "16px",
             }}
           >
             <div>
@@ -793,19 +799,82 @@ export default function SOSPage() {
                 <span className="sos-pulse-ring" style={{ width: "12px", height: "12px", background: "#ef4444", borderRadius: "50%" }}></span>
                 ACTIVE EMERGENCY SOS IN PROGRESS
               </div>
-              <div style={{ fontSize: "13px", color: "#7f1d1d", marginTop: "4px" }}>
-                {currentCallStatusText || `Calling Priority 1: ${priorityContact?.name || "Contact"} (${priorityContact?.phoneNumber || ""})`}
+              <div style={{ fontSize: "13.5px", color: "#7f1d1d", marginTop: "4px", fontWeight: 600 }}>
+                {currentCallStatusText || `Emergency live for ${priorityContact?.name || "Contact"} (${priorityContact?.phoneNumber || ""})`}
               </div>
             </div>
 
-            <button
-              type="button"
-              className="btn solid"
-              style={{ background: "#0d6b63", borderColor: "#0d6b63", padding: "10px 20px", fontSize: "14px", fontWeight: 700 }}
-              onClick={() => handleResolveSession("Emergency ended by student")}
-            >
-              ✓ End Emergency (I Am Safe)
-            </button>
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+              {priorityContact && (
+                <a
+                  href={`tel:${priorityContact.phoneNumber.replace(/[^\d+]/g, "")}`}
+                  className="btn"
+                  style={{
+                    background: "#b3261e",
+                    color: "#ffffff",
+                    borderColor: "#b3261e",
+                    padding: "9px 15px",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    textDecoration: "none",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  📞 Call {priorityContact.name} ({priorityContact.phoneNumber})
+                </a>
+              )}
+
+              {priorityContact && (
+                <button
+                  type="button"
+                  className="btn"
+                  style={{
+                    background: "#25D366",
+                    color: "#ffffff",
+                    borderColor: "#25D366",
+                    padding: "9px 15px",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                  onClick={() => handleOpenWhatsApp(priorityContact)}
+                >
+                  💬 Open WhatsApp Alert
+                </button>
+              )}
+
+              <a
+                href="tel:999"
+                className="btn"
+                style={{
+                  background: "#dc2626",
+                  color: "#ffffff",
+                  borderColor: "#dc2626",
+                  padding: "9px 15px",
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  textDecoration: "none",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
+                🚨 Dial 999
+              </a>
+
+              <button
+                type="button"
+                className="btn solid"
+                style={{ background: "#0d6b63", borderColor: "#0d6b63", padding: "9px 16px", fontSize: "13px", fontWeight: 700 }}
+                onClick={() => handleResolveSession("Emergency ended by student")}
+              >
+                ✓ End Emergency (I Am Safe)
+              </button>
+            </div>
           </div>
         )}
 
@@ -1206,7 +1275,7 @@ export default function SOSPage() {
               Confirm Emergency SOS Alert
             </h2>
             <p style={{ fontSize: "13px", color: "var(--muted)", margin: "0 0 16px", lineHeight: "1.5" }}>
-              Are you in immediate danger? Triggering SOS will immediately place an automated telephone call to your verified contact and dispatch a live GPS tracking link via WhatsApp.
+              Are you in danger? Confirming SOS will automatically open your phone dialpad to call your verified contact and dispatch a live GPS tracking link via WhatsApp.
             </p>
 
             {priorityContact && (
@@ -1232,7 +1301,7 @@ export default function SOSPage() {
               </div>
             )}
 
-            {/* Bangla Voice Announcement Quote Preview */}
+            {/* Instant Phone Dialpad Notice */}
             <div
               style={{
                 background: "#f0fdf4",
@@ -1244,10 +1313,10 @@ export default function SOSPage() {
               }}
             >
               <div style={{ fontSize: "11px", fontWeight: 800, color: "#166534", textTransform: "uppercase", marginBottom: "4px" }}>
-                🔊 Voice Call Announcement (Bengali):
+                📞 Instant Phone Dialpad:
               </div>
-              <p style={{ fontSize: "12.5px", color: "#15803d", margin: 0, lineHeight: "1.5", fontStyle: "italic" }}>
-                &ldquo;জরুরি সতর্কতা। আপনার মেয়ে বা ছেলে লাইফ রিস্কে আছে এবং বিপদে পড়েছে। আপনার নাম্বারে তার লাইভ লোকেশনের লিংক পাঠানো হয়েছে। দয়া করে এখনই মেসেজ চেক করুন এবং দ্রুত ব্যবস্থা নিন।&rdquo;
+              <p style={{ fontSize: "12.5px", color: "#15803d", margin: 0, lineHeight: "1.5" }}>
+                Your phone dialer will immediately open with <strong>{priorityContact?.name || "your contact"}&apos;s number ({priorityContact?.phoneNumber || ""})</strong> so you can connect and speak directly without delay.
               </p>
             </div>
 
@@ -1263,14 +1332,14 @@ export default function SOSPage() {
               }}
             >
               <div style={{ fontSize: "11px", fontWeight: 800, color: "#065f46", textTransform: "uppercase", marginBottom: "2px" }}>
-                💬 Instant WhatsApp Notification:
+                💬 Instant WhatsApp Live Location:
               </div>
               <p style={{ fontSize: "12px", color: "#047857", margin: 0, lineHeight: "1.4" }}>
-                Your real-time live GPS tracking link will immediately open in WhatsApp to notify your emergency contact.
+                Your real-time live GPS tracking link will automatically open in WhatsApp to dispatch immediately to your contact.
               </p>
             </div>
 
-            {/* Auto 999 Fallback Notice */}
+            {/* Direct 999 Fallback */}
             <div
               style={{
                 background: "#fef2f2",
@@ -1282,10 +1351,10 @@ export default function SOSPage() {
               }}
             >
               <div style={{ fontSize: "11px", fontWeight: 800, color: "#991b1b", textTransform: "uppercase", marginBottom: "2px" }}>
-                🚨 Automatic 999 Emergency Fallback:
+                🚨 999 Emergency Services Helpline:
               </div>
               <p style={{ fontSize: "12px", color: "#b91c1c", margin: 0, lineHeight: "1.4" }}>
-                If your contact does not answer, the system will automatically open the 999 emergency helpline on your phone dialpad.
+                You can also dial the 999 National Emergency Helpline directly from the emergency banner at any time.
               </p>
             </div>
 
