@@ -237,15 +237,23 @@ export default function AppNavbar({
     try {
       const raw = localStorage.getItem("unishare_emergency_contacts");
       if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setSosContact(parsed[0]);
-          return;
+        if (raw.includes("1939853593")) {
+          localStorage.removeItem("unishare_emergency_contacts");
+        } else {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setSosContact(parsed[0]);
+            return;
+          }
         }
       }
       const singleRaw = localStorage.getItem("unishare_emergency_contact");
       if (singleRaw) {
-        setSosContact(JSON.parse(singleRaw));
+        if (singleRaw.includes("1939853593")) {
+          localStorage.removeItem("unishare_emergency_contact");
+        } else {
+          setSosContact(JSON.parse(singleRaw));
+        }
       }
     } catch {
       // ignore

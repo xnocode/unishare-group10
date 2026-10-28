@@ -101,6 +101,14 @@ export default function SOSSetupPage() {
     }
 
     try {
+      const rawContacts = localStorage.getItem("unishare_emergency_contacts");
+      if (rawContacts && rawContacts.includes("1939853593")) {
+        localStorage.removeItem("unishare_emergency_contacts");
+      }
+      const rawContact = localStorage.getItem("unishare_emergency_contact");
+      if (rawContact && rawContact.includes("1939853593")) {
+        localStorage.removeItem("unishare_emergency_contact");
+      }
       const res = await fetch(`/api/emergency-contacts?email=${encodeURIComponent(resolvedEmail)}`);
       const data = await res.json();
       if (data.success && Array.isArray(data.contacts) && data.contacts.length > 0) {
