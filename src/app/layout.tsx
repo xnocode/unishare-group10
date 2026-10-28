@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { DM_Sans, Bricolage_Grotesque } from "next/font/google";
-import FloatingSosButton from "./components/FloatingSosButton";
 import "./globals.css";
 
 const dmSans = DM_Sans({
@@ -43,7 +42,6 @@ export default function RootLayout({
       </head>
       <body className={`${dmSans.className} min-h-full flex flex-col bg-white text-[#12201f]`}>
         {children}
-        <FloatingSosButton />
       </body>
     </html>
   );

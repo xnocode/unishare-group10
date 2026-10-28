@@ -222,6 +222,198 @@ export default function AppNavbar({
     }
   };
 
+  // Emergency SOS Dual-Action: 1-click -> Open /sos setup; Press & hold (2s) -> Dispatch Emergency Alert
+  const [sosContact, setSosContact] = useState<{ name: string; phoneNumber: string } | null>(null);
+  const [isHolding, setIsHolding] = useState(false);
+  const [holdProgress, setHoldProgress] = useState(0);
+  const [isTriggering, setIsTriggering] = useState(false);
+  const [sosToast, setSosToast] = useState<string | null>(null);
+
+  const holdTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const triggeredRef = useRef(false);
+
+  const loadEmergencyContact = () => {
+    try {
+      const raw = localStorage.getItem("unishare_emergency_contacts");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setSosContact(parsed[0]);
+          return;
+        }
+      }
+      const singleRaw = localStorage.getItem("unishare_emergency_contact");
+      if (singleRaw) {
+        setSosContact(JSON.parse(singleRaw));
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    loadEmergencyContact();
+    fetch("/api/emergency-contacts")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.contacts?.[0]) {
+          setSosContact(d.contacts[0]);
+        }
+      })
+      .catch(() => {});
+
+    const handleStorage = () => loadEmergencyContact();
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
+  const triggerSosEmergency = async () => {
+    setIsTriggering(true);
+    try {
+      let activeContact = sosContact;
+      if (!activeContact) {
+        try {
+          const raw = localStorage.getItem("unishare_emergency_contacts");
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) activeContact = parsed[0];
+          }
+          if (!activeContact) {
+            const s = localStorage.getItem("unishare_emergency_contact");
+            if (s) activeContact = JSON.parse(s);
+          }
+        } catch {}
+      }
+
+      if (!activeContact || !activeContact.phoneNumber) {
+        setSosToast("⚠️ No emergency contact configured! Opening setup page...");
+        setTimeout(() => {
+          setSosToast(null);
+          router.push("/sos");
+        }, 1200);
+        setIsTriggering(false);
+        return;
+      }
+
+      // 1. Fetch current GPS coordinates
+      let lat: number | undefined;
+      let lng: number | undefined;
+      let accuracy: number | undefined;
+
+      if (typeof window !== "undefined" && "geolocation" in navigator) {
+        try {
+          const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: true,
+              timeout: 4000,
+              maximumAge: 10000,
+            });
+          }).catch(() => null);
+
+          if (pos) {
+            lat = pos.coords.latitude;
+            lng = pos.coords.longitude;
+            accuracy = pos.coords.accuracy;
+          }
+        } catch {}
+      }
+
+      // 2. Dispatch to /api/sos/session (which automatically triggers UltraMsg WhatsApp alert)
+      const studentName = resolvedUser.name || "Campus Student";
+      const studentEmail = resolvedUser.email || "student@unishare.online";
+
+      await fetch("/api/sos/session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-email": studentEmail,
+        },
+        body: JSON.stringify({
+          action: "START",
+          notes: "Triggered from top navbar SOS button (2-second hold)",
+          latitude: lat,
+          longitude: lng,
+          accuracy,
+        }),
+      });
+
+      // 3. Open phone dialer immediately with saved contact number
+      const dialNumber = activeContact.phoneNumber.replace(/[^\d+]/g, "");
+      setTimeout(() => {
+        window.location.href = `tel:${dialNumber}`;
+      }, 350);
+
+      setSosToast(`🚨 SOS DISPATCHED: WhatsApp alert sent to ${activeContact.name} (${activeContact.phoneNumber}) & dialpad opened!`);
+      setTimeout(() => setSosToast(null), 5000);
+    } catch (err) {
+      console.error("SOS trigger error:", err);
+      if (sosContact?.phoneNumber) {
+        const dialNumber = sosContact.phoneNumber.replace(/[^\d+]/g, "");
+        window.location.href = `tel:${dialNumber}`;
+      }
+    } finally {
+      setIsTriggering(false);
+    }
+  };
+
+  const HOLD_DURATION_MS = 2000;
+
+  const handleHoldStart = (e: React.SyntheticEvent) => {
+    if ("button" in e && (e as React.MouseEvent).button !== 0) return;
+    triggeredRef.current = false;
+    setIsHolding(true);
+    setHoldProgress(0);
+
+    const startTime = Date.now();
+    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+    progressIntervalRef.current = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(100, Math.round((elapsed / HOLD_DURATION_MS) * 100));
+      setHoldProgress(progress);
+    }, 40);
+
+    if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+    holdTimerRef.current = setTimeout(() => {
+      triggeredRef.current = true;
+      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+      setIsHolding(false);
+      setHoldProgress(100);
+
+      if (typeof navigator !== "undefined" && navigator.vibrate) {
+        try {
+          navigator.vibrate([200, 100, 200]);
+        } catch {}
+      }
+
+      triggerSosEmergency();
+    }, HOLD_DURATION_MS);
+  };
+
+  const handleHoldCancel = () => {
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
+    setIsHolding(false);
+    setHoldProgress(0);
+  };
+
+  const handleSosButtonClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (triggeredRef.current) {
+      triggeredRef.current = false;
+      return;
+    }
+    handleHoldCancel();
+    // 1-click simply navigates to /sos
+    router.push("/sos");
+  };
+
 
   return (
     <header className="unishare-topbar">
@@ -292,15 +484,61 @@ export default function AppNavbar({
                 {unreadCount > 0 && <span className="ut-bell-dot" />}
               </Link>
 
-              <Link
-                href="/sos"
-                className="ut-sos-btn"
+              <button
+                type="button"
+                className={`ut-sos-btn ${isHolding ? "holding" : ""} ${isTriggering ? "triggering" : ""}`}
                 aria-label="Campus Safety SOS"
-                style={{ textDecoration: "none" }}
+                title="1-click: Open SOS Setup. Press & hold 2 seconds: Trigger Emergency Alert."
+                onMouseDown={handleHoldStart}
+                onMouseUp={handleHoldCancel}
+                onMouseLeave={handleHoldCancel}
+                onTouchStart={handleHoldStart}
+                onTouchEnd={handleHoldCancel}
+                onTouchCancel={handleHoldCancel}
+                onContextMenu={(e) => e.preventDefault()}
+                onClick={handleSosButtonClick}
+                style={{
+                  position: "relative",
+                  overflow: "hidden",
+                  textDecoration: "none",
+                  userSelect: "none",
+                  WebkitUserSelect: "none",
+                }}
               >
-                <NavIcon name="shield" />
-                <span className="ut-sos-text">SOS</span>
-              </Link>
+                {isHolding && (
+                  <span
+                    className="ut-sos-progress-fill"
+                    style={{
+                      position: "absolute",
+                      left: 0,
+                      top: 0,
+                      bottom: 0,
+                      width: `${holdProgress}%`,
+                      background: "rgba(220, 38, 38, 0.35)",
+                      pointerEvents: "none",
+                      zIndex: 1,
+                    }}
+                  />
+                )}
+                <span
+                  style={{
+                    position: "relative",
+                    zIndex: 2,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  <NavIcon name="shield" />
+                  <span className="ut-sos-text">
+                    {isTriggering
+                      ? "Sending..."
+                      : isHolding
+                      ? `Hold (${Math.max(1, Math.ceil((2000 - (holdProgress / 100) * 2000) / 1000))}s)`
+                      : "SOS"}
+                  </span>
+                </span>
+              </button>
 
               <div className="ut-anchor-wrap" ref={profileRef}>
                 <button
@@ -451,6 +689,50 @@ export default function AppNavbar({
               <span>{item.label}</span>
             </Link>
           ))}
+        </div>
+      )}
+
+      {sosToast && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: "fixed",
+            top: "72px",
+            right: "20px",
+            zIndex: 99999,
+            backgroundColor: "#12201f",
+            color: "#ffffff",
+            padding: "14px 20px",
+            borderRadius: "12px",
+            boxShadow: "0 10px 25px rgba(0, 0, 0, 0.25)",
+            fontSize: "14px",
+            fontWeight: 600,
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            borderLeft: "5px solid #dc2626",
+            maxWidth: "420px",
+            lineHeight: 1.4,
+          }}
+        >
+          <span style={{ flex: 1 }}>{sosToast}</span>
+          <button
+            type="button"
+            onClick={() => setSosToast(null)}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "#94a3b8",
+              cursor: "pointer",
+              fontSize: "18px",
+              lineHeight: 1,
+              padding: "4px",
+            }}
+            aria-label="Close notification"
+          >
+            ✕
+          </button>
         </div>
       )}
     </header>
