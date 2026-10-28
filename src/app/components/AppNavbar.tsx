@@ -20,7 +20,8 @@ export type ActiveNavKey =
   | "wallet"
   | "favorites"
   | "notifications"
-  | "sos";
+  | "sos"
+  | "settings";
 
 export interface NavUser {
   name?: string;
@@ -129,6 +130,13 @@ function NavIcon({ name }: { name: string }) {
       return (
         <svg viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+        </svg>
+      );
+    case "settings":
+      return (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c0 .69.4 1.31 1.01 1.6.16.08.34.12.52.12H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
         </svg>
       );
     default:
@@ -641,6 +649,16 @@ export default function AppNavbar({
                       <span>Emergency SOS</span>
                     </Link>
 
+                    <Link
+                      href="/settings"
+                      className="ut-menu-item"
+                      role="menuitem"
+                      onClick={() => setProfileOpen(false)}
+                    >
+                      <NavIcon name="settings" />
+                      <span>Account settings</span>
+                    </Link>
+
                     <div className="ut-divider" />
 
                     <button
@@ -686,6 +704,7 @@ export default function AppNavbar({
             { key: "my-products" as ActiveNavKey, label: "My products", href: "/my-products" },
             { key: "favorites" as ActiveNavKey, label: "Favorites", href: "/favorites" },
             { key: "sos" as ActiveNavKey, label: "Emergency SOS", href: "/sos" },
+            { key: "settings" as ActiveNavKey, label: "Settings", href: "/settings" },
           ].map((item) => (
             <Link
               key={item.key}

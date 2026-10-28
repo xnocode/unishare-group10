@@ -1,13 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/app/lib/db";
 import {
+  applySessionCookies,
+  DEMO_EMAIL,
+  recordKnownAccountCookie,
   SESSION_COOKIE,
   SessionPayload,
+  setVerifiedAccountCookieFromUser,
+  toPublicUser,
   VERIFIED_ACCOUNT_COOKIE,
   VerifiedAccountPayload,
-  toPublicUser,
   verifySignedPayload,
 } from "@/app/lib/auth";
+import { validateDepartment, validateFullName } from "@/app/lib/validation";
+
+const VALID_GENDERS = new Set(["female", "male", "other"]);
 
 export async function GET(req: NextRequest) {
   const sessionToken = req.cookies.get(SESSION_COOKIE)?.value;
@@ -48,6 +55,7 @@ export async function GET(req: NextRequest) {
       department: matchingCookie?.department ?? null,
       programme: matchingCookie?.programme ?? null,
       academicSession: matchingCookie?.academicSession ?? null,
+      gender: matchingCookie?.gender ?? null,
       createdAt: matchingCookie?.createdAt ?? null,
       verified: matchingCookie?.verified ?? session.verified,
       emailVerified: matchingCookie?.emailVerified ?? session.emailVerified,
@@ -56,7 +64,7 @@ export async function GET(req: NextRequest) {
   });
 }
 
-// PATCH /api/auth/me — Self-declare profile gender securely
+// PATCH /api/auth/me — Update authenticated user's profile and safety gender settings
 export async function PATCH(req: NextRequest) {
   const sessionToken = req.cookies.get(SESSION_COOKIE)?.value;
   const session = verifySignedPayload<SessionPayload>(sessionToken);
@@ -66,30 +74,166 @@ export async function PATCH(req: NextRequest) {
   }
 
   try {
-    const body = await req.json().catch(() => ({}));
-    const gender = typeof body.gender === "string" ? body.gender.trim().toLowerCase() : null;
+    const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!body || typeof body !== "object") {
+      return NextResponse.json({ ok: false, error: "Invalid request payload." }, { status: 400 });
+    }
 
-    if (gender && !["female", "male", "other"].includes(gender)) {
+    const updateData: {
+      fullName?: string;
+      department?: string | null;
+      programme?: string | null;
+      academicSession?: string | null;
+      gender?: string | null;
+    } = {};
+
+    if ("fullName" in body) {
+      const check = validateFullName(typeof body.fullName === "string" ? body.fullName : "");
+      if (!check.valid) {
+        return NextResponse.json(
+          { ok: false, error: check.error || "Please enter your real full name." },
+          { status: 400 }
+        );
+      }
+      updateData.fullName = check.normalized;
+    }
+
+    if ("department" in body) {
+      const rawDept = typeof body.department === "string" ? body.department.trim() : "";
+      if (!rawDept) {
+        updateData.department = null;
+      } else {
+        const check = validateDepartment(rawDept);
+        if (!check.valid) {
+          return NextResponse.json(
+            { ok: false, error: check.error || "Please enter a valid department." },
+            { status: 400 }
+          );
+        }
+        updateData.department = check.normalized;
+      }
+    }
+
+    if ("programme" in body) {
+      const rawProg = typeof body.programme === "string" ? body.programme.trim() : "";
+      if (rawProg.length > 60) {
+        return NextResponse.json(
+          { ok: false, error: "Programme name must be 60 characters or fewer." },
+          { status: 400 }
+        );
+      }
+      updateData.programme = rawProg || null;
+    }
+
+    if ("academicSession" in body) {
+      const rawSess =
+        typeof body.academicSession === "string" ? body.academicSession.trim() : "";
+      if (rawSess.length > 30) {
+        return NextResponse.json(
+          { ok: false, error: "Academic session must be 30 characters or fewer." },
+          { status: 400 }
+        );
+      }
+      updateData.academicSession = rawSess || null;
+    }
+
+    if ("gender" in body) {
+      const rawGender =
+        typeof body.gender === "string" ? body.gender.trim().toLowerCase() : "";
+      if (rawGender && !VALID_GENDERS.has(rawGender)) {
+        return NextResponse.json(
+          { ok: false, error: "Gender must be 'female', 'male', or 'other'." },
+          { status: 400 }
+        );
+      }
+      updateData.gender = rawGender || null;
+    }
+
+    if (Object.keys(updateData).length === 0) {
       return NextResponse.json(
-        { ok: false, error: "Gender must be 'female', 'male', or 'other'." },
+        { ok: false, error: "No editable profile fields provided." },
         { status: 400 }
       );
     }
 
-    const updated = await db.user.update({
-      where: { email: session.email },
-      data: { gender },
+    const verifiedCookie = verifySignedPayload<VerifiedAccountPayload>(
+      req.cookies.get(VERIFIED_ACCOUNT_COOKIE)?.value
+    );
+    const matchingCookie =
+      verifiedCookie &&
+      verifiedCookie.email.toLowerCase() === session.email.toLowerCase()
+        ? verifiedCookie
+        : null;
+
+    let updatedRecord: Parameters<typeof toPublicUser>[0] & {
+      passwordHash?: string;
+    } | null = null;
+
+    try {
+      const existing = await db.user.findUnique({ where: { email: session.email } });
+      if (existing) {
+        updatedRecord = await db.user.update({
+          where: { email: session.email },
+          data: updateData,
+        });
+      }
+    } catch (err) {
+      console.warn("PATCH /api/auth/me DB warning:", err);
+    }
+
+    if (!updatedRecord) {
+      updatedRecord = {
+        id: session.userId,
+        email: session.email,
+        fullName: updateData.fullName ?? matchingCookie?.fullName ?? session.fullName,
+        university: matchingCookie?.university ?? session.university,
+        universityId: matchingCookie?.universityId ?? "du",
+        isCustomUniversity: matchingCookie?.isCustomUniversity ?? false,
+        studentId: matchingCookie?.studentId ?? null,
+        department:
+          updateData.department !== undefined
+            ? updateData.department
+            : matchingCookie?.department ?? null,
+        programme:
+          updateData.programme !== undefined
+            ? updateData.programme
+            : matchingCookie?.programme ?? null,
+        academicSession:
+          updateData.academicSession !== undefined
+            ? updateData.academicSession
+            : matchingCookie?.academicSession ?? null,
+        gender:
+          updateData.gender !== undefined
+            ? updateData.gender
+            : matchingCookie?.gender ?? null,
+        createdAt: matchingCookie?.createdAt ?? null,
+        verified: matchingCookie?.verified ?? session.verified,
+        emailVerified: matchingCookie?.emailVerified ?? session.emailVerified,
+        tokenBalance:
+          matchingCookie?.tokenBalance ?? (session.email === DEMO_EMAIL ? 420 : 50),
+        passwordHash: matchingCookie?.passwordHash,
+      };
+    }
+
+    const publicUser = toPublicUser(updatedRecord);
+    const res = NextResponse.json({
+      ok: true,
+      message: "Settings saved successfully.",
+      user: publicUser,
     });
 
-    return NextResponse.json({
-      ok: true,
-      message: "Profile gender updated successfully.",
-      user: toPublicUser(updated),
-    });
+    applySessionCookies(res, publicUser, true);
+    if (updatedRecord.passwordHash) {
+      setVerifiedAccountCookieFromUser(res, publicUser, updatedRecord.passwordHash);
+    }
+    recordKnownAccountCookie(req, res, publicUser.email);
+
+    return res;
   } catch (err) {
     console.error("PATCH /api/auth/me error:", err);
-    return NextResponse.json({ ok: false, error: "Failed to update profile." }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: "Failed to update profile settings." },
+      { status: 500 }
+    );
   }
 }
-
-

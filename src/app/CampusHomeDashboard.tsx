@@ -944,6 +944,8 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
+                gap: "8px",
+                flexWrap: "wrap",
               }}
             >
               <button
@@ -957,17 +959,27 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
               >
                 Close
               </button>
-              <button
-                className="btn"
-                style={{
-                  borderColor: "#c0392b",
-                  color: "#c0392b",
-                  fontSize: "12px",
-                }}
-                onClick={handleLogoutClick}
-              >
-                Log out
-              </button>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                <Link
+                  href="/settings"
+                  className="btn solid"
+                  style={{ fontSize: "12px" }}
+                  onClick={() => setShowProfileModal(false)}
+                >
+                  Settings
+                </Link>
+                <button
+                  className="btn"
+                  style={{
+                    borderColor: "#c0392b",
+                    color: "#c0392b",
+                    fontSize: "12px",
+                  }}
+                  onClick={handleLogoutClick}
+                >
+                  Log out
+                </button>
+              </div>
             </div>
           </div>
         </div>

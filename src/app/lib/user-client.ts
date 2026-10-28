@@ -16,6 +16,7 @@ export interface ClientUser {
   department?: string | null;
   programme?: string | null;
   academicSession?: string | null;
+  gender?: string | null;
   createdAt?: string | null;
   verified?: boolean;
   emailVerified?: boolean;
@@ -54,6 +55,7 @@ export const DEMO_USER: ClientUser = {
   department: "Computer Science & Engineering",
   programme: "BSc (Honours)",
   academicSession: "2023–2024",
+  gender: "female",
   createdAt: "2026-10-14T00:00:00.000Z",
   verified: true,
   emailVerified: true,
@@ -122,7 +124,7 @@ export function useIsHydrated(): boolean {
   );
 }
 
-export function useRequireAuth(redirectPath: string): boolean {
+export function useRequireAuth(redirectPath: string, enabled = true): boolean {
   const router = useRouter();
   const hydrated = useIsHydrated();
   const isLoggedIn =
@@ -139,10 +141,10 @@ export function useRequireAuth(redirectPath: string): boolean {
     })();
 
   useEffect(() => {
-    if (hydrated && !isLoggedIn) {
+    if (enabled && hydrated && !isLoggedIn) {
       router.replace(`/login?redirect=${encodeURIComponent(redirectPath)}`);
     }
-  }, [hydrated, isLoggedIn, redirectPath, router]);
+  }, [enabled, hydrated, isLoggedIn, redirectPath, router]);
 
   return isLoggedIn;
 }
@@ -298,6 +300,7 @@ export function useCurrentUser() {
           parsed.department ?? (isDemo ? "Computer Science & Engineering" : null),
         programme: parsed.programme ?? (isDemo ? "BSc (Honours)" : null),
         academicSession: parsed.academicSession ?? (isDemo ? "2023–2024" : null),
+        gender: parsed.gender ?? (isDemo ? "female" : null),
         createdAt: parsed.createdAt ?? (isDemo ? DEMO_USER.createdAt : null),
         verified: parsed.verified ?? false,
         emailVerified: parsed.emailVerified ?? true,
