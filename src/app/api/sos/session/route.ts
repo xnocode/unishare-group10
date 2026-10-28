@@ -8,6 +8,7 @@ import {
   sendEmergencySms,
   generateSecureTrackingToken,
 } from "@/app/lib/telephony";
+import { sendUltraMsgWhatsApp } from "@/app/lib/ultramsg";
 
 // Helper to resolve authenticated student
 async function getAuthenticatedUser(req: NextRequest, bodyEmail?: string) {
@@ -216,6 +217,18 @@ export async function POST(req: NextRequest) {
           gpsStatus: "PENDING",
         },
       });
+
+      // 1-Click Automated WhatsApp Alert Dispatch via UltraMsg Cloud Gateway
+      const primaryContact = contacts[0];
+      if (primaryContact) {
+        sendUltraMsgWhatsApp({
+          toPhoneNumber: primaryContact.phoneNumber,
+          studentName: user.fullName,
+          trackingUrl,
+        }).catch((err) => {
+          console.warn("UltraMsg automated WhatsApp dispatch error:", err);
+        });
+      }
 
       // Requirement 6 & 7: Send emergency SMS concurrently in parallel
       const smsPromises = contacts.map(async (contact) => {

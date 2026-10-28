@@ -152,24 +152,14 @@ export default function FloatingSosButton() {
       const trackToken = data?.session?.trackingToken || "live";
       const finalTrackUrl = data?.trackingUrl || `${window.location.origin}/sos/track/${trackToken}`;
 
-      // 4. Immediately open WhatsApp in a new tab with emergency alert and live GPS map tracking link
-      const formattedPhone = formatForWhatsApp(contact.phoneNumber);
-      const waMsg = encodeURIComponent(
-        `🚨 *জরুরি সতর্কতা (UniShare Emergency SOS)*\n` +
-        `আপনার সন্তান/বন্ধু (${studentName}) বিপদে পড়েছেন এবং জরুরি সহায়তা চেয়েছেন!\n\n` +
-        `📍 *রিয়েল-টাইম লাইভ জিপিএস লোকেশন দেখতে নিচের লিংকে ক্লিক করুন:*\n${finalTrackUrl}\n\n` +
-        `দয়া করে এখনই ব্যবস্থা নিন অথবা প্রয়োজনে ৯৯৯ নম্বরে কল করুন।`
-      );
-
-      window.open(`https://wa.me/${formattedPhone}?text=${waMsg}`, "_blank");
-
+      // 4. Server automatically dispatches the WhatsApp alert via UltraMsg Cloud Gateway
       // 5. Open phone dialpad immediately with the saved emergency contact's number
       const dialNumber = contact.phoneNumber.replace(/[^\d+]/g, "");
       setTimeout(() => {
         window.location.href = `tel:${dialNumber}`;
-      }, 350);
+      }, 300);
 
-      showToast(`🚨 SOS SENT: WhatsApp alert dispatched to ${contact.name} (${contact.phoneNumber}) & dialpad opened!`);
+      showToast(`🚨 SOS DISPATCHED: WhatsApp alert sent automatically to ${contact.name} (${contact.phoneNumber}) & dialpad opened!`);
     } catch (err) {
       console.error("SOS trigger error:", err);
       // Fallback: direct WhatsApp and dialer
@@ -299,3 +289,4 @@ export default function FloatingSosButton() {
     </>
   );
 }
+
