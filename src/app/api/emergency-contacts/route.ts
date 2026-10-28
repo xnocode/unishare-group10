@@ -17,28 +17,7 @@ const fallbackStore = new Map<string, MemoryContact[]>();
 
 function getFallbackContacts(userId: string): MemoryContact[] {
   if (!fallbackStore.has(userId)) {
-    fallbackStore.set(userId, [
-      {
-        id: `mock-c1-${userId.slice(0, 8)}`,
-        userId,
-        name: "Farida Rahman (Mother)",
-        phoneNumber: "+880 1711-234567",
-        relationship: "Family contact",
-        priority: 1,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
-        id: `mock-c2-${userId.slice(0, 8)}`,
-        userId,
-        name: "Tanvir Ahmed (Roommate)",
-        phoneNumber: "+880 1819-876543",
-        relationship: "Campus friend",
-        priority: 2,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-    ]);
+    fallbackStore.set(userId, []);
   }
   return fallbackStore.get(userId)!;
 }
@@ -115,36 +94,10 @@ export async function GET(req: NextRequest) {
     const user = await getAuthenticatedUser(req);
 
     try {
-      let contacts = await db.emergencyContact.findMany({
+      const contacts = await db.emergencyContact.findMany({
         where: { userId: user.id },
         orderBy: { priority: "asc" },
       });
-
-      if (contacts.length === 0 && user.email === "farhana@std.du.ac.bd") {
-        await db.emergencyContact.createMany({
-          data: [
-            {
-              userId: user.id,
-              name: "Farida Rahman (Mother)",
-              phoneNumber: "+880 1711-234567",
-              relationship: "Family contact",
-              priority: 1,
-            },
-            {
-              userId: user.id,
-              name: "Tanvir Ahmed (Roommate)",
-              phoneNumber: "+880 1819-876543",
-              relationship: "Campus friend",
-              priority: 2,
-            },
-          ],
-        });
-
-        contacts = await db.emergencyContact.findMany({
-          where: { userId: user.id },
-          orderBy: { priority: "asc" },
-        });
-      }
 
       // Sync with fallback store
       fallbackStore.set(user.id, contacts as any);
@@ -208,14 +161,14 @@ export async function POST(req: NextRequest) {
         where: { userId: user.id },
       });
 
-      if (existingCount >= 5) {
+      if (existingCount >= 3) {
         return NextResponse.json(
-          { success: false, error: "Maximum of 5 emergency contacts allowed per student." },
+          { success: false, error: "Maximum of 3 emergency contacts allowed per student." },
           { status: 400 }
         );
       }
 
-      let targetPriority = typeof priority === "number" ? Math.max(1, Math.min(5, priority)) : existingCount + 1;
+      let targetPriority = typeof priority === "number" ? Math.max(1, Math.min(3, priority)) : existingCount + 1;
 
       const existingContacts = await db.emergencyContact.findMany({
         where: { userId: user.id },
@@ -225,7 +178,7 @@ export async function POST(req: NextRequest) {
       const isTaken = existingContacts.some((c) => c.priority === targetPriority);
       if (isTaken) {
         for (const c of existingContacts) {
-          if (c.priority >= targetPriority && c.priority < 5) {
+          if (c.priority >= targetPriority && c.priority < 3) {
             await db.emergencyContact.update({
               where: { id: c.id },
               data: { priority: c.priority + 1 },

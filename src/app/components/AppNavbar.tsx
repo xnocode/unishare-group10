@@ -161,12 +161,9 @@ export default function AppNavbar({
   const router = useRouter();
   const [storedUser, setStoredUser] = useState<NavUser | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [sosOpen, setSosOpen] = useState(false);
-  const [sosSent, setSosSent] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const profileRef = useRef<HTMLDivElement>(null);
-  const sosRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     try {
@@ -184,9 +181,6 @@ export default function AppNavbar({
       const target = e.target as Node;
       if (profileRef.current && !profileRef.current.contains(target)) {
         setProfileOpen(false);
-      }
-      if (sosRef.current && !sosRef.current.contains(target)) {
-        setSosOpen(false);
       }
     };
     document.addEventListener("mousedown", handleOutside);
@@ -228,10 +222,6 @@ export default function AppNavbar({
     }
   };
 
-  const handleSosDispatch = () => {
-    setSosSent(true);
-    onSos?.();
-  };
 
   return (
     <header className="unishare-topbar">
@@ -302,65 +292,15 @@ export default function AppNavbar({
                 {unreadCount > 0 && <span className="ut-bell-dot" />}
               </Link>
 
-              <div className="ut-anchor-wrap" ref={sosRef}>
-                <button
-                  type="button"
-                  className="ut-sos-btn"
-                  aria-expanded={sosOpen}
-                  aria-label="Campus Safety SOS"
-                  onClick={() => {
-                    setSosOpen((prev) => !prev);
-                    setProfileOpen(false);
-                    setMobileOpen(false);
-                    setSosSent(false);
-                  }}
-                >
-                  <NavIcon name="shield" />
-                  <span className="ut-sos-text">SOS</span>
-                </button>
-
-                {sosOpen && (
-                  <div className="ut-popover ut-sos-panel" role="dialog" aria-label="Campus Safety SOS">
-                    <h3 className="ut-sos-title">Campus Safety SOS</h3>
-                    <p className="ut-sos-desc">
-                      Proctor &amp; Campus Security Helpline: <strong>01700-000000</strong> ({resolvedUser.university}).
-                    </p>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                      <Link
-                        href="/sos"
-                        className="ut-sos-action"
-                        style={{
-                          textDecoration: "none",
-                          textAlign: "center",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                        onClick={() => setSosOpen(false)}
-                      >
-                        Open SOS Emergency Center
-                      </Link>
-                      <button
-                        type="button"
-                        className="ut-sos-action"
-                        style={{
-                          background: "#ffffff",
-                          color: "#b3261e",
-                          border: "1.5px solid #b3261e",
-                        }}
-                        onClick={handleSosDispatch}
-                      >
-                        Quick Alert Campus Security
-                      </button>
-                    </div>
-                    {sosSent && (
-                      <div className="ut-sos-status" role="status">
-                        Emergency alert logged with campus safety desk.
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+              <Link
+                href="/sos"
+                className="ut-sos-btn"
+                aria-label="Campus Safety SOS"
+                style={{ textDecoration: "none" }}
+              >
+                <NavIcon name="shield" />
+                <span className="ut-sos-text">SOS</span>
+              </Link>
 
               <div className="ut-anchor-wrap" ref={profileRef}>
                 <button
@@ -370,7 +310,6 @@ export default function AppNavbar({
                   aria-label="Account menu"
                   onClick={() => {
                     setProfileOpen((prev) => !prev);
-                    setSosOpen(false);
                     setMobileOpen(false);
                   }}
                 >
@@ -479,7 +418,6 @@ export default function AppNavbar({
                 onClick={() => {
                   setMobileOpen((prev) => !prev);
                   setProfileOpen(false);
-                  setSosOpen(false);
                 }}
               >
                 <svg viewBox="0 0 24 24" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">

@@ -12,10 +12,16 @@ export interface TelephonyCallResult {
   notes?: string;
 }
 
+// Telephony Credentials Helper
+export function getTelephonyCredentials() {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID || "";
+  const authToken = process.env.TWILIO_AUTH_TOKEN || "";
+  const fromNumber = process.env.TWILIO_PHONE_NUMBER || "";
+  return { accountSid, authToken, fromNumber };
+}
+
 export function getTelephonyProviderInfo() {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-  const fromNumber = process.env.TWILIO_PHONE_NUMBER;
+  const { accountSid, authToken, fromNumber } = getTelephonyCredentials();
 
   const hasCredentials = Boolean(
     accountSid &&
@@ -70,7 +76,7 @@ export function validateTwilioWebhookSignature(params: {
   signature: string | null;
   formData: Record<string, string>;
 }): boolean {
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const { authToken } = getTelephonyCredentials();
 
   // In development, mock mode, or when Twilio credentials are not configured, allow simulated requests
   if (
@@ -138,12 +144,10 @@ export async function placeEmergencyCall(params: {
   // 1. Live Twilio Voice Calling (unless a simulated test outcome is explicitly requested)
   if (info.isLive && !params.simulatedOutcome) {
     try {
-      const accountSid = process.env.TWILIO_ACCOUNT_SID!;
-      const authToken = process.env.TWILIO_AUTH_TOKEN!;
-      const fromNumber = process.env.TWILIO_PHONE_NUMBER!;
+      const { accountSid, authToken, fromNumber } = getTelephonyCredentials();
       const normalizedTo = normalizeToE164(params.toPhoneNumber);
 
-      const appUrl = (process.env.NEXT_PUBLIC_APP_URL || params.callbackBaseUrl || "").replace(/\/$/, "");
+      const appUrl = (process.env.NEXT_PUBLIC_APP_URL || params.callbackBaseUrl || "https://unishare.online").replace(/\/$/, "");
       const voiceUrl = appUrl.startsWith("http")
         ? `${appUrl}/api/sos/webhook/twilio?student=${encodeURIComponent(params.studentName)}&priority=${params.priority}`
         : "http://demo.twilio.com/docs/voice.xml";
@@ -243,8 +247,7 @@ export async function checkTwilioCallStatus(callSid: string): Promise<{
   durationSeconds: number;
   rawStatus: string;
 } | null> {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const { accountSid, authToken } = getTelephonyCredentials();
 
   if (!accountSid || !authToken || !callSid.startsWith("CA")) {
     return null;
@@ -275,8 +278,7 @@ export async function checkTwilioCallStatus(callSid: string): Promise<{
 
 // Cancels / terminates an in-progress Twilio call
 export async function cancelTwilioCall(callSid: string): Promise<boolean> {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const { accountSid, authToken } = getTelephonyCredentials();
 
   if (!accountSid || !authToken || !callSid || !callSid.startsWith("CA")) {
     return false;
@@ -368,9 +370,7 @@ export async function sendEmergencySms(params: {
   // 1. Live Twilio SMS Sending
   if (info.isLive) {
     try {
-      const accountSid = process.env.TWILIO_ACCOUNT_SID!;
-      const authToken = process.env.TWILIO_AUTH_TOKEN!;
-      const fromNumber = process.env.TWILIO_PHONE_NUMBER!;
+      const { accountSid, authToken, fromNumber } = getTelephonyCredentials();
       const normalizedTo = normalizeToE164(params.toPhoneNumber);
 
       const formData = new URLSearchParams();

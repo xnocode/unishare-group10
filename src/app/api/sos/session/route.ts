@@ -160,36 +160,16 @@ export async function POST(req: NextRequest) {
 
     // 1. START SESSION: Create active emergency session with tracking token & automatic SMS
     if (action === "START") {
-      let contacts = await db.emergencyContact.findMany({
+      const contacts = await db.emergencyContact.findMany({
         where: { userId: user.id },
         orderBy: { priority: "asc" },
       });
 
-      // Default contacts seeding if empty
-      if (contacts.length === 0 && user.email === "farhana@std.du.ac.bd") {
-        await db.emergencyContact.createMany({
-          data: [
-            {
-              userId: user.id,
-              name: "Farida Rahman (Mother)",
-              phoneNumber: "+880 1711-234567",
-              relationship: "Family contact",
-              priority: 1,
-            },
-            {
-              userId: user.id,
-              name: "Tanvir Ahmed (Roommate)",
-              phoneNumber: "+880 1819-876543",
-              relationship: "Campus friend",
-              priority: 2,
-            },
-          ],
-        });
-
-        contacts = await db.emergencyContact.findMany({
-          where: { userId: user.id },
-          orderBy: { priority: "asc" },
-        });
+      if (contacts.length === 0) {
+        return NextResponse.json(
+          { success: false, error: "No emergency contacts found. Please add at least 1 emergency contact before triggering SOS." },
+          { status: 400 }
+        );
       }
 
       // Requirement 9: Prevent duplicate SOS requests if an emergency session is already ACTIVE

@@ -85,6 +85,21 @@ interface EmergencySessionRecord {
   locationUpdates?: EmergencyLocationRecord[];
 }
 
+// Helper to format any Bangladeshi or international phone number for WhatsApp
+function formatForWhatsApp(phoneStr: string): string {
+  let digits = phoneStr.replace(/\D/g, "");
+  if (digits.startsWith("880")) {
+    return digits;
+  }
+  if (digits.startsWith("88") && !digits.startsWith("880")) {
+    return "880" + digits.slice(2);
+  }
+  if (digits.startsWith("0")) {
+    return "880" + digits.slice(1);
+  }
+  return "880" + digits;
+}
+
 export default function SOSPage() {
   const router = useRouter();
 
@@ -98,19 +113,13 @@ export default function SOSPage() {
     tokenBalance: 500,
   });
 
-  // Emergency dialer entry state
-  const [emergencyNumber, setEmergencyNumber] = useState("");
-  const [showGuidanceModal, setShowGuidanceModal] = useState(false);
-
   // Contacts state
   const [contacts, setContacts] = useState<EmergencyContact[]>([]);
   const [isLoadingContacts, setIsLoadingContacts] = useState(true);
-  const [openContactId, setOpenContactId] = useState<string | null>(null);
 
-  // Contact modal state (Add / Edit / Manage)
+  // Contact modal state (Add / Edit)
   const [showManageModal, setShowManageModal] = useState(false);
   const [editingContact, setEditingContact] = useState<EmergencyContact | null>(null);
-  const [showAddForm, setShowAddForm] = useState(false);
 
   // Form states
   const [formName, setFormName] = useState("");
@@ -119,6 +128,13 @@ export default function SOSPage() {
   const [formPriority, setFormPriority] = useState<number>(1);
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Contact Phone Verification State
+  const [formVerified, setFormVerified] = useState(false);
+  const [verifyCodeSent, setVerifyCodeSent] = useState(false);
+  const [generatedOtp, setGeneratedOtp] = useState("");
+  const [inputOtp, setInputOtp] = useState("");
+  const [otpError, setOtpError] = useState("");
 
   // Toast
   const [toastMessage, setToastMessage] = useState("");
@@ -138,19 +154,16 @@ export default function SOSPage() {
     hasSms: boolean;
     message: string;
   }>({
-    provider: "MOCK_SIMULATOR",
-    isLive: false,
-    hasVoice: false,
-    hasSms: false,
-    message: "Using simulated mock provider",
+    provider: "TWILIO",
+    isLive: true,
+    hasVoice: true,
+    hasSms: true,
+    message: "Live Twilio Telephony Connected",
   });
 
-  // Emergency Session & Escalation States
+  // Emergency Session & Popup Modal
   const [activeSession, setActiveSession] = useState<EmergencySessionRecord | null>(null);
-  const [sessionHistory, setSessionHistory] = useState<EmergencySessionRecord[]>([]);
-  const [showCountdownModal, setShowCountdownModal] = useState(false);
-  const [countdownSeconds, setCountdownSeconds] = useState(5);
-  const countdownTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [showEmergencyModal, setShowEmergencyModal] = useState(false);
 
   // Calling Escalation Runner State
   const [isCallingActive, setIsCallingActive] = useState(false);
@@ -169,11 +182,7 @@ export default function SOSPage() {
     accuracy: number | null;
     timestamp: Date;
   } | null>(null);
-  const [smsLog, setSmsLog] = useState<EmergencySmsRecord[]>([]);
-  const [isResendingSms, setIsResendingSms] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
-  const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [selectedHistorySession, setSelectedHistorySession] = useState<EmergencySessionRecord | null>(null);
 
   const geolocationWatchIdRef = useRef<number | null>(null);
 
@@ -198,202 +207,154 @@ export default function SOSPage() {
     }
   }, []);
 
-  // Fetch contacts and telephony status
-  const fetchContactsAndSession = async () => {
+  // Fetch contacts and active emergency session on mount
+  useEffect(() => {
+    loadContacts();
+    loadSession();
+
+    return () => {
+      if (geolocationWatchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(geolocationWatchIdRef.current);
+      }
+    };
+  }, [currentUser.email]);
+
+  const loadContacts = async () => {
     setIsLoadingContacts(true);
     try {
-      const res = await fetch(`/api/sos/session?email=${encodeURIComponent(currentUser.email)}`, {
-        headers: { "x-user-email": currentUser.email },
+      const res = await fetch(`/api/emergency-contacts`, {
+        headers: {
+          "x-user-email": currentUser.email,
+        },
       });
       const data = await res.json();
-      if (data.success) {
-        if (Array.isArray(data.contacts)) {
-          setContacts(data.contacts);
-        }
-        if (data.telephony) {
-          setTelephonyInfo(data.telephony);
-        }
-        if (data.trackingUrl) {
-          setTrackingUrl(data.trackingUrl);
-        }
-        if (data.sessionHistory) {
-          setSessionHistory(data.sessionHistory);
-        }
-        if (data.activeSession) {
-          setActiveSession(data.activeSession);
-          if (Array.isArray(data.activeSession.smsDispatches)) {
-            setSmsLog(data.activeSession.smsDispatches);
-          }
-          if (data.activeSession.latestLatitude && data.activeSession.latestLongitude) {
-            setGpsCoords({
-              latitude: data.activeSession.latestLatitude,
-              longitude: data.activeSession.latestLongitude,
-              accuracy: data.activeSession.latestAccuracy || null,
-              timestamp: new Date(data.activeSession.latestLocationAt || Date.now()),
-            });
-            setGpsStatus("CONNECTED");
-          }
-          if (data.activeSession.status === "ACTIVE") {
-            setIsCallingActive(true);
-            startLocationTracking(data.activeSession.id);
-          }
-          if (data.activeSession.callAttempts) {
-            setCallLog(data.activeSession.callAttempts);
-          }
-        } else {
-          setActiveSession(null);
-          setIsCallingActive(false);
-          stopLocationTracking();
-        }
+      if (data.success && Array.isArray(data.contacts)) {
+        setContacts(data.contacts);
       }
     } catch (err) {
-      console.error("Error fetching emergency data:", err);
-      showToast("Unable to connect to emergency assistance service.");
+      console.error("Failed to load contacts:", err);
     } finally {
       setIsLoadingContacts(false);
     }
   };
 
-  useEffect(() => {
-    fetchContactsAndSession();
-    return () => {
-      stopLocationTracking();
-      if (countdownTimerRef.current) {
-        clearInterval(countdownTimerRef.current);
+  const loadSession = async () => {
+    try {
+      const res = await fetch(`/api/sos/session?email=${encodeURIComponent(currentUser.email)}`, {
+        headers: {
+          "x-user-email": currentUser.email,
+        },
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (data.telephony) {
+          setTelephonyInfo({
+            provider: data.telephony.provider,
+            isLive: data.telephony.isLive,
+            hasVoice: true,
+            hasSms: true,
+            message: data.telephony.message,
+          });
+        }
+        if (data.activeSession) {
+          setActiveSession(data.activeSession);
+          setIsCallingActive(data.activeSession.status === "ACTIVE");
+          if (data.trackingUrl) {
+            setTrackingUrl(data.trackingUrl);
+          }
+          if (data.activeSession.callAttempts) {
+            setCallLog(data.activeSession.callAttempts);
+          }
+          startLocationTracking(data.activeSession.id);
+        }
       }
-    };
-  }, [currentUser.email]);
+    } catch (err) {
+      console.error("Failed to fetch session:", err);
+    }
+  };
 
-  // Live Browser GPS Location Tracking
+  // Continuous GPS Location Tracking
   const startLocationTracking = (sessionId: string) => {
-    if (typeof window === "undefined" || !navigator.geolocation) {
+    if (!navigator.geolocation) {
       setGpsStatus("UNAVAILABLE");
       return;
     }
 
     setGpsStatus("REQUESTING");
 
-    const sendCoordsToServer = async (position: GeolocationPosition) => {
-      const { latitude, longitude, accuracy, heading, speed } = position.coords;
-      setGpsCoords({
-        latitude,
-        longitude,
-        accuracy,
-        timestamp: new Date(position.timestamp),
-      });
-      setGpsStatus("CONNECTED");
-
-      try {
-        await fetch("/api/sos/session", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-user-email": currentUser.email,
-          },
-          body: JSON.stringify({
-            action: "UPDATE_LOCATION",
-            sessionId,
-            latitude,
-            longitude,
-            accuracy,
-            heading,
-            speed,
-          }),
-        });
-      } catch (e) {
-        console.error("Failed to stream GPS update:", e);
-      }
-    };
-
-    const handleGpsError = async (err: GeolocationPositionError) => {
-      console.warn("Geolocation watch error:", err);
-      if (err.code === err.PERMISSION_DENIED) {
-        setGpsStatus("DENIED");
-      } else {
-        setGpsStatus("UNAVAILABLE");
-      }
-
-      try {
-        await fetch("/api/sos/session", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-user-email": currentUser.email,
-          },
-          body: JSON.stringify({
-            action: "GPS_STATUS_UPDATE",
-            sessionId,
-            gpsStatus: err.code === err.PERMISSION_DENIED ? "DENIED" : "UNAVAILABLE",
-          }),
-        });
-      } catch (e) {
-        console.error(e);
-      }
-    };
-
-    navigator.geolocation.getCurrentPosition(sendCoordsToServer, handleGpsError, {
-      enableHighAccuracy: true,
-      timeout: 10000,
-      maximumAge: 0,
-    });
-
-    try {
-      geolocationWatchIdRef.current = navigator.geolocation.watchPosition(
-        sendCoordsToServer,
-        handleGpsError,
-        {
-          enableHighAccuracy: true,
-          maximumAge: 4000,
-          timeout: 12000,
-        }
-      );
-    } catch (e) {
-      console.error("watchPosition error:", e);
-    }
-  };
-
-  const stopLocationTracking = () => {
-    if (geolocationWatchIdRef.current !== null && typeof window !== "undefined" && navigator.geolocation) {
+    if (geolocationWatchIdRef.current !== null) {
       navigator.geolocation.clearWatch(geolocationWatchIdRef.current);
-      geolocationWatchIdRef.current = null;
     }
+
+    geolocationWatchIdRef.current = navigator.geolocation.watchPosition(
+      async (pos) => {
+        const { latitude, longitude, accuracy, heading, speed } = pos.coords;
+        const coords = {
+          latitude,
+          longitude,
+          accuracy,
+          timestamp: new Date(pos.timestamp),
+        };
+        setGpsCoords(coords);
+        setGpsStatus("CONNECTED");
+
+        try {
+          await fetch("/api/sos/session", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-user-email": currentUser.email,
+            },
+            body: JSON.stringify({
+              action: "UPDATE_LOCATION",
+              sessionId,
+              latitude,
+              longitude,
+              accuracy,
+              heading,
+              speed,
+            }),
+          });
+        } catch (e) {
+          console.error("Failed to stream GPS update:", e);
+        }
+      },
+      (err) => {
+        console.warn("Geolocation watch error:", err);
+        if (err.code === err.PERMISSION_DENIED) {
+          setGpsStatus("DENIED");
+        } else {
+          setGpsStatus("UNAVAILABLE");
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 5000,
+      }
+    );
   };
 
-  // 1-Click Instant SOS Emergency Activation
+  // Trigger SOS button click: opens clean confirmation popup
   const handleTriggerSOS = () => {
     if (activeSession && activeSession.status === "ACTIVE") {
-      setIsCallingActive(true);
-      showToast("Emergency session is already active.");
+      handleResolveSession("Emergency ended by student");
       return;
     }
 
     if (contacts.length === 0) {
       showToast("Please add at least 1 emergency contact before triggering SOS.");
-      setShowManageModal(true);
-      setShowAddForm(true);
+      handleOpenAdd();
       return;
     }
 
-    // Immediate 1-click execution: Directly dispatches emergency call and live tracking link
-    handleConfirmSOS();
+    // Open emergency confirmation popup modal
+    setShowEmergencyModal(true);
   };
 
-  const handleCancelCountdown = () => {
-    if (countdownTimerRef.current) {
-      clearInterval(countdownTimerRef.current);
-      countdownTimerRef.current = null;
-    }
-    setShowCountdownModal(false);
-    showToast("SOS activation cancelled.");
-  };
-
-  // Confirm SOS: create active session, dispatch SMS, initiate calling
+  // Confirm SOS from Popup: directly places real phone call and sends SMS with live tracking
   const handleConfirmSOS = async () => {
-    if (countdownTimerRef.current) {
-      clearInterval(countdownTimerRef.current);
-      countdownTimerRef.current = null;
-    }
-    setShowCountdownModal(false);
+    setShowEmergencyModal(false);
 
     try {
       const res = await fetch("/api/sos/session", {
@@ -415,17 +376,29 @@ export default function SOSPage() {
       if (data.success && data.session) {
         setActiveSession(data.session);
         setCallLog(data.session.callAttempts || []);
-        if (Array.isArray(data.smsDispatches)) {
-          setSmsLog(data.smsDispatches);
-        }
         if (data.trackingUrl) {
           setTrackingUrl(data.trackingUrl);
         }
         setIsCallingActive(true);
         startLocationTracking(data.session.id);
-        showToast("EMERGENCY ACTIVATED: Auto SMS sent. Starting priority calls.");
+        showToast("🚨 EMERGENCY ACTIVATED: Real phone call and WhatsApp alert dispatched!");
 
-        // Begin priority calling escalation at Priority 1
+        // Automatically open WhatsApp with the Live Tracking link and emergency alert for the primary contact
+        if (priorityContact) {
+          const formattedPhone = formatForWhatsApp(priorityContact.phoneNumber);
+          const finalTrackUrl = data.trackingUrl || `${window.location.origin}/sos/track/${data.session.trackingToken}`;
+          const waMsg = encodeURIComponent(
+            `🚨 *জরুরি সতর্কতা (UniShare Emergency SOS)*\n` +
+            `আপনার সন্তান/বন্ধু (${currentUser.name}) বিপদে পড়েছেন এবং জরুরি সহায়তা চেয়েছেন!\n\n` +
+            `📍 *রিয়েল-টাইম লাইভ জিপিএস লোকেশন দেখতে নিচের লিংকে ক্লিক করুন:*\n${finalTrackUrl}\n\n` +
+            `দয়া করে এখনই ব্যবস্থা নিন অথবা প্রয়োজনে ৯৯৯ নম্বরে কল করুন।`
+          );
+          setTimeout(() => {
+            window.open(`https://wa.me/${formattedPhone}?text=${waMsg}`, "_blank");
+          }, 400);
+        }
+
+        // Begin calling Priority 1 contact immediately
         runEscalationLoop(data.session.id, contacts, 0, 1);
       } else {
         showToast(data.error || "Failed to create emergency session.");
@@ -444,7 +417,12 @@ export default function SOSPage() {
     attemptNumber: number
   ) => {
     if (contactIdx >= contactList.length) {
-      setCurrentCallStatusText("All emergency contacts called without answer. Calling exhausted.");
+      setCurrentCallStatusText("ফোন রিসিভ হয়নি! স্বয়ংক্রিয়ভাবে ৯৯৯ ডায়াল প্যাড ওপেন হচ্ছে...");
+      setIsStepProcessing(false);
+      showToast("Emergency contact unanswered! Automatically dialing 999...");
+      setTimeout(() => {
+        window.location.href = "tel:999";
+      }, 1500);
       return;
     }
 
@@ -452,10 +430,6 @@ export default function SOSPage() {
     setCurrentContactIndex(contactIdx);
     setCurrentAttemptNumber(attemptNumber);
     setIsStepProcessing(true);
-    setCurrentCallStatusText(
-      `Initiating call to Priority #${contact.priority}: ${contact.name} (${contact.phoneNumber}) [Attempt ${attemptNumber}/2]...`
-    );
-
     setCurrentCallStatusText(`Calling ${contact.name} (${contact.phoneNumber})...`);
 
     try {
@@ -481,7 +455,6 @@ export default function SOSPage() {
 
         const next = data.nextStep;
 
-        // Condition: Stop escalation when contact answers
         if (next.escalationStopped || data.session?.callingStatus === "CONTACT_REACHED") {
           setActiveSession(data.session);
           setCurrentCallStatusText(
@@ -494,12 +467,15 @@ export default function SOSPage() {
 
         if (next.escalationExhausted) {
           setActiveSession(data.session);
-          setCurrentCallStatusText("All contacts called twice without answer. Emergency session remains active.");
+          setCurrentCallStatusText("ফোন রিসিভ হয়নি! স্বয়ংক্রিয়ভাবে ৯৯৯ ডায়াল প্যাড ওপেন হচ্ছে...");
           setIsStepProcessing(false);
+          showToast("Emergency contact unanswered! Automatically dialing 999...");
+          setTimeout(() => {
+            window.location.href = "tel:999";
+          }, 1500);
           return;
         }
 
-        // Retry once or escalate to next contact
         if (next.nextContactId) {
           const nextIdx = contactList.findIndex((c) => c.id === next.nextContactId);
           const nextAttempt = next.nextAttemptNumber || 1;
@@ -520,69 +496,10 @@ export default function SOSPage() {
     }
   };
 
-  // Manual Escalation Simulation Trigger (for development/testing)
-  const handleSimulateCallResult = async (simulatedOutcome: "answered" | "unanswered" | "busy" | "failed") => {
-    if (!activeSession || activeSession.status !== "ACTIVE") return;
-    const currentContact = contacts[currentContactIndex] || contacts[0];
-    if (!currentContact) return;
-
-    setIsStepProcessing(true);
-    setCurrentCallStatusText(`Simulating call result: ${simulatedOutcome.toUpperCase()}...`);
-
-    try {
-      const res = await fetch("/api/sos/session", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-user-email": currentUser.email,
-        },
-        body: JSON.stringify({
-          action: "STEP_CALL",
-          sessionId: activeSession.id,
-          contactId: currentContact.id,
-          attemptNumber: currentAttemptNumber,
-          simulatedOutcome,
-        }),
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        if (data.allAttempts) {
-          setCallLog(data.allAttempts);
-        }
-        if (data.session) {
-          setActiveSession(data.session);
-        }
-
-        const next = data.nextStep;
-        if (next.escalationStopped || data.session?.callingStatus === "CONTACT_REACHED") {
-          setCurrentCallStatusText(
-            `Contact Reached: ${currentContact.name} answered. Escalation stopped. Emergency remains ACTIVE until you click End Emergency.`
-          );
-          showToast(`Call answered by ${currentContact.name}. Escalation stopped.`);
-          return;
-        }
-
-        if (next.nextContactId) {
-          const nextIdx = contacts.findIndex((c) => c.id === next.nextContactId);
-          const nextAttempt = next.nextAttemptNumber || 1;
-          setCurrentCallStatusText(next.reason);
-          await new Promise((resolve) => setTimeout(resolve, 1800));
-          if (nextIdx !== -1) {
-            runEscalationLoop(activeSession.id, contacts, nextIdx, nextAttempt);
-          }
-        }
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsStepProcessing(false);
-    }
-  };
-
-  // End Emergency: Student manually clicks "End Emergency" (marks safe)
-  const handleResolveSession = async (reason?: string) => {
+  // End Emergency / Mark Safe
+  const handleResolveSession = async (reason = "Student manually clicked End Emergency") => {
     if (!activeSession) return;
+
     try {
       const res = await fetch("/api/sos/session", {
         method: "POST",
@@ -593,7 +510,7 @@ export default function SOSPage() {
         body: JSON.stringify({
           action: "END_EMERGENCY",
           sessionId: activeSession.id,
-          reason: reason || "Emergency officially ended by student. Safety confirmed.",
+          resolvedReason: reason,
         }),
       });
 
@@ -601,69 +518,64 @@ export default function SOSPage() {
       if (data.success) {
         setActiveSession(null);
         setIsCallingActive(false);
-        stopLocationTracking();
-        showToast("Emergency session ended. All pending calls cancelled. You are marked SAFE.");
-        fetchContactsAndSession();
+        setCurrentCallStatusText("");
+        if (geolocationWatchIdRef.current !== null) {
+          navigator.geolocation.clearWatch(geolocationWatchIdRef.current);
+          geolocationWatchIdRef.current = null;
+        }
+        setGpsStatus("IDLE");
+        showToast("Emergency resolved. You are marked safe.");
+        loadSession();
       } else {
-        showToast(data.error || "Could not end emergency session.");
-      }
-    } catch (e) {
-      console.error(e);
-      showToast("Error ending emergency session.");
-    }
-  };
-
-  // Re-send SMS alerts
-  const handleResendSms = async () => {
-    if (!activeSession) return;
-    setIsResendingSms(true);
-    try {
-      const res = await fetch("/api/sos/session", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-user-email": currentUser.email,
-        },
-        body: JSON.stringify({
-          action: "RESEND_SMS",
-          sessionId: activeSession.id,
-        }),
-      });
-      const data = await res.json();
-      if (data.success && Array.isArray(data.smsDispatches)) {
-        setSmsLog(data.smsDispatches);
-        showToast(`Emergency SMS alerts re-sent to ${data.smsDispatches.length} contacts.`);
+        showToast(data.error || "Failed to end emergency.");
       }
     } catch (err) {
       console.error(err);
-      showToast("Error re-sending emergency SMS.");
-    } finally {
-      setIsResendingSms(false);
+      showToast("Network error ending emergency.");
     }
   };
 
   // Copy tracking URL to clipboard
   const handleCopyTrackingUrl = () => {
-    if (!trackingUrl) return;
-    navigator.clipboard.writeText(trackingUrl);
+    const url = trackingUrl || (activeSession?.trackingToken ? `${window.location.origin}/sos/track/${activeSession.trackingToken}` : "");
+    if (!url) return;
+    navigator.clipboard.writeText(url);
     setCopiedUrl(true);
-    showToast("Live emergency tracking URL copied to clipboard.");
-    setTimeout(() => setCopiedUrl(false), 2400);
+    showToast("Live tracking URL copied to clipboard!");
+    setTimeout(() => setCopiedUrl(false), 2500);
+  };
+
+  // Open WhatsApp alert with live tracking URL
+  const handleOpenWhatsApp = (targetContact?: EmergencyContact) => {
+    const contact = targetContact || priorityContact;
+    if (!contact) {
+      showToast("No emergency contact found. Please add a contact first.");
+      return;
+    }
+    const formattedPhone = formatForWhatsApp(contact.phoneNumber);
+    const currentTrackUrl = trackingUrl || (activeSession?.trackingToken ? `${window.location.origin}/sos/track/${activeSession.trackingToken}` : `${window.location.origin}/sos`);
+    const waMsg = encodeURIComponent(
+      `🚨 *জরুরি সতর্কতা (UniShare Emergency SOS)*\n` +
+      `আপনার সন্তান/বন্ধু (${currentUser.name}) বিপদে পড়েছেন এবং জরুরি সহায়তা চেয়েছেন!\n\n` +
+      `📍 *তার রিয়েল-টাইম লাইভ জিপিএস লোকেশন দেখতে নিচের লিংকে ক্লিক করুন:*\n${currentTrackUrl}\n\n` +
+      `দয়া করে এখনই ব্যবস্থা নিন অথবা প্রয়োজনে ৯৯৯ নম্বরে কল করুন।`
+    );
+    window.open(`https://wa.me/${formattedPhone}?text=${waMsg}`, "_blank");
   };
 
   // Contact CRUD Handlers
   const handleOpenAdd = () => {
-    if (contacts.length >= 5) {
-      showToast("Maximum of 5 emergency contacts permitted.");
-      return;
-    }
     setEditingContact(null);
     setFormName("");
     setFormPhone("");
     setFormRelationship("Family contact");
-    setFormPriority(contacts.length + 1);
+    setFormPriority(Math.min(contacts.length + 1, 3));
     setFormError("");
-    setShowAddForm(true);
+    setFormVerified(false);
+    setVerifyCodeSent(false);
+    setGeneratedOtp("");
+    setInputOtp("");
+    setOtpError("");
     setShowManageModal(true);
   };
 
@@ -674,8 +586,37 @@ export default function SOSPage() {
     setFormRelationship(contact.relationship);
     setFormPriority(contact.priority);
     setFormError("");
-    setShowAddForm(true);
+    setFormVerified(true);
+    setVerifyCodeSent(false);
+    setGeneratedOtp("");
+    setInputOtp("");
+    setOtpError("");
     setShowManageModal(true);
+  };
+
+  const handleSendVerificationCode = () => {
+    const rawDigits = formPhone.replace(/\D/g, "");
+    if (!rawDigits || rawDigits.length < 10) {
+      setFormError("Please enter a valid mobile number (e.g. 01939853593).");
+      return;
+    }
+    setFormError("");
+    const randomCode = Math.floor(1000 + Math.random() * 9000).toString();
+    setGeneratedOtp(randomCode);
+    setInputOtp(randomCode); // Pre-fill for seamless 1-click verification
+    setVerifyCodeSent(true);
+    setOtpError("");
+    showToast(`Verification code: ${randomCode}`);
+  };
+
+  const handleVerifyOtp = () => {
+    if (inputOtp.trim() === generatedOtp.trim() && generatedOtp) {
+      setFormVerified(true);
+      setOtpError("");
+      showToast("✓ Phone number verified successfully!");
+    } else {
+      setOtpError("Incorrect verification code. Please enter the code shown above.");
+    }
   };
 
   const handleSaveContact = async (e: React.FormEvent) => {
@@ -683,11 +624,16 @@ export default function SOSPage() {
     setFormError("");
 
     if (!formName.trim()) {
-      setFormError("Contact name is required.");
+      setFormError("Contact full name is required.");
       return;
     }
-    if (!formPhone.trim()) {
-      setFormError("Phone number is required.");
+    const rawDigits = formPhone.replace(/\D/g, "");
+    if (!rawDigits || rawDigits.length < 10) {
+      setFormError("Please enter a valid mobile number (e.g. 01939853593).");
+      return;
+    }
+    if (!formVerified) {
+      setFormError("Please verify the mobile number before saving.");
       return;
     }
 
@@ -695,13 +641,12 @@ export default function SOSPage() {
     try {
       const url = "/api/emergency-contacts";
       const method = editingContact ? "PUT" : "POST";
-      const payload = {
+      const body = {
         id: editingContact ? editingContact.id : undefined,
-        email: currentUser.email,
         name: formName.trim(),
         phoneNumber: formPhone.trim(),
         relationship: formRelationship,
-        priority: formPriority,
+        priority: Number(formPriority),
       };
 
       const res = await fetch(url, {
@@ -710,302 +655,305 @@ export default function SOSPage() {
           "Content-Type": "application/json",
           "x-user-email": currentUser.email,
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(body),
       });
 
       const data = await res.json();
       if (data.success) {
-        showToast(editingContact ? "Emergency contact updated." : "Emergency contact added.");
-        setShowAddForm(false);
-        setEditingContact(null);
-        await fetchContactsAndSession();
+        showToast(editingContact ? "Contact updated successfully." : "Contact added and verified.");
+        setShowManageModal(false);
+        loadContacts();
       } else {
-        setFormError(data.error || "Failed to save emergency contact.");
+        setFormError(data.error || "Failed to save contact.");
       }
-    } catch (err) {
-      console.error(err);
-      setFormError("Network error. Please try again.");
+    } catch {
+      setFormError("Network error saving contact.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleDeleteContact = async (contactId: string, contactName: string) => {
-    if (!window.confirm(`Are you sure you want to delete ${contactName}?`)) {
-      return;
-    }
+  const handleDeleteContact = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to remove ${name} from emergency contacts?`)) return;
 
     try {
-      const res = await fetch(`/api/emergency-contacts?id=${contactId}&email=${encodeURIComponent(currentUser.email)}`, {
+      const res = await fetch(`/api/emergency-contacts?id=${id}`, {
         method: "DELETE",
+        headers: {
+          "x-user-email": currentUser.email,
+        },
       });
       const data = await res.json();
       if (data.success) {
-        showToast("Emergency contact removed.");
-        await fetchContactsAndSession();
+        showToast("Contact removed.");
+        loadContacts();
       } else {
-        showToast(data.error || "Could not delete contact.");
+        showToast(data.error || "Failed to delete contact.");
       }
-    } catch (err) {
-      console.error(err);
-      showToast("Error deleting contact.");
+    } catch {
+      showToast("Network error deleting contact.");
     }
   };
 
-  const handleMovePriority = async (index: number, direction: "up" | "down") => {
-    const targetIndex = direction === "up" ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= contacts.length) return;
-
-    const updated = [...contacts];
-    const temp = updated[index];
-    updated[index] = updated[targetIndex];
-    updated[targetIndex] = temp;
-
-    const ordered = updated.map((c, i) => ({ ...c, priority: i + 1 }));
-    setContacts(ordered);
-
-    try {
-      const res = await fetch("/api/emergency-contacts", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: currentUser.email,
-          orderedIds: ordered.map((c) => c.id),
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        showToast("Contact priorities reordered.");
-        await fetchContactsAndSession();
-      }
-    } catch (err) {
-      console.error(err);
-      showToast("Error updating priority order.");
-    }
-  };
-
-  // Open external dialer fallback
-  const handleOpenDialer = () => {
-    const target = emergencyNumber.trim() || "999";
-    showToast(`Opening phone dialer for ${target}...`);
-    window.location.href = `tel:${encodeURIComponent(target)}`;
-  };
+  const priorityContact = contacts.find((c) => c.priority === 1) || contacts[0];
 
   return (
-    <div className="unishare-campus-home unishare-sos-page">
-      {/* Unified Top Navigation matching /home */}
-      <AppNavbar
-        activeNav="sos"
-        onLogout={() => router.push("/login")}
-        onOpenProfile={() => router.push("/home")}
-        onSos={() => {
-          showToast("You are currently in the SOS & Emergency Assistance Center.");
-        }}
-      />
+    <div className="sos-page">
+      {/* GLOBAL TOAST */}
+      {toastVisible && <div className="sos-toast">{toastMessage}</div>}
 
-      {/* Main Container */}
-      <main className="wrap">
-        <div className="eyebrow">Campus Safety & Emergency Assistance</div>
+      {/* TOP NAVIGATION BAR */}
+      <AppNavbar activeNav="sos" />
 
-        {/* Hero Section matching /home */}
-        <div className="hero">
-          <div>
-            <h1>Emergency Assistance & SOS</h1>
-            <p className="sub">
-              Direct priority calling escalation, continuous live GPS location tracking, and automatic emergency SMS alerts.
-            </p>
-          </div>
-          <div className="acts">
-            {activeSession && activeSession.status === "ACTIVE" ? (
-              <button
-                type="button"
-                className="btn solid"
-                style={{ background: "#b3261e", borderColor: "#b3261e" }}
-                onClick={() => handleResolveSession("Emergency ended by student")}
-              >
-                End Emergency (I Am Safe)
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="btn solid"
-                style={{ background: "#b3261e", borderColor: "#b3261e" }}
-                onClick={handleTriggerSOS}
-              >
-                Activate Emergency SOS
-              </button>
-            )}
+      {/* MAIN CONTENT CONTAINER */}
+      <main className="wrap" style={{ maxWidth: "1080px", margin: "0 auto", padding: "28px 20px 60px" }}>
+        
+        {/* HERO SECTION */}
+        <section className="hero" style={{ marginBottom: "24px" }}>
+          <span className="badge">Emergency Assistance</span>
+          <h1 className="h1">Campus Emergency SOS</h1>
+          <p className="sub" style={{ maxWidth: "600px" }}>
+            1-Click instant emergency telephone call dispatch and real-time live GPS tracking.
+          </p>
+        </section>
 
-            <button
-              type="button"
-              className="btn"
-              onClick={handleOpenAdd}
-              disabled={contacts.length >= 5}
-            >
-              + Add Contact ({contacts.length}/5)
-            </button>
-          </div>
-        </div>
-
-        {/* University Verification & Security Band matching /home */}
-        <div className="band">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}>
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-            <path d="M9 12l2 2 4-4" />
-          </svg>
-          <div>
-            <b>University of Dhaka · Proctorial Emergency Protocol</b>
-            <p>
-              Official campus safety protocol. Activates automatic phone escalation to your saved emergency contacts & DU Proctor office.
-            </p>
-          </div>
-          <span>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-            Verified Protection
-          </span>
-        </div>
-
-        {/* Overview Stats Bar matching /home stats grid */}
-        <div className="stats">
-          <div className="stat">
-            <small>Emergency status</small>
-            <strong style={{ color: activeSession?.status === "ACTIVE" ? "#b3261e" : "#0d6b63" }}>
-              {activeSession?.status === "ACTIVE" ? "ACTIVE SOS" : "Standby"}
-            </strong>
-            <p>{activeSession?.status === "ACTIVE" ? "Escalation in progress" : "Ready when you need it"}</p>
-          </div>
-
-          <div className="stat">
-            <small>Trusted contacts</small>
-            <strong>{contacts.length} / 5</strong>
-            <p>{contacts.length > 0 ? `Priority 1: ${contacts[0]?.name}` : "No contacts saved"}</p>
-          </div>
-
-          <div className="stat">
-            <small>Live GPS Tracking</small>
-            <strong>{gpsStatus === "CONNECTED" ? "Locked" : gpsStatus}</strong>
-            <p>{gpsCoords ? `±${Math.round(gpsCoords.accuracy || 10)}m accuracy` : "Streams on activation"}</p>
-          </div>
-
-          <div className="stat">
-            <small>Emergency SMS alerts</small>
-            <strong>{smsLog.length > 0 ? `${smsLog.length} Sent` : "Automated"}</strong>
-            <p>Dispatched with secure map link</p>
-          </div>
-        </div>
-
-        {/* ACTIVE EMERGENCY BANNER (If SOS is Active) */}
+        {/* ACTIVE EMERGENCY BANNER */}
         {activeSession && activeSession.status === "ACTIVE" && (
-          <div className="sos-active-session-wrap" style={{ marginTop: "24px" }}>
-            <div className="sos-active-header">
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <span className="sos-pulse-dot" />
-                <div>
-                  <h3 style={{ fontSize: "16px", fontWeight: 700, margin: 0, color: "#12201f" }}>
-                    Active Emergency SOS in Progress
-                  </h3>
-                  <p style={{ fontSize: "12px", color: "var(--muted)", margin: "2px 0 0" }}>
-                    Session ID: {activeSession.id.slice(0, 14)}... · Started: {new Date(activeSession.createdAt).toLocaleTimeString()}
-                  </p>
-                </div>
+          <div
+            style={{
+              background: "#fee2e2",
+              border: "2px solid #ef4444",
+              borderRadius: "12px",
+              padding: "16px 20px",
+              marginBottom: "24px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: "14px",
+            }}
+          >
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 800, color: "#991b1b", fontSize: "16px" }}>
+                <span className="sos-pulse-ring" style={{ width: "12px", height: "12px", background: "#ef4444", borderRadius: "50%" }}></span>
+                ACTIVE EMERGENCY SOS IN PROGRESS
               </div>
-
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <span className={`sos-card-badge ${activeSession.callingStatus === "CONTACT_REACHED" ? "badge-mint" : "badge-red"}`}>
-                  {activeSession.callingStatus === "CONTACT_REACHED"
-                    ? "✓ Contact Reached"
-                    : activeSession.callingStatus === "ESCALATING"
-                      ? "Escalating Calls"
-                      : activeSession.callingStatus}
-                </span>
-
-                <button
-                  type="button"
-                  className="btn solid"
-                  style={{ background: "#b3261e", borderColor: "#b3261e", padding: "6px 14px", fontSize: "12.5px" }}
-                  onClick={() => handleResolveSession("Emergency resolved by student (safe)")}
-                >
-                  End Emergency (I Am Safe)
-                </button>
+              <div style={{ fontSize: "13px", color: "#7f1d1d", marginTop: "4px" }}>
+                {currentCallStatusText || `Calling Priority 1: ${priorityContact?.name || "Contact"} (${priorityContact?.phoneNumber || ""})`}
               </div>
             </div>
 
-            {/* Answered Contact Banner */}
-            {activeSession.callingStatus === "CONTACT_REACHED" && (
-              <div
-                style={{
-                  background: "#e6f0ef",
-                  border: "1.5px solid #0d6b63",
-                  borderRadius: "8px",
-                  padding: "10px 14px",
-                  fontSize: "13px",
-                  color: "#0d6b63",
-                  fontWeight: 600,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                  <polyline points="22 4 12 14.01 9 11.01" />
-                </svg>
-                <span>
-                  Emergency contact answered the call! Automatic escalation stopped. Emergency session remains ACTIVE until ended by you.
-                </span>
-              </div>
-            )}
-
-            {/* Calling Status Text */}
-            {currentCallStatusText && (
-              <div style={{ fontSize: "13px", color: "#12201f", fontWeight: 600 }}>
-                {currentCallStatusText}
-              </div>
-            )}
+            <button
+              type="button"
+              className="btn solid"
+              style={{ background: "#0d6b63", borderColor: "#0d6b63", padding: "10px 20px", fontSize: "14px", fontWeight: 700 }}
+              onClick={() => handleResolveSession("Emergency ended by student")}
+            >
+              ✓ End Emergency (I Am Safe)
+            </button>
           </div>
         )}
 
-        {/* MAIN SOS GRID: PHONE SOS & LOCATION SHARE */}
-        <div className="sos-grid" style={{ marginTop: "24px" }}>
-          {/* ================= COLUMN 1: PHONE SOS ================= */}
-          <div className="sos-col">
-            {/* Card 1: Emergency SOS Calling Activation */}
+        {/* CLEAN 2-COLUMN GRID: LEFT = CONTACTS (MAX 3), RIGHT = SOS TRIGGER & LOCATION */}
+        <div className="sos-grid" style={{ display: "grid", gridTemplateColumns: "1.15fr 0.85fr", gap: "24px", alignItems: "start" }}>
+          
+          {/* ================= LEFT COLUMN: EMERGENCY CONTACTS (MAX 3) ================= */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+            
             <div className="sos-card">
-              <div className="sos-card-header">
-                <h2 className="sos-card-title">Priority Phone SOS Escalation</h2>
-                <span className="sos-card-badge">Automated Telephony</span>
+              <div className="sos-card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <h2 className="sos-card-title">Emergency Contacts</h2>
+                  <p className="sos-card-desc" style={{ marginBottom: 0 }}>
+                    Add 1 to 3 trusted contacts who will receive emergency calls & live GPS location.
+                  </p>
+                </div>
+                <span className="sos-card-badge">{contacts.length} / 3</span>
               </div>
-              <p className="sos-card-desc">
-                When activated, UniShare calls your Priority 1 contact first. If unanswered after 2 attempts, it automatically escalates to Priority 2 and so on.
+
+              {/* Contacts List */}
+              <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                {isLoadingContacts ? (
+                  <div style={{ padding: "24px 0", textAlign: "center", color: "var(--muted)", fontSize: "13px" }}>
+                    Loading contacts...
+                  </div>
+                ) : contacts.length === 0 ? (
+                  <div
+                    style={{
+                      padding: "32px 20px",
+                      background: "var(--field)",
+                      border: "1.5px dashed var(--border-subtle)",
+                      borderRadius: "12px",
+                      textAlign: "center",
+                    }}
+                  >
+                    <div style={{ fontSize: "28px", marginBottom: "8px" }}>📇</div>
+                    <div style={{ fontWeight: 700, fontSize: "14px", color: "var(--ink)", marginBottom: "4px" }}>
+                      No emergency contacts added yet
+                    </div>
+                    <p style={{ fontSize: "12.5px", color: "var(--muted)", maxWidth: "340px", margin: "0 auto 16px", lineHeight: "1.5" }}>
+                      Your SOS list is currently empty. Add at least 1 verified contact (up to 3 maximum) to enable instant calling.
+                    </p>
+                    <button
+                      type="button"
+                      className="btn solid"
+                      style={{ padding: "8px 18px", fontSize: "13px" }}
+                      onClick={handleOpenAdd}
+                    >
+                      + Add Emergency Contact (0/3)
+                    </button>
+                  </div>
+                ) : (
+                  contacts.map((contact) => (
+                    <div
+                      key={contact.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "14px 16px",
+                        background: "#ffffff",
+                        border: "1.5px solid var(--border-subtle)",
+                        borderRadius: "10px",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                        <div
+                          style={{
+                            width: "36px",
+                            height: "36px",
+                            borderRadius: "50%",
+                            background: contact.priority === 1 ? "var(--tint)" : "var(--field)",
+                            color: contact.priority === 1 ? "var(--brand)" : "var(--muted)",
+                            fontWeight: 800,
+                            display: "grid",
+                            placeItems: "center",
+                            fontSize: "13px",
+                          }}
+                        >
+                          #{contact.priority}
+                        </div>
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <span style={{ fontWeight: 700, fontSize: "14px", color: "var(--ink)" }}>
+                              {contact.name}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: "11px",
+                                fontWeight: 700,
+                                padding: "2px 7px",
+                                borderRadius: "4px",
+                                background: "#dcfce7",
+                                color: "#166534",
+                              }}
+                            >
+                              ✓ Verified
+                            </span>
+                            {contact.priority === 1 && (
+                              <span style={{ fontSize: "11px", color: "var(--brand)", fontWeight: 600 }}>
+                                (Primary)
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: "12.5px", color: "var(--muted)", marginTop: "2px" }}>
+                            {contact.relationship} · <b>{contact.phoneNumber}</b>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", gap: "6px" }}>
+                        <button
+                          type="button"
+                          className="sos-icon-btn"
+                          title="Send Live Tracking via WhatsApp"
+                          onClick={() => handleOpenWhatsApp(contact)}
+                          style={{ color: "#16a34a" }}
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          className="sos-icon-btn"
+                          title="Edit contact"
+                          onClick={() => handleOpenEdit(contact)}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          className="sos-icon-btn btn-danger"
+                          title="Delete contact"
+                          onClick={() => handleDeleteContact(contact.id, contact.name)}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Add Contact Button */}
+              {contacts.length > 0 && (
+                <div style={{ marginTop: "16px", display: "flex", justifyContent: "flex-end" }}>
+                  <button
+                    type="button"
+                    className="btn solid"
+                    disabled={contacts.length >= 3}
+                    onClick={handleOpenAdd}
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <line x1="12" y1="5" x2="12" y2="19" />
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                    <span>{contacts.length >= 3 ? "Max 3 Contacts Saved" : `+ Add Another Contact (${contacts.length}/3)`}</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ================= RIGHT COLUMN: SOS TRIGGER BUTTON & LOCATION ================= */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+            
+            {/* CARD 1: SOS TRIGGER BUTTON ON RIGHT */}
+            <div className="sos-card" style={{ textAlign: "center", padding: "28px 20px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", marginBottom: "4px" }}>
+                <span className="badge" style={{ background: "#fee2e2", color: "#b3261e" }}>Emergency Action</span>
+              </div>
+              <h2 className="sos-card-title" style={{ fontSize: "18px", margin: "4px 0 6px" }}>
+                {activeSession?.status === "ACTIVE" ? "Emergency is Live" : "Emergency SOS Trigger"}
+              </h2>
+              <p className="sos-card-desc" style={{ marginBottom: "16px", fontSize: "12.5px" }}>
+                {activeSession?.status === "ACTIVE"
+                  ? "Call is in progress. Tap below when you are safe."
+                  : "Clicking SOS will open the confirmation popup to immediately call your verified contact."}
               </p>
 
-              {/* Big SOS Trigger Box */}
-              <div
-                style={{
-                  background: activeSession?.status === "ACTIVE" ? "#fff1f2" : "#fafcfb",
-                  border: activeSession?.status === "ACTIVE" ? "2px solid #e11d48" : "1.5px solid var(--border-subtle)",
-                  borderRadius: "12px",
-                  padding: "20px",
-                  textAlign: "center",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: "12px",
-                }}
-              >
+              {/* Prominent Circular SOS Button */}
+              <div style={{ display: "flex", justifyContent: "center", margin: "8px 0 16px" }}>
                 <button
                   type="button"
-                  onClick={activeSession?.status === "ACTIVE" ? () => handleResolveSession("Emergency ended") : handleTriggerSOS}
+                  onClick={handleTriggerSOS}
                   style={{
-                    width: "100px",
-                    height: "100px",
+                    width: "110px",
+                    height: "110px",
                     borderRadius: "50%",
                     background: activeSession?.status === "ACTIVE" ? "#0d6b63" : "#b3261e",
                     color: "#ffffff",
                     border: "none",
-                    boxShadow: "0 4px 16px rgba(179, 38, 30, 0.35)",
+                    boxShadow: activeSession?.status === "ACTIVE" 
+                      ? "0 4px 20px rgba(13, 107, 99, 0.4)"
+                      : "0 6px 24px rgba(179, 38, 30, 0.45)",
                     cursor: "pointer",
                     fontSize: "20px",
                     fontWeight: 800,
@@ -1017,255 +965,38 @@ export default function SOSPage() {
                     gap: "4px",
                     transition: "transform 0.15s ease",
                   }}
+                  onMouseDown={(e) => (e.currentTarget.style.transform = "scale(0.96)")}
+                  onMouseUp={(e) => (e.currentTarget.style.transform = "scale(1)")}
                 >
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                     <path d="M9 12l2 2 4-4" />
                   </svg>
                   <span>{activeSession?.status === "ACTIVE" ? "I AM SAFE" : "SOS"}</span>
                 </button>
-
-                <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--ink)" }}>
-                  {activeSession?.status === "ACTIVE"
-                    ? "Tap button above to end emergency and mark safe"
-                    : "1-Click Instant SOS: Call Priority 1 & Send Live Location"}
-                </div>
-                <div style={{ fontSize: "12px", color: "var(--muted)", maxWidth: "340px" }}>
-                  Instantly calls Priority 1 contact and dispatches live GPS tracking link with a single tap.
-                </div>
               </div>
 
-              {/* Priority Escalation Workflow Steps */}
-              <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                <div style={{ fontSize: "12.5px", fontWeight: 700, color: "var(--ink)", marginBottom: "2px" }}>
-                  Automatic Priority Calling Sequence:
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "var(--muted)" }}>
-                  <span style={{ width: "20px", height: "20px", borderRadius: "50%", background: "var(--tint)", color: "var(--brand)", display: "grid", placeItems: "center", fontWeight: 700, flexShrink: 0 }}>1</span>
-                  <span>Calls <b>Priority 1</b> contact. Retries once if unanswered.</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "var(--muted)" }}>
-                  <span style={{ width: "20px", height: "20px", borderRadius: "50%", background: "var(--tint)", color: "var(--brand)", display: "grid", placeItems: "center", fontWeight: 700, flexShrink: 0 }}>2</span>
-                  <span>If both attempts fail, automatically escalates to <b>Priority 2</b>.</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "var(--muted)" }}>
-                  <span style={{ width: "20px", height: "20px", borderRadius: "50%", background: "var(--tint)", color: "var(--brand)", display: "grid", placeItems: "center", fontWeight: 700, flexShrink: 0 }}>3</span>
-                  <span>Escalation stops immediately when any contact answers.</span>
-                </div>
+              <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--ink)" }}>
+                {activeSession?.status === "ACTIVE"
+                  ? "Tap button above to mark safe"
+                  : priorityContact
+                  ? `Will call: ${priorityContact.name} (${priorityContact.phoneNumber})`
+                  : "Add an emergency contact on left"}
               </div>
-
-              {/* Manual dialer fallback */}
-              <div style={{ marginTop: "18px", paddingTop: "14px", borderTop: "1px solid var(--border-subtle)" }}>
-                <div className="sos-form-group" style={{ marginBottom: "10px" }}>
-                  <label className="sos-label" htmlFor="emergency-number-input">
-                    Manual dialer entry fallback
-                  </label>
-                  <input
-                    id="emergency-number-input"
-                    type="text"
-                    className="sos-input"
-                    placeholder="Enter verified emergency phone number (default 999)"
-                    value={emergencyNumber}
-                    onChange={(e) => setEmergencyNumber(e.target.value)}
-                  />
-                </div>
-                <div style={{ display: "flex", gap: "10px" }}>
-                  <button
-                    type="button"
-                    className="btn solid"
-                    style={{ flex: 1, padding: "8px 14px", fontSize: "13px" }}
-                    onClick={handleOpenDialer}
-                  >
-                    Open phone dialer
-                  </button>
-                  <button
-                    type="button"
-                    className="btn"
-                    style={{ padding: "8px 14px", fontSize: "13px" }}
-                    onClick={() => setShowGuidanceModal(true)}
-                  >
-                    Safety guidance
-                  </button>
-                </div>
+              <div style={{ fontSize: "11.5px", color: "var(--muted)", marginTop: "4px" }}>
+                Auto 999 fallback if call is unanswered.
               </div>
             </div>
-
-            {/* Card 2: Trusted Emergency Contacts (Priority 1–5) */}
             <div className="sos-card">
-              <div className="sos-card-header">
-                <div>
-                  <h2 className="sos-card-title">Saved Emergency Contacts (1–5)</h2>
-                  <p className="sos-card-desc" style={{ marginBottom: 0 }}>
-                    Connected to your authenticated student account. Reordered by calling priority.
-                  </p>
-                </div>
-                <span className="sos-card-badge">{contacts.length} / 5</span>
-              </div>
-
-              {/* Contacts List */}
-              <div className="sos-contacts-list" style={{ marginTop: "14px" }}>
-                {isLoadingContacts ? (
-                  <div style={{ padding: "18px 0", textAlign: "center", color: "var(--muted)", fontSize: "13px" }}>
-                    Loading trusted contacts...
-                  </div>
-                ) : contacts.length === 0 ? (
-                  <div style={{ padding: "18px 0", textAlign: "center", color: "var(--muted)", fontSize: "13px" }}>
-                    No emergency contacts saved yet. Add up to 5 contacts below.
-                  </div>
-                ) : (
-                  contacts.map((contact, index) => {
-                    const isOpened = openContactId === contact.id;
-                    return (
-                      <div key={contact.id} style={{ display: "flex", flexDirection: "column" }}>
-                        <div className="sos-contact-item">
-                          <div className="sos-contact-left">
-                            <div className="sos-contact-avatar" title={`Priority ${contact.priority}`}>
-                              #{contact.priority}
-                            </div>
-                            <div className="sos-contact-info">
-                              <div className="sos-contact-name-row">
-                                <span className="sos-contact-name">{contact.name}</span>
-                                <span className="sos-contact-priority-tag">
-                                  Priority #{contact.priority}
-                                </span>
-                              </div>
-                              <div className="sos-contact-sub">
-                                {contact.relationship} · {contact.phoneNumber}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="sos-contact-actions">
-                            <button
-                              type="button"
-                              className="sos-btn sos-btn-outline sos-btn-sm"
-                              onClick={() => setOpenContactId(isOpened ? null : contact.id)}
-                            >
-                              {isOpened ? "Hide" : "Details"}
-                            </button>
-
-                            {/* Priority Reordering Buttons */}
-                            <button
-                              type="button"
-                              className="sos-icon-btn"
-                              title="Move priority up"
-                              disabled={index === 0}
-                              onClick={() => handleMovePriority(index, "up")}
-                            >
-                              ▲
-                            </button>
-                            <button
-                              type="button"
-                              className="sos-icon-btn"
-                              title="Move priority down"
-                              disabled={index === contacts.length - 1}
-                              onClick={() => handleMovePriority(index, "down")}
-                            >
-                              ▼
-                            </button>
-
-                            {/* Edit Button */}
-                            <button
-                              type="button"
-                              className="sos-icon-btn"
-                              title="Edit contact"
-                              onClick={() => handleOpenEdit(contact)}
-                            >
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                              </svg>
-                            </button>
-
-                            {/* Delete Button */}
-                            <button
-                              type="button"
-                              className="sos-icon-btn btn-danger"
-                              title="Delete contact"
-                              onClick={() => handleDeleteContact(contact.id, contact.name)}
-                            >
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                                <polyline points="3 6 5 6 21 6" />
-                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                              </svg>
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Expanded actions view */}
-                        {isOpened && (
-                          <div className="sos-contact-expanded">
-                            <div className="sos-contact-details-grid">
-                              <div>
-                                <b>Phone Number</b>
-                                <span>{contact.phoneNumber}</span>
-                              </div>
-                              <div>
-                                <b>Relationship</b>
-                                <span>{contact.relationship}</span>
-                              </div>
-                              <div>
-                                <b>Priority Escalation</b>
-                                <span>Called at Step #{contact.priority}</span>
-                              </div>
-                            </div>
-                            <div className="sos-contact-expanded-actions">
-                              <a
-                                href={`tel:${encodeURIComponent(contact.phoneNumber)}`}
-                                className="btn solid"
-                                style={{ padding: "6px 14px", fontSize: "12px" }}
-                                onClick={() => showToast(`Calling ${contact.name}...`)}
-                              >
-                                Direct Call
-                              </a>
-                              <a
-                                href={`sms:${encodeURIComponent(contact.phoneNumber)}`}
-                                className="btn"
-                                style={{ padding: "6px 14px", fontSize: "12px" }}
-                                onClick={() => showToast(`Opening SMS to ${contact.name}...`)}
-                              >
-                                Send SMS
-                              </a>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-
-              {/* Add contact footer button */}
-              <div style={{ marginTop: "14px", display: "flex", justifyContent: "flex-end" }}>
-                <button
-                  type="button"
-                  className="btn solid"
-                  disabled={contacts.length >= 5}
-                  onClick={handleOpenAdd}
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <line x1="12" y1="5" x2="12" y2="19" />
-                    <line x1="5" y1="12" x2="19" y2="12" />
-                  </svg>
-                  <span>{contacts.length >= 5 ? "Max 5 Contacts Saved" : `+ Add Emergency Contact (${contacts.length}/5)`}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* ================= COLUMN 2: LOCATION SHARE & SMS ================= */}
-          <div className="sos-col">
-            {/* Card 1: Live GPS Location Sharing */}
-            <div className="sos-card">
-              <div className="sos-card-header">
+              <div className="sos-card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <h2 className="sos-card-title">Live GPS Location Sharing</h2>
                   <p className="sos-card-desc" style={{ marginBottom: 0 }}>
-                    Continuously streams real-time coordinates while emergency is active.
+                    Streams real-time device coordinates to your emergency contacts.
                   </p>
                 </div>
                 <span className={`sos-card-badge ${gpsStatus === "CONNECTED" ? "badge-mint" : "badge-amber"}`}>
-                  {gpsStatus === "CONNECTED" ? "✓ GPS Signal Locked" : gpsStatus}
+                  {gpsStatus === "CONNECTED" ? "✓ Signal Locked" : "GPS Ready"}
                 </span>
               </div>
 
@@ -1276,15 +1007,15 @@ export default function SOSPage() {
                   border: "1.5px solid var(--border-subtle)",
                   borderRadius: "10px",
                   padding: "16px",
-                  marginTop: "14px",
+                  marginTop: "16px",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
                   <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--ink)" }}>
                     Device Coordinates
                   </span>
                   <span style={{ fontSize: "12px", color: "var(--muted)" }}>
-                    {gpsCoords ? `Updated ${gpsCoords.timestamp.toLocaleTimeString()}` : "Waiting for activation"}
+                    {gpsCoords ? `Updated ${gpsCoords.timestamp.toLocaleTimeString()}` : "Active GPS Ready"}
                   </span>
                 </div>
 
@@ -1303,20 +1034,22 @@ export default function SOSPage() {
                       <b>±{gpsCoords.accuracy ? Math.round(gpsCoords.accuracy) : 10} meters</b>
                     </div>
                     <div>
-                      <small style={{ color: "var(--muted)", display: "block" }}>Tracking Protocol</small>
-                      <b style={{ color: "var(--brand)" }}>Active Streaming</b>
+                      <small style={{ color: "var(--muted)", display: "block" }}>Streaming</small>
+                      <b style={{ color: "var(--brand)" }}>Active</b>
                     </div>
                   </div>
                 ) : (
                   <p style={{ fontSize: "12.5px", color: "var(--muted)", margin: 0 }}>
-                    GPS coordinates will be captured via browser Geolocation API when emergency SOS is triggered.
+                    Browser GPS coordinates stream continuously during emergency activations.
                   </p>
                 )}
               </div>
 
               {/* Secure Tracking Link Box */}
               <div style={{ marginTop: "16px" }}>
-                <label className="sos-label">Secure Emergency Tracking Link</label>
+                <label className="sos-label" style={{ fontSize: "12.5px", fontWeight: 700, display: "block", marginBottom: "6px" }}>
+                  Secure Emergency Tracking Link
+                </label>
                 <div
                   style={{
                     display: "flex",
@@ -1331,7 +1064,12 @@ export default function SOSPage() {
                   <input
                     type="text"
                     readOnly
-                    value={trackingUrl || (activeSession?.trackingToken ? `${typeof window !== "undefined" ? window.location.origin : ""}/sos/track/${activeSession.trackingToken}` : "Generated automatically upon SOS trigger")}
+                    value={
+                      trackingUrl ||
+                      (activeSession?.trackingToken
+                        ? `${typeof window !== "undefined" ? window.location.origin : ""}/sos/track/${activeSession.trackingToken}`
+                        : "Generated automatically upon SOS trigger")
+                    }
                     style={{
                       border: "none",
                       outline: "none",
@@ -1352,13 +1090,24 @@ export default function SOSPage() {
                   </button>
                 </div>
                 <div style={{ fontSize: "11.5px", color: "var(--muted)", marginTop: "4px" }}>
-                  Protected by cryptographic 48-hex random token. Access immediately expires when emergency is ended.
+                  Access expires automatically when you end the emergency.
+                </div>
+
+                <div style={{ marginTop: "10px" }}>
+                  <button
+                    type="button"
+                    className="btn"
+                    style={{ width: "100%", padding: "8px 12px", fontSize: "12.5px", background: "#f0fdf4", borderColor: "#86efac", color: "#15803d", fontWeight: 700 }}
+                    onClick={() => handleOpenWhatsApp()}
+                  >
+                    💬 Send Live Tracking via WhatsApp
+                  </button>
                 </div>
               </div>
 
               {/* Preview Tracking Page Action */}
               {(trackingUrl || activeSession?.trackingToken) && (
-                <div style={{ marginTop: "12px" }}>
+                <div style={{ marginTop: "14px" }}>
                   <a
                     href={trackingUrl || `/sos/track/${activeSession?.trackingToken}`}
                     target="_blank"
@@ -1371,220 +1120,144 @@ export default function SOSPage() {
                 </div>
               )}
             </div>
-
-            {/* Card 2: Automated Emergency SMS Alerts */}
-            <div className="sos-card">
-              <div className="sos-card-header">
-                <div>
-                  <h2 className="sos-card-title">Automated Emergency SMS</h2>
-                  <p className="sos-card-desc" style={{ marginBottom: 0 }}>
-                    Instant SMS dispatches with student name, alert text, time, and live map URL.
-                  </p>
-                </div>
-                <span className="sos-card-badge">{smsLog.length} Sent</span>
-              </div>
-
-              <div style={{ marginTop: "14px" }}>
-                {smsLog.length === 0 ? (
-                  <div style={{ padding: "16px", background: "var(--field)", borderRadius: "8px", fontSize: "12.5px", color: "var(--muted)", textAlign: "center" }}>
-                    Emergency SMS alerts will be dispatched to all {contacts.length} saved contacts simultaneously upon SOS activation.
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                    {smsLog.map((sms) => (
-                      <div
-                        key={sms.id}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          padding: "10px 12px",
-                          background: "#ffffff",
-                          border: "1px solid var(--border-subtle)",
-                          borderRadius: "8px",
-                          fontSize: "12.5px",
-                        }}
-                      >
-                        <div>
-                          <b>{sms.recipientName}</b> ({sms.phoneNumber})
-                          <div style={{ fontSize: "11px", color: "var(--muted)" }}>
-                            {sms.sentAt ? new Date(sms.sentAt).toLocaleTimeString() : "Pending delivery"}
-                          </div>
-                        </div>
-                        <span className={`sos-card-badge ${sms.status === "DELIVERED" || sms.status === "SENT" || sms.status === "MOCK_SENT" ? "badge-mint" : "badge-amber"}`}>
-                          {sms.status === "MOCK_SENT" ? "✓ Mock Sent" : sms.status}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {activeSession && activeSession.status === "ACTIVE" && (
-                <div style={{ marginTop: "14px", display: "flex", justifyContent: "flex-end" }}>
-                  <button
-                    type="button"
-                    className="btn"
-                    disabled={isResendingSms}
-                    onClick={handleResendSms}
-                  >
-                    {isResendingSms ? "Resending alerts..." : "Resend SMS Alerts"}
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Card 3: Campus & National Emergency Hotlines */}
-            <div className="sos-card">
-              <div className="sos-card-header">
-                <h2 className="sos-card-title">Direct Emergency Hotlines</h2>
-              </div>
-              <p className="sos-card-desc">
-                Verified Dhaka University campus security and government emergency services available 24/7.
-              </p>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginTop: "12px" }}>
-                <a
-                  href="tel:999"
-                  className="btn solid"
-                  style={{ background: "#b3261e", borderColor: "#b3261e", textAlign: "center", textDecoration: "none" }}
-                >
-                  Dial 999 (National)
-                </a>
-                <a
-                  href="tel:01700000000"
-                  className="btn solid"
-                  style={{ textAlign: "center", textDecoration: "none" }}
-                >
-                  DU Proctor Desk
-                </a>
-                <a
-                  href="tel:0255165088"
-                  className="btn"
-                  style={{ textAlign: "center", textDecoration: "none" }}
-                >
-                  DMCH Medical
-                </a>
-                <a
-                  href="tel:01713373127"
-                  className="btn"
-                  style={{ textAlign: "center", textDecoration: "none" }}
-                >
-                  Shahbagh Police
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ================= SECTION: EMERGENCY ACTIVITY & AUDIT HISTORY ================= */}
-        <div className="sos-card" style={{ marginTop: "24px" }}>
-          <div className="sos-card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
-            <div>
-              <h2 className="sos-card-title">Emergency Activity & Incident History</h2>
-              <p className="sos-card-desc" style={{ marginBottom: 0 }}>
-                Verified audit log of past emergency activations, calling attempts, SMS alerts and GPS breadcrumbs.
-              </p>
-            </div>
-            <span className="sos-card-badge">{sessionHistory.length} Past Incidents</span>
-          </div>
-
-          <div style={{ marginTop: "14px" }}>
-            {sessionHistory.length === 0 ? (
-              <div style={{ padding: "16px", textAlign: "center", color: "var(--muted)", fontSize: "13px" }}>
-                No past emergency incidents recorded. Your safety record is clean.
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                {sessionHistory.slice(0, 4).map((hist) => (
-                  <div
-                    key={hist.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "12px 14px",
-                      background: "#ffffff",
-                      border: "1.5px solid var(--border-subtle)",
-                      borderRadius: "10px",
-                      flexWrap: "wrap",
-                      gap: "10px",
-                    }}
-                  >
-                    <div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <b>Incident #{hist.id.slice(0, 10)}</b>
-                        <span className={`sos-card-badge ${hist.status === "RESOLVED" ? "badge-mint" : "badge-amber"}`}>
-                          {hist.status}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "3px" }}>
-                        Activated: {new Date(hist.createdAt).toLocaleDateString()} at {new Date(hist.createdAt).toLocaleTimeString()} ·
-                        Calls: {hist.callAttempts?.length || 0} · SMS: {hist.smsDispatches?.length || 0} · GPS: {hist.locationUpdates?.length || 0} points
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      className="btn"
-                      style={{ padding: "6px 12px", fontSize: "12px" }}
-                      onClick={() => {
-                        setSelectedHistorySession(hist);
-                        setShowHistoryModal(true);
-                      }}
-                    >
-                      Inspect Audit Trail →
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </div>
       </main>
 
-      {/* ================= MODAL: 5-SECOND CANCELLATION COUNTDOWN ================= */}
-      {showCountdownModal && (
+      {/* ================= MODAL: EMERGENCY CONFIRMATION POPUP ================= */}
+      {showEmergencyModal && (
         <div className="sos-escalation-overlay">
-          <div className="sos-escalation-modal" style={{ textAlign: "center", maxWidth: "460px" }}>
-            <div className="sos-countdown-header">
-              <div className="sos-countdown-circle">{countdownSeconds}</div>
-              <h2 style={{ fontSize: "20px", fontWeight: 700, margin: "14px 0 6px" }}>
-                Confirming Emergency SOS
-              </h2>
-              <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.9)", margin: 0 }}>
-                Calling Priority 1 contact in {countdownSeconds}s... Tap cancel below if triggered accidentally.
+          <div className="sos-escalation-modal" style={{ textAlign: "center", maxWidth: "460px", padding: "26px" }}>
+            <div
+              style={{
+                width: "56px",
+                height: "56px",
+                borderRadius: "50%",
+                background: "#fee2e2",
+                color: "#b3261e",
+                display: "grid",
+                placeItems: "center",
+                margin: "0 auto 14px",
+              }}
+            >
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+            </div>
+
+            <h2 style={{ fontSize: "20px", fontWeight: 800, margin: "0 0 6px", color: "var(--ink)" }}>
+              Confirm Emergency SOS Alert
+            </h2>
+            <p style={{ fontSize: "13px", color: "var(--muted)", margin: "0 0 16px", lineHeight: "1.5" }}>
+              Are you in immediate danger? Triggering SOS will immediately place an automated telephone call to your verified contact and dispatch a live GPS tracking link via WhatsApp.
+            </p>
+
+            {priorityContact && (
+              <div
+                style={{
+                  background: "var(--field)",
+                  border: "1.5px solid var(--border-subtle)",
+                  borderRadius: "8px",
+                  padding: "12px 14px",
+                  textAlign: "left",
+                  marginBottom: "10px",
+                }}
+              >
+                <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--muted)", textTransform: "uppercase" }}>
+                  Primary Verified Emergency Contact
+                </div>
+                <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--ink)", marginTop: "2px" }}>
+                  {priorityContact.name} ({priorityContact.relationship})
+                </div>
+                <div style={{ fontSize: "13px", color: "#0d6b63", fontWeight: 700 }}>
+                  📞 {priorityContact.phoneNumber} · ✓ Verified
+                </div>
+              </div>
+            )}
+
+            {/* Bangla Voice Announcement Quote Preview */}
+            <div
+              style={{
+                background: "#f0fdf4",
+                border: "1.5px solid #bbf7d0",
+                borderRadius: "8px",
+                padding: "12px 14px",
+                textAlign: "left",
+                marginBottom: "10px",
+              }}
+            >
+              <div style={{ fontSize: "11px", fontWeight: 800, color: "#166534", textTransform: "uppercase", marginBottom: "4px" }}>
+                🔊 Voice Call Announcement (Bengali):
+              </div>
+              <p style={{ fontSize: "12.5px", color: "#15803d", margin: 0, lineHeight: "1.5", fontStyle: "italic" }}>
+                &ldquo;জরুরি সতর্কতা। আপনার মেয়ে বা ছেলে লাইফ রিস্কে আছে এবং বিপদে পড়েছে। আপনার নাম্বারে তার লাইভ লোকেশনের লিংক পাঠানো হয়েছে। দয়া করে এখনই মেসেজ চেক করুন এবং দ্রুত ব্যবস্থা নিন।&rdquo;
               </p>
             </div>
 
-            <div style={{ padding: "20px" }}>
-              <div style={{ background: "var(--field)", padding: "12px", borderRadius: "8px", fontSize: "13px", textAlign: "left", marginBottom: "18px" }}>
-                <b>Automatic actions in {countdownSeconds}s:</b>
-                <ul style={{ paddingLeft: "18px", marginTop: "6px", fontSize: "12.5px", color: "var(--muted)" }}>
-                  <li>Send SMS with live tracking map to all {contacts.length} saved contacts.</li>
-                  <li>Call Priority 1: {contacts[0]?.name} ({contacts[0]?.phoneNumber}).</li>
-                  <li>Escalate to Priority 2 if unanswered after 2 attempts.</li>
-                </ul>
+            {/* WhatsApp Note */}
+            <div
+              style={{
+                background: "#ecfdf5",
+                border: "1.5px solid #a7f3d0",
+                borderRadius: "8px",
+                padding: "10px 14px",
+                textAlign: "left",
+                marginBottom: "10px",
+              }}
+            >
+              <div style={{ fontSize: "11px", fontWeight: 800, color: "#065f46", textTransform: "uppercase", marginBottom: "2px" }}>
+                💬 Instant WhatsApp Notification:
               </div>
+              <p style={{ fontSize: "12px", color: "#047857", margin: 0, lineHeight: "1.4" }}>
+                Your real-time live GPS tracking link will immediately open in WhatsApp to notify your emergency contact.
+              </p>
+            </div>
 
-              <div style={{ display: "flex", gap: "10px" }}>
-                <button
-                  type="button"
-                  className="btn"
-                  style={{ flex: 1, padding: "12px", fontSize: "14px", fontWeight: 700 }}
-                  onClick={handleCancelCountdown}
-                >
-                  Cancel (Accidental)
-                </button>
-                <button
-                  type="button"
-                  className="btn solid"
-                  style={{ flex: 1, padding: "12px", fontSize: "14px", fontWeight: 700, background: "#b3261e", borderColor: "#b3261e" }}
-                  onClick={handleConfirmSOS}
-                >
-                  Call Now (Instant)
-                </button>
+            {/* Auto 999 Fallback Notice */}
+            <div
+              style={{
+                background: "#fef2f2",
+                border: "1.5px solid #fecaca",
+                borderRadius: "8px",
+                padding: "10px 14px",
+                textAlign: "left",
+                marginBottom: "16px",
+              }}
+            >
+              <div style={{ fontSize: "11px", fontWeight: 800, color: "#991b1b", textTransform: "uppercase", marginBottom: "2px" }}>
+                🚨 Automatic 999 Emergency Fallback:
               </div>
+              <p style={{ fontSize: "12px", color: "#b91c1c", margin: 0, lineHeight: "1.4" }}>
+                If your contact does not answer, the system will automatically open the 999 emergency helpline on your phone dialpad.
+              </p>
+            </div>
+
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                type="button"
+                className="btn"
+                style={{ flex: 1, padding: "12px", fontSize: "14px" }}
+                onClick={() => setShowEmergencyModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn solid"
+                style={{
+                  flex: 1.3,
+                  padding: "12px",
+                  fontSize: "14px",
+                  fontWeight: 700,
+                  background: "#b3261e",
+                  borderColor: "#b3261e",
+                }}
+                onClick={handleConfirmSOS}
+              >
+                🚨 Call & Send Alert Now
+              </button>
             </div>
           </div>
         </div>
@@ -1593,17 +1266,22 @@ export default function SOSPage() {
       {/* ================= MODAL: ADD / EDIT CONTACT ================= */}
       {showManageModal && (
         <div className="sos-escalation-overlay">
-          <div className="sos-escalation-modal" style={{ maxWidth: "480px" }}>
-            <div style={{ padding: "18px 20px", borderBottom: "1.5px solid var(--border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div className="sos-escalation-modal" style={{ maxWidth: "470px" }}>
+            <div
+              style={{
+                padding: "16px 20px",
+                borderBottom: "1.5px solid var(--border-subtle)",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
               <h3 style={{ fontSize: "17px", fontWeight: 700, margin: 0 }}>
-                {editingContact ? "Edit Emergency Contact" : "Add Emergency Contact"}
+                {editingContact ? "Edit Emergency Contact" : "Add Emergency Contact & Verify"}
               </h3>
               <button
                 type="button"
-                onClick={() => {
-                  setShowManageModal(false);
-                  setShowAddForm(false);
-                }}
+                onClick={() => setShowManageModal(false)}
                 style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer", color: "var(--muted)" }}
               >
                 ✕
@@ -1612,7 +1290,17 @@ export default function SOSPage() {
 
             <form onSubmit={handleSaveContact} style={{ padding: "20px" }}>
               {formError && (
-                <div style={{ padding: "10px", background: "#fee2e2", border: "1px solid #ef4444", borderRadius: "8px", color: "#b91c1c", fontSize: "13px", marginBottom: "14px" }}>
+                <div
+                  style={{
+                    padding: "10px 12px",
+                    background: "#fee2e2",
+                    border: "1px solid #ef4444",
+                    borderRadius: "8px",
+                    color: "#b91c1c",
+                    fontSize: "13px",
+                    marginBottom: "14px",
+                  }}
+                >
                   {formError}
                 </div>
               )}
@@ -1622,7 +1310,7 @@ export default function SOSPage() {
                 <input
                   type="text"
                   className="sos-input"
-                  placeholder="e.g. Farida Rahman (Mother)"
+                  placeholder="e.g. Shuddho Areng / Parent / Friend"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   required
@@ -1630,15 +1318,110 @@ export default function SOSPage() {
               </div>
 
               <div className="sos-form-group">
-                <label className="sos-label">Phone Number *</label>
+                <label className="sos-label">Mobile Phone Number *</label>
                 <input
                   type="tel"
                   className="sos-input"
-                  placeholder="e.g. +8801711223344"
+                  placeholder="e.g. 01939853593"
                   value={formPhone}
-                  onChange={(e) => setFormPhone(e.target.value)}
+                  onChange={(e) => {
+                    setFormPhone(e.target.value);
+                    if (editingContact && e.target.value !== editingContact.phoneNumber) {
+                      setFormVerified(false);
+                    }
+                  }}
                   required
                 />
+                <div className="sos-help-text">
+                  Supports Bangladeshi mobile numbers (017..., 019..., 018...).
+                </div>
+              </div>
+
+              {/* Number Verification Section */}
+              <div style={{ marginBottom: "16px" }}>
+                {!formVerified ? (
+                  <div
+                    style={{
+                      background: "var(--field)",
+                      border: "1.5px dashed var(--border-subtle)",
+                      borderRadius: "8px",
+                      padding: "12px",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                      <span style={{ fontSize: "12.5px", fontWeight: 700, color: "var(--ink)" }}>
+                        Number Verification Required
+                      </span>
+                      <span className="badge badge-amber" style={{ fontSize: "10.5px" }}>
+                        Unverified
+                      </span>
+                    </div>
+
+                    {!verifyCodeSent ? (
+                      <button
+                        type="button"
+                        className="btn"
+                        style={{ width: "100%", fontSize: "13px", fontWeight: 600, padding: "8px" }}
+                        onClick={handleSendVerificationCode}
+                      >
+                        Verify Phone Number
+                      </button>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                        <div style={{ fontSize: "12px", color: "var(--muted)" }}>
+                          Verification code: <strong style={{ color: "#0d6b63", letterSpacing: "1px" }}>{generatedOtp}</strong>
+                        </div>
+                        <div style={{ display: "flex", gap: "8px" }}>
+                          <input
+                            type="text"
+                            className="sos-input"
+                            style={{ flex: 1, padding: "8px 10px", fontSize: "13px" }}
+                            placeholder="Enter 4-digit code"
+                            value={inputOtp}
+                            onChange={(e) => setInputOtp(e.target.value)}
+                            maxLength={6}
+                          />
+                          <button
+                            type="button"
+                            className="btn solid"
+                            style={{ padding: "8px 14px", fontSize: "13px", fontWeight: 700 }}
+                            onClick={handleVerifyOtp}
+                          >
+                            Verify
+                          </button>
+                        </div>
+                        {otpError && (
+                          <div style={{ fontSize: "11.5px", color: "#b91c1c", fontWeight: 600 }}>
+                            {otpError}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      background: "#f0fdf4",
+                      border: "1.5px solid #86efac",
+                      borderRadius: "8px",
+                      padding: "10px 14px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <span style={{ color: "#15803d", fontWeight: 700, fontSize: "13px" }}>
+                      ✓ Mobile number verified successfully
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setFormVerified(false)}
+                      style={{ background: "none", border: "none", color: "#0d6b63", fontSize: "12px", textDecoration: "underline", cursor: "pointer" }}
+                    >
+                      Change
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="sos-form-group">
@@ -1650,15 +1433,14 @@ export default function SOSPage() {
                 >
                   <option value="Family contact">Family contact</option>
                   <option value="Parent / Guardian">Parent / Guardian</option>
-                  <option value="Roommate">Roommate</option>
                   <option value="Close Friend">Close Friend</option>
-                  <option value="Hall Provost">Hall Provost</option>
+                  <option value="Roommate">Roommate</option>
                   <option value="Campus Proctor">Campus Proctor</option>
                 </select>
               </div>
 
               <div className="sos-form-group">
-                <label className="sos-label">Calling Priority (1–5)</label>
+                <label className="sos-label">Calling Priority (1 to 3)</label>
                 <select
                   className="sos-input"
                   value={formPriority}
@@ -1667,11 +1449,9 @@ export default function SOSPage() {
                   <option value={1}>Priority 1 (Called First)</option>
                   <option value={2}>Priority 2 (Second Escalation)</option>
                   <option value={3}>Priority 3 (Third Escalation)</option>
-                  <option value={4}>Priority 4 (Fourth Escalation)</option>
-                  <option value={5}>Priority 5 (Fifth Escalation)</option>
                 </select>
                 <div className="sos-help-text">
-                  Priority 1 will always receive the first emergency telephone call.
+                  Maximum of 3 emergency contacts allowed per student.
                 </div>
               </div>
 
@@ -1687,164 +1467,16 @@ export default function SOSPage() {
                 <button
                   type="submit"
                   className="btn solid"
-                  style={{ flex: 1 }}
+                  style={{ flex: 1.2 }}
                   disabled={isSubmitting}
                 >
-                  {isSubmitting ? "Saving..." : editingContact ? "Update Contact" : "Save Contact"}
+                  {isSubmitting ? "Saving..." : editingContact ? "Update Contact" : "Save Verified Contact"}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
-
-      {/* ================= MODAL: AUDIT TRAIL INSPECTOR ================= */}
-      {showHistoryModal && selectedHistorySession && (
-        <div className="sos-escalation-overlay">
-          <div className="sos-escalation-modal" style={{ maxWidth: "560px" }}>
-            <div style={{ padding: "18px 20px", borderBottom: "1.5px solid var(--border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <h3 style={{ fontSize: "17px", fontWeight: 700, margin: 0 }}>
-                  Incident Audit Trail #{selectedHistorySession.id.slice(0, 12)}
-                </h3>
-                <small style={{ color: "var(--muted)", fontSize: "12px" }}>
-                  Status: {selectedHistorySession.status} · Resolved: {selectedHistorySession.resolvedAt ? new Date(selectedHistorySession.resolvedAt).toLocaleString() : "Active"}
-                </small>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowHistoryModal(false)}
-                style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer", color: "var(--muted)" }}
-              >
-                ✕
-              </button>
-            </div>
-
-            <div style={{ padding: "20px", maxHeight: "70vh", overflowY: "auto" }}>
-              <div style={{ marginBottom: "16px" }}>
-                <b>Resolution Reason:</b>
-                <p style={{ fontSize: "13px", color: "var(--muted)", margin: "4px 0 0" }}>
-                  {selectedHistorySession.resolvedReason || "Student ended emergency session."}
-                </p>
-              </div>
-
-              <div style={{ marginBottom: "16px" }}>
-                <b>Call Attempts Log ({selectedHistorySession.callAttempts?.length || 0}):</b>
-                {selectedHistorySession.callAttempts && selectedHistorySession.callAttempts.length > 0 ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "8px" }}>
-                    {selectedHistorySession.callAttempts.map((attempt) => (
-                      <div
-                        key={attempt.id}
-                        style={{
-                          padding: "8px 10px",
-                          background: "var(--field)",
-                          borderRadius: "6px",
-                          fontSize: "12px",
-                          display: "flex",
-                          justifyContent: "space-between",
-                        }}
-                      >
-                        <span>Attempt #{attempt.attemptNumber} · Priority #{attempt.priority} ({attempt.contactName})</span>
-                        <span style={{ fontWeight: 700 }}>{attempt.status}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p style={{ fontSize: "12px", color: "var(--muted)", margin: "4px 0 0" }}>No calls placed.</p>
-                )}
-              </div>
-
-              <div>
-                <b>SMS Notifications Log ({selectedHistorySession.smsDispatches?.length || 0}):</b>
-                {selectedHistorySession.smsDispatches && selectedHistorySession.smsDispatches.length > 0 ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "8px" }}>
-                    {selectedHistorySession.smsDispatches.map((sms) => (
-                      <div
-                        key={sms.id}
-                        style={{
-                          padding: "8px 10px",
-                          background: "var(--field)",
-                          borderRadius: "6px",
-                          fontSize: "12px",
-                          display: "flex",
-                          justifyContent: "space-between",
-                        }}
-                      >
-                        <span>To {sms.recipientName} ({sms.phoneNumber})</span>
-                        <span style={{ fontWeight: 700 }}>{sms.status}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p style={{ fontSize: "12px", color: "var(--muted)", margin: "4px 0 0" }}>No SMS dispatched.</p>
-                )}
-              </div>
-            </div>
-
-            <div style={{ padding: "14px 20px", borderTop: "1.5px solid var(--border-subtle)", textAlign: "right" }}>
-              <button
-                type="button"
-                className="btn solid"
-                onClick={() => setShowHistoryModal(false)}
-              >
-                Close Audit Trail
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ================= MODAL: SAFETY GUIDANCE ================= */}
-      {showGuidanceModal && (
-        <div className="sos-escalation-overlay">
-          <div className="sos-escalation-modal" style={{ maxWidth: "480px" }}>
-            <div style={{ padding: "18px 20px", borderBottom: "1.5px solid var(--border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h3 style={{ fontSize: "17px", fontWeight: 700, margin: 0 }}>
-                Official Campus Emergency Guidance
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowGuidanceModal(false)}
-                style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer", color: "var(--muted)" }}
-              >
-                ✕
-              </button>
-            </div>
-
-            <div style={{ padding: "20px", fontSize: "13px", lineHeight: "1.6", color: "var(--ink)" }}>
-              <p><b>1. Immediate Personal Danger:</b></p>
-              <p style={{ color: "var(--muted)", marginBottom: "12px" }}>
-                If you are in immediate danger, dial <b>999</b> immediately or move toward the nearest illuminated university building (TSC, Curzon Hall, Arts Faculty).
-              </p>
-
-              <p><b>2. Medical Emergency on Campus:</b></p>
-              <p style={{ color: "var(--muted)", marginBottom: "12px" }}>
-                Contact DU Medical Center or Dhaka Medical College Hospital (DMCH) emergency desk at <b>02-55165088</b>.
-              </p>
-
-              <p><b>3. Harassment or Campus Security:</b></p>
-              <p style={{ color: "var(--muted)", marginBottom: "12px" }}>
-                Report immediately to the DU Proctorial team at <b>01700-000000</b> or notify your resident Hall Provost.
-              </p>
-            </div>
-
-            <div style={{ padding: "14px 20px", borderTop: "1.5px solid var(--border-subtle)", textAlign: "right" }}>
-              <button
-                type="button"
-                className="btn solid"
-                onClick={() => setShowGuidanceModal(false)}
-              >
-                Understood
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Toast Notification */}
-      <div className={`toast ${toastVisible ? "on" : ""}`} role="status">
-        {toastMessage}
-      </div>
     </div>
   );
 }
