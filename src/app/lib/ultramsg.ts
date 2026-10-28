@@ -21,8 +21,8 @@ export async function sendUltraMsgWhatsApp(params: {
   studentName: string;
   trackingUrl: string;
 }): Promise<UltraMsgSendResult> {
-  const instanceId = process.env.ULTRAMSG_INSTANCE_ID || "";
-  const token = process.env.ULTRAMSG_TOKEN || "";
+  const instanceId = process.env.ULTRAMSG_INSTANCE_ID || "instance196655";
+  const token = process.env.ULTRAMSG_TOKEN || "9fomfj5w2huw7adz";
 
   if (!instanceId || !token) {
     return { success: false, error: "UltraMsg credentials not configured" };
