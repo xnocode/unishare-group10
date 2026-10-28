@@ -187,7 +187,19 @@ export async function POST(req: NextRequest) {
         const origin = req.headers.get("origin") || req.nextUrl.origin || "http://localhost:3000";
         const trackingUrl = existingActiveSession.trackingToken
           ? `${origin}/sos/track/${existingActiveSession.trackingToken}`
-          : undefined;
+          : `${origin}/sos`;
+
+        // Automatically dispatch WhatsApp alert via UltraMsg on every trigger
+        const primaryContact = contacts[0];
+        if (primaryContact) {
+          sendUltraMsgWhatsApp({
+            toPhoneNumber: primaryContact.phoneNumber,
+            studentName: user.fullName,
+            trackingUrl,
+          }).catch((err) => {
+            console.warn("UltraMsg automated dispatch error on active session:", err);
+          });
+        }
 
         return NextResponse.json({
           success: true,

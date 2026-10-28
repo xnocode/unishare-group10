@@ -310,27 +310,11 @@ export default function SOSSetupPage() {
 
       if (data.success) {
         showToast(`✓ Automatic WhatsApp alert sent to ${contact.phoneNumber}!`);
-        return;
       } else {
-        // Fallback to web link if UltraMsg QR is pending
-        console.warn("UltraMsg server response:", data);
-        showToast(data.error ? `Gateway: ${data.error}` : "Opening WhatsApp preview...");
-        const formatted = formatForWhatsApp(contact.phoneNumber);
-        const msg = encodeURIComponent(
-          `🚨 *UniShare Campus Safety (Test Alert)*\n` +
-          `This is a test notification from ${currentUser.name}. In an emergency, our live GPS tracking link will appear here.\n\n` +
-          `UniShare Emergency Center: ${window.location.origin}/sos`
-        );
-        window.open(`https://wa.me/${formatted}?text=${msg}`, "_blank");
+        showToast(data.error || "Failed to dispatch WhatsApp alert via gateway.");
       }
     } catch {
-      const formatted = formatForWhatsApp(contact.phoneNumber);
-      const msg = encodeURIComponent(
-        `🚨 *UniShare Campus Safety (Test Alert)*\n` +
-        `This is a test notification from ${currentUser.name}. In an emergency, our live GPS tracking link will appear here.\n\n` +
-        `UniShare Emergency Center: ${window.location.origin}/sos`
-      );
-      window.open(`https://wa.me/${formatted}?text=${msg}`, "_blank");
+      showToast("Network error contacting WhatsApp gateway.");
     }
   };
 

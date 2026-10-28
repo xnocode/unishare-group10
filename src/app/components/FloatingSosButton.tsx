@@ -162,17 +162,9 @@ export default function FloatingSosButton() {
       showToast(`🚨 SOS DISPATCHED: WhatsApp alert sent automatically to ${contact.name} (${contact.phoneNumber}) & dialpad opened!`);
     } catch (err) {
       console.error("SOS trigger error:", err);
-      // Fallback: direct WhatsApp and dialer
-      const formattedPhone = formatForWhatsApp(contact.phoneNumber);
-      const fallbackUrl = `${window.location.origin}/sos`;
-      const waMsg = encodeURIComponent(
-        `🚨 *জরুরি সতর্কতা (UniShare Emergency SOS)*\n` +
-        `আমি বিপদে পড়েছি! অনুগ্রহ করে দ্রুত যোগাযোগ করুন অথবা ৯৯৯ এ কল করুন।\n\n` +
-        `UniShare Campus Safety: ${fallbackUrl}`
-      );
-      window.open(`https://wa.me/${formattedPhone}?text=${waMsg}`, "_blank");
       const dialNumber = contact.phoneNumber.replace(/[^\d+]/g, "");
       window.location.href = `tel:${dialNumber}`;
+      showToast(`⚠️ Emergency: Dialpad opened for ${contact.name} (${contact.phoneNumber})`);
     } finally {
       setTimeout(() => {
         setIsTriggering(false);
