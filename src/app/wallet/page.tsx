@@ -322,16 +322,49 @@ export default function WalletPage() {
 
   if (!isAuthenticated) {
     return (
-      <div
-        style={{
-          minHeight: "100vh",
-          display: "grid",
-          placeItems: "center",
-          background: "#ffffff",
-          fontFamily: "system-ui, sans-serif",
-        }}
-      >
-        <p style={{ color: "#0d5c5a", fontWeight: 600 }}>Checking campus authentication...</p>
+      <div className="unishare-wallet" style={{ minHeight: "100vh", background: "#ffffff" }}>
+        <AppNavbar activeNav="wallet" />
+        <main
+          style={{
+            maxWidth: "1000px",
+            width: "100%",
+            margin: "28px auto",
+            padding: "0 24px",
+          }}
+        >
+          <div
+            style={{
+              height: "36px",
+              width: "260px",
+              borderRadius: "8px",
+              background: "#f3f7f6",
+              marginBottom: "18px",
+            }}
+          />
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+              gap: "18px",
+            }}
+          >
+            <div
+              style={{
+                height: "220px",
+                borderRadius: "18px",
+                background: "#e5efec",
+              }}
+            />
+            <div
+              style={{
+                height: "220px",
+                borderRadius: "18px",
+                background: "#f3f7f6",
+                border: "1px solid #cfe0dc",
+              }}
+            />
+          </div>
+        </main>
       </div>
     );
   }

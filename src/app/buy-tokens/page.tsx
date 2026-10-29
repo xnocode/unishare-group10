@@ -108,16 +108,16 @@ export default function BuyTokensPage() {
 
   if (!isAuthenticated) {
     return (
-      <div
-        style={{
-          minHeight: "100vh",
-          display: "grid",
-          placeItems: "center",
-          background: "#ffffff",
-          fontFamily: "system-ui, sans-serif",
-        }}
-      >
-        <p style={{ color: "#0b5d5b", fontWeight: 600 }}>Checking authentication...</p>
+      <div className="unishare-buy-tokens" style={{ minHeight: "100vh", background: "#ffffff" }}>
+        <AppNavbar activeNav="wallet" />
+        <main style={{ maxWidth: "1170px", width: "100%", margin: "26px auto", padding: "0 40px" }}>
+          <div style={{ height: "38px", width: "240px", borderRadius: "8px", background: "#f3f8f6", marginBottom: "18px" }} />
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "18px" }}>
+            <div style={{ height: "260px", borderRadius: "14px", background: "#e4efec" }} />
+            <div style={{ height: "260px", borderRadius: "14px", background: "#f3f8f6", border: "1px solid #d9e1df" }} />
+            <div style={{ height: "260px", borderRadius: "14px", background: "#f3f8f6", border: "1px solid #d9e1df" }} />
+          </div>
+        </main>
       </div>
     );
   }
@@ -139,6 +139,8 @@ export default function BuyTokensPage() {
         <div className="crumbs">
           <Link href="/home">Home</Link>
           <svg
+            width="8"
+            height="8"
             viewBox="0 0 10 10"
             fill="none"
             stroke="#0b5d5b"
@@ -152,6 +154,8 @@ export default function BuyTokensPage() {
             Wallet
           </Link>
           <svg
+            width="8"
+            height="8"
             viewBox="0 0 10 10"
             fill="none"
             stroke="#0b5d5b"
@@ -179,6 +183,8 @@ export default function BuyTokensPage() {
         <div className="campus">
           <div className="l">
             <svg
+              width="18"
+              height="18"
               viewBox="0 0 24 24"
               fill="none"
               stroke="#0b5d5b"
@@ -265,7 +271,7 @@ export default function BuyTokensPage() {
                   )}
                 </div>
                 <div className="coins">
-                  <svg viewBox="0 0 130 64">
+                  <svg width="130" height="64" viewBox="0 0 130 64">
                     <ellipse cx="65" cy="52" rx="58" ry="5" fill="#e4efec" />
                     <circle
                       cx="76"
@@ -345,7 +351,7 @@ export default function BuyTokensPage() {
                   )}
                 </div>
                 <div className="coins">
-                  <svg viewBox="0 0 130 64">
+                  <svg width="130" height="64" viewBox="0 0 130 64">
                     <ellipse cx="65" cy="52" rx="58" ry="5" fill="#e4efec" />
                     <circle
                       cx="92"
@@ -444,7 +450,7 @@ export default function BuyTokensPage() {
                   )}
                 </div>
                 <div className="coins">
-                  <svg viewBox="0 0 130 64">
+                  <svg width="130" height="64" viewBox="0 0 130 64">
                     <ellipse cx="65" cy="52" rx="60" ry="5" fill="#e4efec" />
                     <circle
                       cx="108"
@@ -776,6 +782,8 @@ export default function BuyTokensPage() {
         {/* Info Box */}
         <div className="info">
           <svg
+            width="16"
+            height="16"
             viewBox="0 0 24 24"
             fill="none"
             stroke="#0b5d5b"
@@ -802,6 +810,8 @@ export default function BuyTokensPage() {
         <div className="know-grid">
           <div className="know-item">
             <svg
+              width="18"
+              height="18"
               viewBox="0 0 24 24"
               fill="none"
               stroke="#0b5d5b"
@@ -824,6 +834,8 @@ export default function BuyTokensPage() {
           </div>
           <div className="know-item">
             <svg
+              width="18"
+              height="18"
               viewBox="0 0 24 24"
               fill="none"
               stroke="#0b5d5b"
@@ -842,6 +854,8 @@ export default function BuyTokensPage() {
           </div>
           <div className="know-item">
             <svg
+              width="18"
+              height="18"
               viewBox="0 0 24 24"
               fill="none"
               stroke="#0b5d5b"

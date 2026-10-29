@@ -53,20 +53,20 @@ function NavIcon({ name }: { name: string }) {
   switch (name) {
     case "home":
       return (
-        <svg viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9.5z" />
         </svg>
       );
     case "marketplace":
       return (
-        <svg viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M6 7h12l1 13H5L6 7z" />
           <path d="M9 7a3 3 0 0 1 6 0" />
         </svg>
       );
     case "rides":
       return (
-        <svg viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M5 15V10l2-4.5h10L19 10v5" />
           <rect x="3" y="15" width="18" height="3.5" rx="1" />
           <path d="M6.5 18.5v2M17.5 18.5v2M5 10.5h14" />
@@ -74,61 +74,61 @@ function NavIcon({ name }: { name: string }) {
       );
     case "wallet":
       return (
-        <svg viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <rect x="3" y="5" width="18" height="14" rx="2.5" />
           <path d="M3 10h18M15.5 14h2" />
         </svg>
       );
     case "bell":
       return (
-        <svg viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 21h4" />
         </svg>
       );
     case "shield":
       return (
-        <svg viewBox="0 0 24 24" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6l8-3z" />
           <path d="M9 12l2 2 4-4" />
         </svg>
       );
     case "box":
       return (
-        <svg viewBox="0 0 24 24" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" />
           <path d="M4 7.5l8 4.5 8-4.5M12 12v9" />
         </svg>
       );
     case "heart":
       return (
-        <svg viewBox="0 0 24 24" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M12 20s-7-4.5-9-8.8C1.5 7.9 3.8 5 6.8 5c1.9 0 3.5 1 4.4 2.4h1.6C13.7 6 15.3 5 17.2 5c3 0 5.3 2.9 3.8 6.2-2 4.3-9 8.8-9 8.8z" />
         </svg>
       );
     case "clock":
       return (
-        <svg viewBox="0 0 24 24" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <circle cx="12" cy="12" r="9" />
           <path d="M12 7v5l3 2" />
         </svg>
       );
     case "user":
       return (
-        <svg viewBox="0 0 24 24" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <circle cx="12" cy="8" r="4" />
           <path d="M5 20a7 7 0 0 1 14 0" />
         </svg>
       );
     case "coin":
       return (
-        <svg viewBox="0 0 24 24" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <circle cx="12" cy="12" r="9" />
           <path d="M12 7v10M9 10h4.5a1.5 1.5 0 0 1 0 3H10" />
         </svg>
       );
     case "logout":
       return (
-        <svg viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
         </svg>
       );
@@ -439,7 +439,7 @@ export default function AppNavbar({
           className="ut-logo"
           onClick={() => setMobileOpen(false)}
         >
-          <svg viewBox="0 0 22 14" strokeWidth="2.3" aria-hidden="true">
+          <svg width="28" height="18" viewBox="0 0 22 14" fill="none" stroke="#0B5D5E" strokeWidth="2.3" aria-hidden="true">
             <circle cx="6.5" cy="7" r="4.5" />
             <circle cx="15.5" cy="7" r="4.5" />
           </svg>
@@ -569,7 +569,7 @@ export default function AppNavbar({
                 >
                   <span className="ut-avatar">{resolvedUser.initials}</span>
                   <span className="ut-user-name">{resolvedUser.name}</span>
-                  <svg className="ut-chev" viewBox="0 0 24 24" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <svg className="ut-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4a5b59" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M6 9l6 6 6-6" />
                   </svg>
                 </button>
@@ -684,7 +684,7 @@ export default function AppNavbar({
                   setProfileOpen(false);
                 }}
               >
-                <svg viewBox="0 0 24 24" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
                   {mobileOpen ? (
                     <path d="M18 6 6 18M6 6l12 12" />
                   ) : (
