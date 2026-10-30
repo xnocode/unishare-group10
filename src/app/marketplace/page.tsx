@@ -294,15 +294,15 @@ export default function MarketplacePage() {
       <main className="wrap">
         {/* Breadcrumb Navigation */}
         <nav className="crumb" aria-label="Breadcrumb">
-          <Link href="/">Home</Link>
+          <Link href="/home">Home</Link>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M9 18l6-6-6-6" />
           </svg>
-          <span style={{ fontWeight: 700, color: 'var(--ink)' }}>Marketplace</span>
+          <span style={{ fontWeight: 600, color: 'var(--ink)' }}>Marketplace</span>
         </nav>
 
         {/* Hero Section */}
-        <div className="kicker">{resolvedUser.university.toUpperCase()} · VERIFIED STUDENTS ONLY</div>
+        <div className="kicker">{resolvedUser.university} · Verified students only</div>
         <div className="hero-row">
           <div>
             <h1>Your campus, one shared shelf.</h1>
@@ -315,14 +315,17 @@ export default function MarketplacePage() {
 
         {/* Campus Verification Trust Banner */}
         <div className="trust-banner">
-          <svg className="shield-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg className="shield-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6l8-3z" />
             <path d="M9 12l2 2 4-4" />
           </svg>
           <div className="banner-text">
             <b>Only your university. Always a verified student.</b>
-            <p>Every item here belongs to a {resolvedUser.university} student. Meet on campus and pay with tokens.</p>
+            <p>Every item here belongs to a verified {resolvedUser.university} student. Meet on campus and pay with tokens.</p>
           </div>
+          <span className="banner-status">
+            {resolvedUser.verified ? 'Verified student' : 'Campus member'}
+          </span>
         </div>
 
         {/* Organized Control Station (Tabs, Search, Filters, Categories) */}

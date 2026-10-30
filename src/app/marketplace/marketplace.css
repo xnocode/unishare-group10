@@ -5,18 +5,18 @@
    ========================================================================== */
 
 .unishare-marketplace {
-  --brand: #0B5D5E;
-  --brand-dark: #073c3d;
-  --ink: #12201f;
-  --muted: #4a5b59;
-  --tint: #e6f0ef;
-  --line: #12201f;
-  --field: #f5f8f7;
-  --soft: #bfc5c4;
+  --brand: #0d6b63;
+  --brand-dark: #09524c;
+  --ink: #161b1a;
+  --muted: #4b5553;
+  --tint: #e9f2ef;
+  --line: #161b1a;
+  --field: #f5f7f6;
+  --soft: #8a9391;
   --hair: #d5dcda;
   --err: #b3261e;
   --teal: var(--brand);
-  --head: 'Bricolage Grotesque', var(--font-bricolage), 'DM Sans', system-ui, sans-serif;
+  --head: 'DM Sans', var(--font-dm-sans), system-ui, -apple-system, sans-serif;
   --body: 'DM Sans', var(--font-dm-sans), system-ui, -apple-system, sans-serif;
 
   font-family: var(--body);
@@ -84,13 +84,13 @@
 }
 
 .unishare-marketplace .kicker {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
   color: var(--brand);
   text-transform: uppercase;
   margin-top: 24px;
-  margin-bottom: 6px;
+  margin-bottom: 0;
 }
 
 .unishare-marketplace .hero-row {
@@ -99,21 +99,22 @@
   align-items: flex-end;
   gap: 20px;
   flex-wrap: wrap;
+  margin-top: 6px;
 }
 
 .unishare-marketplace h1 {
   font-family: var(--head);
-  font-size: clamp(30px, 4vw, 40px);
+  font-size: 34px;
   line-height: 1.1;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--ink);
 }
 
 .unishare-marketplace .hero-sub {
-  font-size: 15.5px;
+  font-size: 14px;
   color: var(--muted);
-  margin-top: 8px;
+  margin-top: 6px;
   max-width: 600px;
 }
 
@@ -122,22 +123,21 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 11px 22px;
+  padding: 10px 18px;
   border-radius: 8px;
   font-weight: 700;
-  font-size: 14.5px;
-  border: 2px solid var(--brand);
+  font-size: 13.5px;
+  border: 1.5px solid var(--brand);
   color: #ffffff;
   background: var(--brand);
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .unishare-marketplace .btn:hover {
   background: var(--brand-dark);
   border-color: var(--brand-dark);
-  filter: brightness(1.05);
 }
 
 .unishare-marketplace .btn.outline {
@@ -150,25 +150,26 @@
 }
 
 /* ==========================================================================
-   Campus Verification Banner (Matches Notice Language)
+   Campus Verification Banner (Matches Home Notice Language)
    ========================================================================== */
 .unishare-marketplace .trust-banner {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   background: var(--tint);
-  border-radius: 12px;
-  padding: 16px 20px;
-  margin-top: 24px;
-  border: 1.5px solid var(--line);
-  box-shadow: 3px 3px 0 var(--line);
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin-top: 22px;
+  border: 0;
+  box-shadow: none;
+  flex-wrap: wrap;
 }
 
 .unishare-marketplace .trust-banner svg.shield-icon {
   color: var(--brand);
   flex-shrink: 0;
-  width: 26px;
-  height: 26px;
+  width: 20px;
+  height: 20px;
 }
 
 .unishare-marketplace .trust-banner .banner-text {
@@ -177,16 +178,24 @@
 
 .unishare-marketplace .trust-banner b {
   display: block;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 700;
-  color: var(--brand);
+  color: var(--ink);
 }
 
 .unishare-marketplace .trust-banner p {
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--muted);
   margin-top: 2px;
   line-height: 1.4;
+}
+
+.unishare-marketplace .trust-banner .banner-status {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--brand);
+  white-space: nowrap;
 }
 
 /* ==========================================================================
@@ -203,8 +212,8 @@
 /* Tabs */
 .unishare-marketplace .shelf-tabs {
   display: flex;
-  gap: 28px;
-  border-bottom: 2px solid var(--hair);
+  gap: 26px;
+  border-bottom: 1px solid var(--hair);
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -220,10 +229,10 @@
   font-size: 14px;
   font-weight: 600;
   color: var(--muted);
-  border-bottom: 3px solid transparent;
-  margin-bottom: -2px;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
   white-space: nowrap;
-  transition: all 0.15s ease;
+  transition: color 0.15s ease, border-color 0.15s ease;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -246,7 +255,7 @@
   font-weight: 700;
   padding: 2px 7px;
   border-radius: 999px;
-  border: 1px solid var(--brand);
+  border: 1px solid rgba(13, 107, 99, 0.25);
 }
 
 /* Search Bar */
@@ -254,16 +263,16 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  border: 2px solid var(--line);
-  border-radius: 12px;
-  padding: 6px 6px 6px 16px;
+  border: 1.5px solid var(--hair);
+  border-radius: 10px;
+  padding: 5px 5px 5px 14px;
   background: #ffffff;
-  box-shadow: 2px 2px 0 var(--line);
+  box-shadow: none;
   transition: box-shadow 0.15s ease, border-color 0.15s ease;
 }
 
 .unishare-marketplace .search-bar-wrap:focus-within {
-  box-shadow: 0 0 0 3px rgba(11, 93, 94, 0.18);
+  box-shadow: 0 0 0 3px rgba(13, 107, 99, 0.12);
   border-color: var(--brand);
 }
 
@@ -307,11 +316,11 @@
 .unishare-marketplace .filter-select-wrap select {
   appearance: none;
   -webkit-appearance: none;
-  border: 1.5px solid var(--line);
+  border: 1px solid var(--hair);
   border-radius: 8px;
   background: #ffffff;
-  height: 38px;
-  padding: 0 32px 0 14px;
+  height: 36px;
+  padding: 0 32px 0 12px;
   font: inherit;
   font-size: 13px;
   font-weight: 600;
@@ -321,9 +330,13 @@
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
+.unishare-marketplace .filter-select-wrap select:hover {
+  border-color: var(--brand);
+}
+
 .unishare-marketplace .filter-select-wrap select:focus {
   border-color: var(--brand);
-  box-shadow: 0 0 0 3px rgba(11, 93, 94, 0.15);
+  box-shadow: 0 0 0 3px rgba(13, 107, 99, 0.12);
 }
 
 .unishare-marketplace .filter-select-wrap.has-left-icon select {
@@ -351,10 +364,10 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  border: 1.5px solid var(--line);
+  border: 1px solid var(--hair);
   border-radius: 8px;
-  height: 38px;
-  padding: 0 14px;
+  height: 36px;
+  padding: 0 12px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -390,7 +403,7 @@
 }
 
 .unishare-marketplace .chip-pill {
-  border: 1.5px solid var(--line);
+  border: 1px solid var(--hair);
   border-radius: 999px;
   background: #ffffff;
   height: 32px;
@@ -413,7 +426,7 @@
   background: var(--brand);
   border-color: var(--brand);
   color: #ffffff;
-  box-shadow: 2px 2px 0 var(--line);
+  box-shadow: none;
 }
 
 /* ==========================================================================
@@ -423,14 +436,14 @@
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  margin-top: 36px;
+  margin-top: 32px;
   margin-bottom: 16px;
 }
 
 .unishare-marketplace .section-bar h2 {
   font-family: var(--head);
-  font-size: 24px;
-  font-weight: 800;
+  font-size: 20px;
+  font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--ink);
 }
@@ -442,37 +455,38 @@
 }
 
 /* ==========================================================================
-   3-Column Product Grid (Clean, Brutalist, Professional)
+   3-Column Product Grid
    ========================================================================== */
 .unishare-marketplace .shelf-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
+  gap: 18px;
 }
 
 .unishare-marketplace .shelf-card {
-  border: 2px solid var(--line);
-  border-radius: 16px;
+  border: 1.5px solid var(--hair);
+  border-radius: 12px;
   overflow: hidden;
   background: #ffffff;
   display: flex;
   flex-direction: column;
   cursor: pointer;
-  box-shadow: 3px 3px 0 var(--line);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 }
 
 .unishare-marketplace .shelf-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 5px 5px 0 var(--brand);
+  transform: translateY(-2px);
+  border-color: var(--brand);
+  box-shadow: 0 8px 20px rgba(13, 107, 99, 0.08);
 }
 
 .unishare-marketplace .card-img-wrap {
-  height: 145px;
+  height: 152px;
   position: relative;
   overflow: hidden;
   background-color: var(--field);
-  border-bottom: 2px solid var(--line);
+  border-bottom: 1px solid var(--hair);
 }
 
 .unishare-marketplace .card-img-wrap img {
@@ -487,13 +501,13 @@
   top: 10px;
   left: 10px;
   background: #ffffff;
-  border: 1.5px solid var(--line);
+  border: 1px solid var(--hair);
   border-radius: 999px;
   padding: 3px 10px;
   font-size: 11px;
   font-weight: 700;
   color: var(--ink);
-  box-shadow: 1px 1px 0 var(--line);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .unishare-marketplace .fav-btn {
@@ -504,13 +518,13 @@
   height: 28px;
   border-radius: 50%;
   background: #ffffff;
-  border: 1.5px solid var(--line);
+  border: 1px solid var(--hair);
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--muted);
   transition: all 0.15s ease;
-  box-shadow: 1px 1px 0 var(--line);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .unishare-marketplace .fav-btn:hover {
@@ -594,7 +608,7 @@
   gap: 10px;
   margin-top: 14px;
   padding-top: 12px;
-  border-top: 1.5px solid var(--hair);
+  border-top: 1px solid var(--hair);
 }
 
 .unishare-marketplace .owner-avatar {
@@ -641,11 +655,11 @@
 /* Empty State */
 .unishare-marketplace .empty-state {
   grid-column: 1 / -1;
-  border: 2px dashed var(--soft);
-  border-radius: 14px;
+  border: 1.5px dashed var(--hair);
+  border-radius: 12px;
   padding: 48px 24px;
   text-align: center;
-  font-size: 14.5px;
+  font-size: 14px;
   color: var(--muted);
   background: var(--field);
 }
@@ -655,24 +669,24 @@
    ========================================================================== */
 .unishare-marketplace .guide-card {
   background: var(--field);
-  border: 2px solid var(--line);
-  border-radius: 14px;
-  padding: 24px 28px;
-  margin: 38px 0 44px;
-  box-shadow: 3px 3px 0 var(--line);
+  border: 1px solid var(--hair);
+  border-radius: 12px;
+  padding: 22px 24px;
+  margin: 34px 0 42px;
+  box-shadow: none;
 }
 
 .unishare-marketplace .guide-card h3 {
   font-family: var(--head);
-  font-size: 21px;
-  font-weight: 800;
+  font-size: 18px;
+  font-weight: 700;
   color: var(--ink);
 }
 
 .unishare-marketplace .guide-card p {
-  font-size: 14px;
+  font-size: 13.5px;
   color: var(--muted);
-  margin-top: 8px;
+  margin-top: 6px;
   line-height: 1.5;
   max-width: 820px;
 }
@@ -681,9 +695,9 @@
    Footer
    ========================================================================== */
 .unishare-marketplace footer {
-  border-top: 2px solid var(--line);
-  padding: 24px 0;
-  font-size: 13.5px;
+  border-top: 1px solid var(--hair);
+  padding: 20px 0;
+  font-size: 12px;
   color: var(--muted);
   background: #ffffff;
   margin-top: auto;
@@ -700,11 +714,11 @@
 .unishare-marketplace footer a,
 .unishare-marketplace footer button.logout-link {
   font-weight: 600;
-  color: var(--ink);
-  margin-left: 20px;
+  color: var(--muted);
+  margin-left: 18px;
   background: none;
   border: 0;
-  font-size: 13.5px;
+  font-size: 12px;
 }
 
 .unishare-marketplace footer a:hover,
@@ -756,14 +770,14 @@
 
 .unishare-modal-card {
   background: #ffffff;
-  border: 2px solid var(--line);
-  border-radius: 16px;
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
   width: 100%;
   max-width: 520px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 8px 8px 0 var(--brand);
-  padding: 28px;
+  box-shadow: 0 20px 44px rgba(22, 27, 26, 0.16);
+  padding: 26px;
   position: relative;
   color: var(--ink);
 }
@@ -874,10 +888,10 @@
   max-width: 480px;
   width: 100%;
   background: #ffffff;
-  border: 2px solid var(--line);
-  border-radius: 16px;
-  padding: 38px 32px;
-  box-shadow: 8px 8px 0 var(--brand);
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  padding: 36px 30px;
+  box-shadow: 0 18px 40px rgba(22, 27, 26, 0.12);
   text-align: center;
 }
 
