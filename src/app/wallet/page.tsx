@@ -386,8 +386,10 @@ export default function WalletPage() {
         <div className="crumb">
           <Link href="/home">Home</Link>
           <span>›</span>
-          <span>Wallet</span>
+          <span className="current">Wallet</span>
         </div>
+
+        <div className="eyebrow">Campus Wallet · {resolvedUser.university}</div>
 
         {/* Top Title & Balance Badge */}
         <div className="top">
@@ -400,10 +402,10 @@ export default function WalletPage() {
 
         {/* Verified Campus Banner */}
         <div className="banner">
-          <WalletIcon name="shield" size={22} />
+          <WalletIcon name="shield" size={20} />
           <div>
-            <b>{resolvedUser.university}</b> &nbsp;Your wallet for sharing with verified
-            students on your campus.
+            <b>{resolvedUser.university}</b>
+            <p>Your wallet for sharing with verified students on your campus.</p>
           </div>
           <span className="v">
             <WalletIcon name="check" size={14} style={{ marginRight: "4px" }} />
@@ -504,23 +506,21 @@ export default function WalletPage() {
           {/* Sidebar */}
           <aside className="side">
             {/* Connected Favorites Card */}
-            <div className="card promo" style={{ border: "2px solid var(--teal)", background: "#fbfdfc" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ color: "#e11d48", display: "inline-flex" }}>
-                    <WalletIcon name="heart" size={20} />
-                  </span>
-                  <b style={{ fontSize: "14px", color: "var(--ink)" }}>Favorites Connection</b>
+            <div className="card promo promo-featured">
+              <div className="promo-top">
+                <div className="promo-title">
+                  <WalletIcon name="heart" size={18} />
+                  <span>Favorites Connection</span>
                 </div>
-                <span className="badge" style={{ background: "#ffe4e6", color: "#be123c" }}>
+                <span className="badge">
                   {favoritesCount} saved {favoritesCount === 1 ? "item" : "items"}
                 </span>
               </div>
-              <h3 style={{ marginTop: "12px", marginBottom: "8px" }}>Saved Favorites & Readiness</h3>
+              <h3>Saved Favorites &amp; Readiness</h3>
               <p>
                 Keep track of campus essentials you plan to borrow. Confirm your token balance covers rental rates and security deposits before meeting the owner.
               </p>
-              <Link className="lnk" href="/favorites" style={{ color: "var(--teal)", fontWeight: 700 }}>
+              <Link className="lnk" href="/favorites">
                 Manage Favorites ({favoritesCount}) →
               </Link>
             </div>
