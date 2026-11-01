@@ -1,44 +1,44 @@
 /* UniShare Campus Ride Sharing · Destination-Based Live Companion Matching */
-@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600..800&family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap');
 
 :root {
   --teal: #0d6b63;
-  --teal-dark: #094e48;
+  --teal-dark: #09524c;
   --teal-light: #128278;
   --mint: #e9f2ef;
-  --mint-soft: #f2f7f5;
+  --mint-soft: #f5f7f6;
   --ink: #161b1a;
   --muted: #4b5553;
   --hair: #d5dcda;
   --field-bg: #f5f7f6;
   --card-bg: #ffffff;
-  --danger: #dc2626;
+  --danger: #b91c1c;
   --blue-gps: #1a73e8;
   --green-pin: #1e8e3e;
   --red-pin: #d93025;
   --radius-sm: 8px;
   --radius-md: 12px;
-  --radius-lg: 16px;
+  --radius-lg: 14px;
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.06);
   --shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.10);
 }
 
 .unishare-rides-container {
-  font-family: "DM Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: "DM Sans", var(--font-dm-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   color: var(--ink);
-  background: #f8faf9;
+  background: #ffffff;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .unishare-rides-container h1,
 .unishare-rides-container h2,
 .unishare-rides-container h3,
 .unishare-rides-container .headline-font {
-  font-family: "Bricolage Grotesque", "DM Sans", sans-serif;
+  font-family: "Bricolage Grotesque", var(--font-bricolage), "DM Sans", system-ui, sans-serif;
 }
 
 .unishare-rides-container *,
@@ -55,7 +55,7 @@
   display: flex;
   flex: 1;
   position: relative;
-  height: calc(100vh - 66px);
+  height: calc(100vh - 72px);
   min-height: 640px;
   overflow: hidden;
 }
@@ -102,11 +102,11 @@
   min-width: 400px;
   max-width: 480px;
   background: #ffffff;
-  border-right: 1.5px solid var(--hair);
+  border-right: 1px solid var(--hair);
   display: flex;
   flex-direction: column;
   height: 100%;
-  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.03);
+  box-shadow: none;
   z-index: 20;
   position: relative;
 }
@@ -124,8 +124,9 @@
 .rides-header-eyebrow {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 4px;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
 }
 
 .rides-badge-pill {
@@ -135,28 +136,32 @@
   padding: 4px 10px;
   border-radius: 9999px;
   background: var(--mint);
+  border: 1px solid rgba(13, 107, 99, 0.22);
   color: var(--teal);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
+  line-height: 1.3;
+  max-width: 100%;
 }
 
 .verified-indicator {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--teal);
-  font-weight: 600;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .rides-title-block h1 {
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 700;
-  line-height: 1.15;
+  line-height: 1.1;
   color: var(--ink);
-  margin-top: 6px;
+  margin-top: 8px;
   letter-spacing: -0.02em;
 }
 
@@ -298,9 +303,9 @@
   width: 100%;
   padding: 8px 12px;
   border-radius: var(--radius-sm);
-  border: 1px dashed #cbd5e1;
-  background: #f8fafc;
-  color: var(--blue-gps);
+  border: 1px dashed var(--hair);
+  background: var(--field-bg);
+  color: var(--teal);
   font-size: 12.5px;
   font-weight: 600;
   display: flex;
@@ -312,8 +317,8 @@
 }
 
 .use-gps-btn:hover {
-  background: #eff6ff;
-  border-color: var(--blue-gps);
+  background: var(--mint);
+  border-color: var(--teal);
 }
 
 .use-gps-btn.locating {
@@ -502,26 +507,25 @@
 
 .find-partners-btn {
   width: 100%;
-  height: 48px;
+  height: 44px;
   background: var(--teal);
   color: #ffffff;
-  border: none;
-  border-radius: var(--radius-md);
-  font-size: 15px;
+  border: 1.5px solid var(--teal);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
   font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(13, 107, 99, 0.25);
-  transition: all 0.15s ease;
+  box-shadow: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .find-partners-btn:hover {
   background: var(--teal-dark);
-  box-shadow: 0 6px 16px rgba(13, 107, 99, 0.35);
-  transform: translateY(-1px);
+  border-color: var(--teal-dark);
 }
 
 .find-partners-btn:active {
@@ -1384,6 +1388,7 @@
 
 /* Roads */
 .svg-primary-highway {
+  fill: none;
   stroke: #ffffff;
   stroke-width: 14;
   stroke-linecap: round;
@@ -1392,6 +1397,7 @@
 }
 
 .svg-secondary-road {
+  fill: none;
   stroke: #ffffff;
   stroke-width: 8;
   stroke-linecap: round;
@@ -1399,6 +1405,7 @@
 }
 
 .svg-local-street {
+  fill: none;
   stroke: #f1ede7;
   stroke-width: 4;
 }
@@ -1516,17 +1523,19 @@
 
 /* Header Connection Requests Pill */
 .connection-requests-trigger-btn {
+  margin-left: auto;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   background: #ffffff;
-  border: 1.5px solid #cbd5e1;
+  border: 1.5px solid var(--hair);
   border-radius: 999px;
-  padding: 4px 12px;
+  padding: 5px 12px;
   font-size: 11.5px;
   font-weight: 700;
   color: var(--ink);
   cursor: pointer;
+  white-space: nowrap;
   transition: all 0.15s ease;
   position: relative;
 }
