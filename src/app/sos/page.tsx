@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import AppNavbar from "../components/AppNavbar";
 import {
   getUserScopedKey,
@@ -293,10 +294,15 @@ export default function SOSSetupPage() {
       )}
 
       {/* MAIN CONTENT WRAPPER */}
-      <main className="wrap" style={{ maxWidth: "1000px", margin: "0 auto", padding: "0 24px 60px" }}>
-        
+      <main className="wrap" style={{ maxWidth: "1000px", margin: "0 auto", padding: "24px 24px 56px", flex: 1 }}>
+        <nav className="crumbs" aria-label="Breadcrumb">
+          <Link href="/home">Home</Link>
+          <span>›</span>
+          <span className="current">Emergency SOS</span>
+        </nav>
+
         {/* HERO SECTION MATCHING CAMPUS HOME */}
-        <div className="eyebrow">{currentUser.university} · CAMPUS SAFETY SETTINGS</div>
+        <div className="eyebrow" style={{ marginTop: "24px" }}>{currentUser.university} · Verified students only</div>
         <div className="hero" style={{ marginTop: "6px", marginBottom: "22px" }}>
           <div>
             <h1>Emergency Contact Setup</h1>
@@ -730,6 +736,18 @@ export default function SOSSetupPage() {
         </div>
 
       </main>
+
+      <footer>
+        <div className="wrap">
+          <span>UniShare. Made for university students in Bangladesh.</span>
+          <div>
+            <Link href="#">Privacy</Link>
+            <Link href="#">Terms</Link>
+            <Link href="#">Get help</Link>
+            <Link href="/settings">Settings</Link>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

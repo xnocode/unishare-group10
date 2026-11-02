@@ -1,5 +1,4 @@
 /* UniShare Campus Home Dashboard */
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
 
 .unishare-campus-home {
   --ink: #161b1a;
@@ -15,7 +14,7 @@
   --img-chg: url(/images/landing/laptop-charger.jpeg);
   --img-pods: url(/images/landing/airpods.jpeg);
 
-  font-family: "DM Sans", system-ui, -apple-system, sans-serif;
+  font-family: "DM Sans", var(--font-dm-sans), system-ui, -apple-system, sans-serif;
   color: var(--ink);
   background: #ffffff;
   line-height: 1.45;
@@ -57,6 +56,24 @@
 }
 
 /* Hero */
+.unishare-campus-home .crumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.unishare-campus-home .crumbs a:hover {
+  color: var(--teal);
+  text-decoration: underline;
+}
+
+.unishare-campus-home .crumbs .current {
+  color: var(--ink);
+  font-weight: 500;
+}
+
 .unishare-campus-home .eyebrow {
   font-size: 11px;
   font-weight: 700;
@@ -754,9 +771,9 @@
 
 /* Footer */
 .unishare-campus-home footer {
-  border-top: 1px solid var(--line);
-  padding: 22px 0 max(22px, env(safe-area-inset-bottom, 0px));
-  font-size: 12.5px;
+  border-top: 1px solid var(--hair);
+  padding: 20px 0 max(20px, env(safe-area-inset-bottom, 0px));
+  font-size: 12px;
   color: var(--muted);
   margin-top: auto;
 }
@@ -770,13 +787,14 @@
 
 .unishare-campus-home footer a {
   font-weight: 600;
-  color: var(--ink);
-  margin-left: 20px;
+  color: var(--muted);
+  margin-left: 18px;
   transition: color 0.15s;
 }
 
 .unishare-campus-home footer a:hover {
   color: var(--teal);
+  text-decoration: underline;
 }
 
 /* Toast */

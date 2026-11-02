@@ -328,7 +328,7 @@ export default function WalletPage() {
           style={{
             maxWidth: "1000px",
             width: "100%",
-            margin: "28px auto",
+            margin: "24px auto",
             padding: "0 24px",
           }}
         >
@@ -337,7 +337,7 @@ export default function WalletPage() {
               height: "36px",
               width: "260px",
               borderRadius: "8px",
-              background: "#f3f7f6",
+              background: "#f5f7f6",
               marginBottom: "18px",
             }}
           />
@@ -351,16 +351,16 @@ export default function WalletPage() {
             <div
               style={{
                 height: "220px",
-                borderRadius: "18px",
-                background: "#e5efec",
+                borderRadius: "12px",
+                background: "#e9f2ef",
               }}
             />
             <div
               style={{
                 height: "220px",
-                borderRadius: "18px",
-                background: "#f3f7f6",
-                border: "1px solid #cfe0dc",
+                borderRadius: "12px",
+                background: "#f5f7f6",
+                border: "1px solid #d5dcda",
               }}
             />
           </div>
@@ -383,13 +383,13 @@ export default function WalletPage() {
       {/* Main Content */}
       <main className="wrap">
         {/* Breadcrumb */}
-        <div className="crumb">
+        <nav className="crumb" aria-label="Breadcrumb">
           <Link href="/home">Home</Link>
           <span>›</span>
           <span className="current">Wallet</span>
-        </div>
+        </nav>
 
-        <div className="eyebrow">Campus Wallet · {resolvedUser.university}</div>
+        <div className="eyebrow">{resolvedUser.university} · Verified students only</div>
 
         {/* Top Title & Balance Badge */}
         <div className="top">

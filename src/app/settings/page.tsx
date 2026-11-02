@@ -358,7 +358,7 @@ export default function SettingsPage() {
         <nav className="crumbs" aria-label="Breadcrumb">
           <Link href="/home">Home</Link>
           <span aria-hidden="true">›</span>
-          <span>Settings</span>
+          <span className="current">Settings</span>
         </nav>
 
         <div className="eyebrow">Account & Preferences</div>

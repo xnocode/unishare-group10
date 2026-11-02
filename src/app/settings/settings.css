@@ -65,6 +65,12 @@
 
 .unishare-settings .crumbs a:hover {
   color: var(--teal);
+  text-decoration: underline;
+}
+
+.unishare-settings .crumbs .current {
+  color: var(--ink);
+  font-weight: 500;
 }
 
 .unishare-settings .eyebrow {

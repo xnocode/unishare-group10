@@ -73,6 +73,10 @@
   width: 100%;
 }
 
+.unishare-wallet main.wrap {
+  padding: 24px 24px 40px;
+}
+
 /* Breadcrumb */
 .unishare-wallet .crumb {
   display: flex;
@@ -80,7 +84,7 @@
   align-items: center;
   font-size: 13px;
   color: var(--muted);
-  margin: 24px 0 0;
+  margin: 0;
 }
 
 .unishare-wallet .crumb a:hover {
