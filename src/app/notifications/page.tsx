@@ -258,11 +258,11 @@ export default function NotificationsPage() {
 
       {/* Main Content */}
       <main>
-        <div className="crumbs">
+        <nav className="crumbs" aria-label="Breadcrumb">
           <Link href="/home">Home</Link>
           <span>›</span>
-          <span>Notifications</span>
-        </div>
+          <span className="current">Notifications</span>
+        </nav>
 
         <div className="eyebrow">{resolvedUser.university} · Verified students only</div>
 

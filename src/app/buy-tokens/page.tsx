@@ -110,12 +110,12 @@ export default function BuyTokensPage() {
     return (
       <div className="unishare-buy-tokens" style={{ minHeight: "100vh", background: "#ffffff" }}>
         <AppNavbar activeNav="wallet" />
-        <main style={{ maxWidth: "1170px", width: "100%", margin: "26px auto", padding: "0 40px" }}>
-          <div style={{ height: "38px", width: "240px", borderRadius: "8px", background: "#f3f8f6", marginBottom: "18px" }} />
+        <main style={{ maxWidth: "1000px", width: "100%", margin: "24px auto", padding: "0 24px" }}>
+          <div style={{ height: "38px", width: "240px", borderRadius: "8px", background: "#f5f7f6", marginBottom: "18px" }} />
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "18px" }}>
-            <div style={{ height: "260px", borderRadius: "14px", background: "#e4efec" }} />
-            <div style={{ height: "260px", borderRadius: "14px", background: "#f3f8f6", border: "1px solid #d9e1df" }} />
-            <div style={{ height: "260px", borderRadius: "14px", background: "#f3f8f6", border: "1px solid #d9e1df" }} />
+            <div style={{ height: "260px", borderRadius: "12px", background: "#e9f2ef" }} />
+            <div style={{ height: "260px", borderRadius: "12px", background: "#f5f7f6", border: "1px solid #d5dcda" }} />
+            <div style={{ height: "260px", borderRadius: "12px", background: "#f5f7f6", border: "1px solid #d5dcda" }} />
           </div>
         </main>
       </div>
@@ -136,37 +136,15 @@ export default function BuyTokensPage() {
       {/* Main Content */}
       <main>
         {/* Breadcrumbs */}
-        <div className="crumbs">
+        <nav className="crumbs" aria-label="Breadcrumb">
           <Link href="/home">Home</Link>
-          <svg
-            width="8"
-            height="8"
-            viewBox="0 0 10 10"
-            fill="none"
-            stroke="#0b5d5b"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M3.5 2l3 3-3 3" />
-          </svg>
-          <Link href="/wallet" className="t">
-            Wallet
-          </Link>
-          <svg
-            width="8"
-            height="8"
-            viewBox="0 0 10 10"
-            fill="none"
-            stroke="#0b5d5b"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M3.5 2l3 3-3 3" />
-          </svg>
+          <span>›</span>
+          <Link href="/wallet">Wallet</Link>
+          <span>›</span>
           <span className="cur">Token packages</span>
-        </div>
+        </nav>
+
+        <div className="eyebrow">{resolvedUser.university} · Verified students only</div>
 
         {/* Title Row */}
         <div className="title-row">

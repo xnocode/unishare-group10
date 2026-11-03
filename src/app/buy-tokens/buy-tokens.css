@@ -1,18 +1,18 @@
 /* UniShare Token Packages / Buy Tokens Styles */
 
 .unishare-buy-tokens {
-  --teal: #0b5d5b;
-  --teal-soft: #e4efec;
-  --teal-faint: #f3f8f6;
-  --ink: #14211f;
-  --muted: #4b5a57;
-  --line: #d9e1df;
+  --teal: #0d6b63;
+  --teal-soft: #e9f2ef;
+  --teal-faint: #f5f7f6;
+  --ink: #161b1a;
+  --muted: #4b5553;
+  --line: #d5dcda;
   --bg: #ffffff;
 
-  font-family: 'Hanken Grotesk', 'DM Sans', 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: "DM Sans", var(--font-dm-sans), system-ui, -apple-system, sans-serif;
   color: var(--ink);
   background: var(--bg);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.45;
   min-height: 100vh;
   display: flex;
@@ -43,16 +43,16 @@
 .unishare-buy-tokens h2,
 .unishare-buy-tokens h3,
 .unishare-buy-tokens .display {
-  font-family: 'Schibsted Grotesk', 'Hanken Grotesk', system-ui, sans-serif;
+  font-family: "Bricolage Grotesque", var(--font-bricolage), "DM Sans", system-ui, sans-serif;
 }
 
 /* Main Container */
 .unishare-buy-tokens main {
   flex: 1;
   width: 100%;
-  max-width: 1170px;
+  max-width: 1000px;
   margin: 0 auto;
-  padding: 26px 40px 48px;
+  padding: 24px 24px 56px;
 }
 
 /* Breadcrumbs */
@@ -60,96 +60,103 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
-  color: #2a3836;
-}
-
-.unishare-buy-tokens .crumbs svg {
-  width: 8px;
-  height: 8px;
-}
-
-.unishare-buy-tokens .crumbs .cur {
+  font-size: 13px;
   color: var(--muted);
 }
 
-.unishare-buy-tokens .crumbs a.t {
-  color: var(--teal);
+.unishare-buy-tokens .crumbs .cur {
+  color: var(--ink);
   font-weight: 500;
 }
 
 .unishare-buy-tokens .crumbs a:hover {
+  color: var(--teal);
   text-decoration: underline;
+}
+
+.unishare-buy-tokens .eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--teal);
+  text-transform: uppercase;
+  margin-top: 24px;
 }
 
 /* Title row */
 .unishare-buy-tokens .title-row {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-top: 14px;
+  align-items: flex-end;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-top: 6px;
 }
 
 .unishare-buy-tokens h1 {
-  font-size: 32px;
+  font-size: 34px;
   line-height: 1.1;
   font-weight: 700;
-  letter-spacing: -0.4px;
+  letter-spacing: -0.02em;
   color: var(--ink);
 }
 
 .unishare-buy-tokens .sub-title {
-  font-size: 13.5px;
-  color: #2a3836;
-  margin-top: 8px;
+  font-size: 14px;
+  color: var(--muted);
+  margin-top: 6px;
 }
 
 .unishare-buy-tokens .pill {
   background: var(--teal-soft);
+  border: 1.5px solid var(--teal);
   color: var(--teal);
-  font-weight: 600;
-  font-size: 11px;
-  padding: 4px 12px;
+  font-weight: 700;
+  font-size: 12.5px;
+  padding: 7px 14px;
   border-radius: 999px;
-  margin-top: 6px;
+  white-space: nowrap;
 }
 
 /* Campus Banner */
 .unishare-buy-tokens .campus {
-  margin-top: 16px;
+  margin-top: 22px;
   background: var(--teal-soft);
-  border-radius: 8px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px 0 20px;
-  height: 48px;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 14px 18px;
 }
 
 .unishare-buy-tokens .campus .l {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 12px;
+  gap: 10px;
+  font-size: 13px;
   color: var(--muted);
 }
 
 .unishare-buy-tokens .campus .l svg {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   color: var(--teal);
+  flex-shrink: 0;
 }
 
 .unishare-buy-tokens .campus .l b {
-  color: var(--teal);
-  font-weight: 600;
-  font-size: 12.5px;
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 13.5px;
 }
 
 .unishare-buy-tokens .campus .r {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--teal);
+  white-space: nowrap;
 }
 
 /* Stepper */
@@ -524,20 +531,22 @@
 
 /* Footer */
 .unishare-buy-tokens footer {
-  border-top: 2px solid var(--ink);
+  border-top: 1px solid var(--line);
   background: #ffffff;
   margin-top: auto;
+  padding: 20px 0;
 }
 
 .unishare-buy-tokens .foot {
-  max-width: 1170px;
+  max-width: 1000px;
   margin: 0 auto;
-  padding: 0 40px;
-  height: 48px;
+  padding: 0 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 11.5px;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 12px;
   color: var(--muted);
 }
 
@@ -547,12 +556,13 @@
 }
 
 .unishare-buy-tokens .foot nav a {
-  color: var(--teal);
+  color: var(--muted);
   font-weight: 600;
-  transition: opacity 0.15s;
+  transition: color 0.15s;
 }
 
 .unishare-buy-tokens .foot nav a:hover {
+  color: var(--teal);
   text-decoration: underline;
 }
 

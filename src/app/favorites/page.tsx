@@ -161,7 +161,7 @@ export default function FavoritesPage() {
   }
 
   return (
-    <div className="unishare-favorites-page unishare-marketplace">
+    <div className="unishare-favorites-page">
       <AppNavbar
         activeNav="favorites"
         user={{ tokenBalance: walletBalance }}
@@ -172,27 +172,17 @@ export default function FavoritesPage() {
       {/* Main Content Area */}
       <main className="wrap">
         {/* Breadcrumb Navigation */}
-        <nav className="crumb" aria-label="Breadcrumb" style={{ marginTop: 14 }}>
+        <nav className="crumb" aria-label="Breadcrumb">
           <Link href="/home">Home</Link>
-          <span style={{ margin: "0 4px" }}>›</span>
+          <span>›</span>
           <Link href="/marketplace">Marketplace</Link>
-          <span style={{ margin: "0 4px" }}>›</span>
-          <span style={{ color: "var(--ink)" }}>Favorites</span>
+          <span>›</span>
+          <span className="current">Favorites</span>
         </nav>
 
         {/* Eyebrow */}
-        <div className="eyebrow" style={{ marginTop: 14 }}>
+        <div className="eyebrow">
           {resolvedUser.university} · Verified students only
-        </div>
-
-        {/* Back Link */}
-        <div style={{ marginTop: 12 }}>
-          <Link href="/marketplace" className="fav-back-link">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M19 12H5M12 19l-7-7 7-7" />
-            </svg>
-            <span>Back to Marketplace</span>
-          </Link>
         </div>
 
         {/* Title Header */}
@@ -203,7 +193,7 @@ export default function FavoritesPage() {
               Bookmarked campus essentials you plan to borrow. Review rental rates, check pickup locations, and confirm token readiness with your wallet.
             </p>
           </div>
-          <span className="pill" style={{ height: "fit-content", padding: "8px 16px" }}>
+          <span className="pill">
             {favoriteItems.length} {favoriteItems.length === 1 ? "saved item" : "saved items"}
           </span>
         </div>
