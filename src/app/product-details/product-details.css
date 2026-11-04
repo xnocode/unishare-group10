@@ -1,35 +1,69 @@
 /* UniShare Product Details Styles */
 
 .product-detail-page {
+  --bg: #ffffff;
+  --brand: #0d6b63;
+  --brand-hover: #09524c;
+  --ink: #161b1a;
+  --muted: #4b5553;
+  --tint: #e9f2ef;
+  --line: #d5dcda;
+  --hair: #d5dcda;
+  --field: #f5f7f6;
+  --faint: #6c7775;
+
   min-height: 100vh;
-  background-color: var(--bg, #fafcfb);
-  color: var(--ink, #12201f);
-  font-family: var(--font-dm-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
-  padding-bottom: 70px;
+  background-color: var(--bg);
+  color: var(--ink);
+  font-family: "DM Sans", var(--font-dm-sans), system-ui, -apple-system, sans-serif;
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .product-detail-page * {
   box-sizing: border-box;
 }
 
-/* Header & Breadcrumb */
-.pd-back-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--brand, #0B5D5E);
+.product-detail-page a {
+  color: inherit;
   text-decoration: none;
-  margin-bottom: 14px;
-  padding: 6px 12px;
-  border-radius: 6px;
-  background: var(--tint, #e6f0ef);
-  transition: all 0.15s ease;
 }
 
-.pd-back-link:hover {
-  background: var(--tint-hover, #d2e4e2);
+.product-detail-page main.wrap {
+  max-width: 1000px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 24px 24px 56px;
+  flex: 1;
+}
+
+.product-detail-page .crumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.product-detail-page .crumb a:hover {
+  color: var(--brand);
+  text-decoration: underline;
+}
+
+.product-detail-page .crumb .current {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.product-detail-page .eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--brand);
+  text-transform: uppercase;
+  margin-top: 24px;
 }
 
 /* Main Layout Grid */
@@ -115,13 +149,13 @@
 }
 
 .pd-title {
-  font-family: var(--font-bricolage, serif);
+  font-family: "Bricolage Grotesque", var(--font-bricolage), "DM Sans", sans-serif;
   font-size: 32px;
-  font-weight: 800;
-  line-height: 1.2;
-  color: var(--ink, #12201f);
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--ink);
   margin: 0 0 12px 0;
-  letter-spacing: -0.5px;
+  letter-spacing: -0.02em;
 }
 
 @media (max-width: 600px) {
@@ -431,12 +465,12 @@
 /* Action Buttons */
 .pd-borrow-btn {
   width: 100%;
-  height: 48px;
-  background: var(--brand, #0B5D5E);
+  height: 46px;
+  background: var(--brand);
   color: #ffffff;
-  border: 1.5px solid var(--brand, #0B5D5E);
-  border-radius: var(--radius-sm, 8px);
-  font-size: 15px;
+  border: 1.5px solid var(--brand);
+  border-radius: 8px;
+  font-size: 14.5px;
   font-weight: 700;
   cursor: pointer;
   display: flex;
@@ -444,14 +478,13 @@
   justify-content: center;
   gap: 8px;
   margin-bottom: 12px;
-  box-shadow: 2px 2px 0 var(--ink, #12201f);
-  transition: all 0.15s ease;
+  box-shadow: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .pd-borrow-btn:hover {
-  background: var(--brand-hover, #084546);
-  transform: translateY(-1px);
-  box-shadow: 3px 3px 0 var(--ink, #12201f);
+  background: var(--brand-hover);
+  border-color: var(--brand-hover);
 }
 
 .pd-fav-toggle-btn {
@@ -527,6 +560,61 @@
   margin: 0;
   font-size: 13px;
   color: var(--ink, #12201f);
+}
+
+.product-detail-page footer {
+  border-top: 1px solid var(--hair);
+  padding: 20px 0;
+  font-size: 12px;
+  color: var(--muted);
+  background: #ffffff;
+  margin-top: auto;
+}
+
+.product-detail-page footer .wrap {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.product-detail-page footer a,
+.product-detail-page footer button {
+  color: var(--muted);
+  font-weight: 600;
+  margin-left: 18px;
+}
+
+.product-detail-page footer a:hover,
+.product-detail-page footer button:hover {
+  color: var(--brand);
+  text-decoration: underline;
+}
+
+.product-detail-page .toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--ink);
+  color: #ffffff;
+  font-size: 13px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s, transform 0.25s;
+  z-index: 50;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.product-detail-page .toast.on {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 
 @keyframes fadeIn {

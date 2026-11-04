@@ -1,10 +1,47 @@
 'use strict';
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+
+function toLocalIsoDate(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+const emptySubscribe = () => () => {};
+let cachedTodayIso = '';
+function getClientTodayIso(): string {
+  const next = toLocalIsoDate(new Date());
+  if (next !== cachedTodayIso) cachedTodayIso = next;
+  return cachedTodayIso;
+}
+
+function addDaysIso(baseIso: string, offsetDays: number): string {
+  const base = new Date(`${baseIso}T00:00:00`);
+  base.setDate(base.getDate() + offsetDays);
+  return toLocalIsoDate(base);
+}
+
+function calcRentalDays(startIso: string, endIso: string): number {
+  if (!startIso) return 1;
+  const start = new Date(`${startIso}T00:00:00`).getTime();
+  const end = new Date(`${(endIso || startIso)}T00:00:00`).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return 1;
+  return Math.max(1, Math.round((end - start) / 86400000) + 1);
+}
+
+function formatShortDate(iso: string): string {
+  if (!iso) return '';
+  return new Date(`${iso}T00:00:00`).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+  });
+}
 import {
   DEFAULT_ITEMS,
   CATEGORIES,
@@ -30,14 +67,45 @@ export default function MarketplacePage() {
   const authChecked = useIsHydrated();
 
   // Marketplace State
-  const [selectedTab, setSelectedTab] = useState<'all' | 'fav' | 'recent' | 'you'>('all');
+  const [selectedTab, setSelectedTab] = useState<'all' | 'fav' | 'recent' | 'you' | 'mine'>('all');
   const [selectedCategory, setSelectedCategory] = useState('All items');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedArea, setSelectedArea] = useState('');
   const [selectedPriceMax, setSelectedPriceMax] = useState('');
   const [selectedAvailability, setSelectedAvailability] = useState('now');
   const [selectedSort, setSelectedSort] = useState('rec');
-  const [rentalDate, setRentalDate] = useState('');
+  const [rentalStartDate, setRentalStartDate] = useState('');
+  const [rentalEndDate, setRentalEndDate] = useState('');
+  const [showDatePopover, setShowDatePopover] = useState(false);
+  const dateFilterRef = useRef<HTMLDivElement>(null);
+
+  const todayIso = useSyncExternalStore(
+    emptySubscribe,
+    getClientTodayIso,
+    () => ''
+  );
+  const effectiveTodayIso = todayIso || undefined;
+  const rentalDaysCount = rentalStartDate
+    ? calcRentalDays(rentalStartDate, rentalEndDate || rentalStartDate)
+    : null;
+
+  useEffect(() => {
+    if (!showDatePopover) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      if (dateFilterRef.current && !dateFilterRef.current.contains(event.target as Node)) {
+        setShowDatePopover(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setShowDatePopover(false);
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showDatePopover]);
 
   const favoritesKey = getUserScopedKey(
     'unishare_favorites',
@@ -99,18 +167,9 @@ export default function MarketplacePage() {
     return resolvedUser.tokenBalance;
   }, [rawWalletJson, resolvedUser.tokenBalance]);
 
-  // Modals & Toast State
-  const [showListItemModal, setShowListItemModal] = useState(false);
+  // Toast State
   const [toastMessage, setToastMessage] = useState('');
   const [toastVisible, setToastVisible] = useState(false);
-
-  // New Listing Form State
-  const [newItemName, setNewItemName] = useState('');
-  const [newItemCategory, setNewItemCategory] = useState('Calculators');
-  const [newItemPrice, setNewItemPrice] = useState(30);
-  const [newItemDeposit, setNewItemDeposit] = useState(80);
-  const [newItemArea, setNewItemArea] = useState('TSC');
-  const [newItemDesc, setNewItemDesc] = useState('');
 
   // Toast Helper
   const showToast = (msg: string) => {
@@ -150,34 +209,12 @@ export default function MarketplacePage() {
   const handleOpenItem = (item: MarketplaceItem) => {
     const updated = [item.name, ...recentlyViewed.filter((n) => n !== item.name)].slice(0, 10);
     writeUserScopedJson(recentKey, updated);
-    router.push(`/product-details/${item.id}`);
-  };
-
-  // Submit New Listing
-  const handleCreateListing = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newItemName.trim()) return;
-
-    const newItem: MarketplaceItem = {
-      id: Date.now().toString(),
-      name: newItemName.trim(),
-      category: newItemCategory,
-      price: Number(newItemPrice) || 20,
-      deposit: Number(newItemDeposit) || 50,
-      area: newItemArea,
-      owner: resolvedUser.name,
-      initials: resolvedUser.initials,
-      image: '/images/landing/calculator.jpeg',
-      available: true,
-      description: newItemDesc.trim() || `Listed by verified ${resolvedUser.university} student.`,
-    };
-
-    const updated = [newItem, ...items];
-    writeUserScopedJson('unishare_marketplace_items', updated);
-    setShowListItemModal(false);
-    setNewItemName('');
-    setNewItemDesc('');
-    showToast(`"${newItem.name}" added to campus shelf!`);
+    const params = new URLSearchParams();
+    if (rentalDaysCount) params.set('days', String(rentalDaysCount));
+    if (rentalStartDate) params.set('from', rentalStartDate);
+    if (rentalEndDate || rentalStartDate) params.set('to', rentalEndDate || rentalStartDate);
+    const qs = params.toString();
+    router.push(`/product-details/${item.id}${qs ? `?${qs}` : ''}`);
   };
 
   // Filter and Sort Items
@@ -188,6 +225,13 @@ export default function MarketplacePage() {
       // Tab filter
       if (selectedTab === 'fav' && !favorites[x.name]) return false;
       if (selectedTab === 'recent' && !recentlyViewed.includes(x.name)) return false;
+      if (
+        selectedTab === 'mine' &&
+        x.ownerEmail !== resolvedUser.email &&
+        x.owner !== resolvedUser.name
+      ) {
+        return false;
+      }
 
       // Category filter
       if (selectedCategory !== 'All items' && x.category !== selectedCategory) return false;
@@ -197,6 +241,12 @@ export default function MarketplacePage() {
 
       // Price filter
       if (selectedPriceMax && x.price > Number(selectedPriceMax)) return false;
+
+      // Availability filter
+      if (selectedAvailability === 'now' && !x.available) return false;
+
+      // Rental date duration filter
+      if (rentalDaysCount && x.maxRentalDays && rentalDaysCount > x.maxRentalDays) return false;
 
       // Search query
       if (q) {
@@ -227,10 +277,14 @@ export default function MarketplacePage() {
     selectedCategory,
     selectedArea,
     selectedPriceMax,
+    selectedAvailability,
+    rentalDaysCount,
     selectedSort,
     selectedTab,
     favorites,
     recentlyViewed,
+    resolvedUser.email,
+    resolvedUser.name,
   ]);
 
   // Auth Gate: Shown if user has not logged in
@@ -295,10 +349,8 @@ export default function MarketplacePage() {
         {/* Breadcrumb Navigation */}
         <nav className="crumb" aria-label="Breadcrumb">
           <Link href="/home">Home</Link>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <path d="M9 18l6-6-6-6" />
-          </svg>
-          <span style={{ fontWeight: 600, color: 'var(--ink)' }}>Marketplace</span>
+          <span>›</span>
+          <span className="current">Marketplace</span>
         </nav>
 
         {/* Hero Section */}
@@ -308,9 +360,14 @@ export default function MarketplacePage() {
             <h1>Your campus, one shared shelf.</h1>
             <p className="hero-sub">Borrow what you need. Lend what you have. All from verified {resolvedUser.university} students.</p>
           </div>
-          <button className="btn" onClick={() => setShowListItemModal(true)}>
-            List an item
-          </button>
+          <div className="hero-actions">
+            <Link href="/my-products" className="btn outline">
+              My listings
+            </Link>
+            <Link href="/marketplace/list" className="btn">
+              List an item
+            </Link>
+          </div>
         </div>
 
         {/* Campus Verification Trust Banner */}
@@ -358,6 +415,23 @@ export default function MarketplacePage() {
               onClick={() => setSelectedTab('you')}
             >
               For you
+            </button>
+            <button
+              className={`shelf-tab ${selectedTab === 'mine' ? 'on' : ''}`}
+              onClick={() => setSelectedTab('mine')}
+            >
+              My listings
+              {items.filter(
+                (x) => x.ownerEmail === resolvedUser.email || x.owner === resolvedUser.name
+              ).length > 0 && (
+                <span className="tab-badge">
+                  {
+                    items.filter(
+                      (x) => x.ownerEmail === resolvedUser.email || x.owner === resolvedUser.name
+                    ).length
+                  }
+                </span>
+              )}
             </button>
           </div>
 
@@ -412,29 +486,164 @@ export default function MarketplacePage() {
               </i>
             </label>
 
-            {/* Rental Dates Datepicker */}
-            <label className="date-picker-wrap">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="8.5" />
-                <path d="M12 7.5V12l3 2" />
-              </svg>
-              <span>
-                {rentalDate
-                  ? new Date(rentalDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-                  : 'Rental dates'}
-              </span>
-              <input
-                type="date"
-                value={rentalDate}
-                onChange={(e) => {
-                  setRentalDate(e.target.value);
-                  if (e.target.value) {
-                    showToast(`Selected date: ${e.target.value}`);
-                  }
-                }}
-                aria-label="Rental date"
-              />
-            </label>
+            {/* Rental Dates Popover Picker */}
+            <div className="date-filter-wrap" ref={dateFilterRef}>
+              <button
+                type="button"
+                className={`date-picker-wrap ${rentalStartDate ? 'on' : ''}`}
+                aria-expanded={showDatePopover}
+                aria-label="Rental dates"
+                onClick={() => setShowDatePopover((prev) => !prev)}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="4" width="18" height="18" rx="2" />
+                  <path d="M16 2v4M8 2v4M3 10h18" />
+                </svg>
+                <span>
+                  {rentalStartDate
+                    ? rentalEndDate && rentalEndDate !== rentalStartDate
+                      ? `${formatShortDate(rentalStartDate)} – ${formatShortDate(rentalEndDate)} (${rentalDaysCount}d)`
+                      : `${formatShortDate(rentalStartDate)} (1d)`
+                    : 'Rental dates'}
+                </span>
+              </button>
+              {rentalStartDate && (
+                <button
+                  type="button"
+                  className="date-clear-btn"
+                  aria-label="Clear rental dates"
+                  title="Clear rental dates"
+                  onClick={() => {
+                    setRentalStartDate('');
+                    setRentalEndDate('');
+                    setShowDatePopover(false);
+                  }}
+                >
+                  ×
+                </button>
+              )}
+
+              {showDatePopover && (
+                <div className="date-popover" role="dialog" aria-label="Select rental dates">
+                  <div className="date-popover-title">Select rental dates</div>
+                  <div className="date-presets">
+                    <button
+                      type="button"
+                      className="date-preset-chip"
+                      onClick={() => {
+                        const base = todayIso || getClientTodayIso();
+                        setRentalStartDate(base);
+                        setRentalEndDate(base);
+                        setShowDatePopover(false);
+                      }}
+                    >
+                      Today (1d)
+                    </button>
+                    <button
+                      type="button"
+                      className="date-preset-chip"
+                      onClick={() => {
+                        const base = todayIso || getClientTodayIso();
+                        const tmrw = addDaysIso(base, 1);
+                        setRentalStartDate(tmrw);
+                        setRentalEndDate(tmrw);
+                        setShowDatePopover(false);
+                      }}
+                    >
+                      Tomorrow
+                    </button>
+                    <button
+                      type="button"
+                      className="date-preset-chip"
+                      onClick={() => {
+                        const base = todayIso || getClientTodayIso();
+                        setRentalStartDate(base);
+                        setRentalEndDate(addDaysIso(base, 2));
+                        setShowDatePopover(false);
+                      }}
+                    >
+                      Next 3 days
+                    </button>
+                    <button
+                      type="button"
+                      className="date-preset-chip"
+                      onClick={() => {
+                        const base = todayIso || getClientTodayIso();
+                        setRentalStartDate(base);
+                        setRentalEndDate(addDaysIso(base, 6));
+                        setShowDatePopover(false);
+                      }}
+                    >
+                      Next 7 days
+                    </button>
+                  </div>
+
+                  <div className="date-inputs-grid">
+                    <div className="date-field">
+                      <label htmlFor="mp-rental-start">Start date</label>
+                      <input
+                        id="mp-rental-start"
+                        type="date"
+                        min={effectiveTodayIso}
+                        value={rentalStartDate}
+                        onChange={(e) => {
+                          const nextStart = e.target.value;
+                          setRentalStartDate(nextStart);
+                          if (!nextStart) {
+                            setRentalEndDate('');
+                          } else if (!rentalEndDate || rentalEndDate < nextStart) {
+                            setRentalEndDate(nextStart);
+                          }
+                        }}
+                      />
+                    </div>
+                    <div className="date-field">
+                      <label htmlFor="mp-rental-end">Return date</label>
+                      <input
+                        id="mp-rental-end"
+                        type="date"
+                        min={rentalStartDate || effectiveTodayIso}
+                        value={rentalEndDate || rentalStartDate}
+                        onChange={(e) => {
+                          const nextEnd = e.target.value;
+                          if (!rentalStartDate && nextEnd) {
+                            setRentalStartDate(nextEnd);
+                          }
+                          setRentalEndDate(nextEnd);
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {rentalStartDate && (
+                    <div className="date-popover-summary">
+                      {rentalDaysCount} {rentalDaysCount === 1 ? 'day' : 'days'} selected · Showing items supporting {rentalDaysCount}+ {rentalDaysCount === 1 ? 'day' : 'days'}
+                    </div>
+                  )}
+
+                  <div className="date-popover-actions">
+                    <button
+                      type="button"
+                      className="btn outline"
+                      onClick={() => {
+                        setRentalStartDate('');
+                        setRentalEndDate('');
+                        setShowDatePopover(false);
+                      }}
+                    >
+                      Clear
+                    </button>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => setShowDatePopover(false)}
+                    >
+                      Apply
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Price Per Day */}
             <label className="filter-select-wrap">
@@ -535,8 +744,15 @@ export default function MarketplacePage() {
                     fill
                     sizes="(max-width: 600px) 100vw, (max-width: 900px) 50vw, 360px"
                     style={{ objectFit: 'cover' }}
+                    unoptimized={item.image.startsWith('data:')}
                   />
-                  <span className="avail-pill">Available today</span>
+                  <span className="avail-pill">
+                    {rentalStartDate
+                      ? rentalEndDate && rentalEndDate !== rentalStartDate
+                        ? `Free ${formatShortDate(rentalStartDate)}–${formatShortDate(rentalEndDate)}`
+                        : `Free ${formatShortDate(rentalStartDate)}`
+                      : 'Available today'}
+                  </span>
                   <button
                     type="button"
                     className={`fav-btn ${favorites[item.name] ? 'on' : ''}`}
@@ -560,7 +776,11 @@ export default function MarketplacePage() {
                     <span>tokens / day</span>
                   </div>
 
-                  <div className="dep-text">{item.deposit} tokens refundable deposit</div>
+                  <div className="dep-text">
+                    {rentalDaysCount
+                      ? `${rentalDaysCount}d est: ${item.price * rentalDaysCount} tokens · ${item.deposit} deposit`
+                      : `${item.deposit} tokens refundable deposit${item.maxRentalDays ? ` · Max ${item.maxRentalDays}d` : ''}`}
+                  </div>
 
                   <div className="loc-badge">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -594,11 +814,20 @@ export default function MarketplacePage() {
             ))
           ) : (
             <div className="empty-state">
-              {selectedTab === 'fav'
-                ? 'No favorites yet. Tap the heart on any item to save it here.'
-                : selectedTab === 'recent'
-                ? 'Nothing viewed yet. Items you open will show up here.'
-                : 'No items match your active filters. Try another category or clear your search query.'}
+              {selectedTab === 'fav' ? (
+                'No favorites yet. Tap the heart on any item to save it here.'
+              ) : selectedTab === 'recent' ? (
+                'Nothing viewed yet. Items you open will show up here.'
+              ) : selectedTab === 'mine' ? (
+                <span>
+                  You haven&apos;t published an item yet.{' '}
+                  <Link href="/marketplace/list" style={{ color: 'var(--brand)', fontWeight: 700, textDecoration: 'underline' }}>
+                    List your first item →
+                  </Link>
+                </span>
+              ) : (
+                'No items match your active filters. Try another category, date range, or clear your search query.'
+              )}
             </div>
           )}
         </div>
@@ -608,7 +837,14 @@ export default function MarketplacePage() {
           <h3>A little borrowing goes a long way.</h3>
           <p>
             Choose your dates, send a request, then meet the owner in a public campus spot. Check the item
-            together and confirm the return to release your deposit.
+            together and confirm the return to release your deposit. Want to earn tokens from gear you already own?{' '}
+            <Link href="/marketplace/list" style={{ color: 'var(--brand)', fontWeight: 700, textDecoration: 'underline' }}>
+              List an item
+            </Link>{' '}
+            or{' '}
+            <Link href="/my-products" style={{ color: 'var(--brand)', fontWeight: 700, textDecoration: 'underline' }}>
+              manage your listings in My Products →
+            </Link>
           </p>
         </div>
       </main>
@@ -631,116 +867,6 @@ export default function MarketplacePage() {
           </span>
         </div>
       </footer>
-
-      {/* "List an item" Modal */}
-      {showListItemModal && (
-        <div className="unishare-modal-overlay" onClick={() => setShowListItemModal(false)}>
-          <div className="unishare-modal-card" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              className="close-btn"
-              onClick={() => setShowListItemModal(false)}
-              aria-label="Close"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-
-            <div className="kicker" style={{ marginTop: 0 }}>PEER-TO-PEER LENDING</div>
-            <h2>List an item for borrowing</h2>
-            <p className="modal-sub">Earn tokens by sharing your gadget, sports gear, or book with {resolvedUser.university} peers.</p>
-
-            <form onSubmit={handleCreateListing}>
-              <div className="form-group">
-                <label>Item Title</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Scientific calculator fx-991EX"
-                  value={newItemName}
-                  onChange={(e) => setNewItemName(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div className="form-group">
-                  <label>Category</label>
-                  <select
-                    value={newItemCategory}
-                    onChange={(e) => setNewItemCategory(e.target.value)}
-                  >
-                    {CATEGORIES.filter((c) => c !== 'All items').map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label>Pickup Spot</label>
-                  <select
-                    value={newItemArea}
-                    onChange={(e) => setNewItemArea(e.target.value)}
-                  >
-                    {PICKUP_AREAS.map((ar) => (
-                      <option key={ar} value={ar}>
-                        {ar}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div className="form-group">
-                  <label>Tokens / day</label>
-                  <input
-                    type="number"
-                    min="5"
-                    max="500"
-                    value={newItemPrice}
-                    onChange={(e) => setNewItemPrice(Number(e.target.value))}
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Refundable Deposit</label>
-                  <input
-                    type="number"
-                    min="10"
-                    max="1000"
-                    value={newItemDeposit}
-                    onChange={(e) => setNewItemDeposit(Number(e.target.value))}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label>Item Description & Notes</label>
-                <textarea
-                  rows={2}
-                  placeholder="Condition, included cables/accessories, preferred meetup time..."
-                  value={newItemDesc}
-                  onChange={(e) => setNewItemDesc(e.target.value)}
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="btn"
-                style={{ width: '100%', height: 46, fontSize: 15, marginTop: 8 }}
-              >
-                Publish to Campus Shelf
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Floating Toast Notification */}
       <div className={`toast-alert ${toastVisible ? 'show' : ''}`} role="status">

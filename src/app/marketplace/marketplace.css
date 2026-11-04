@@ -57,6 +57,10 @@
   padding: 0 24px;
 }
 
+.unishare-marketplace main.wrap {
+  padding: 24px 24px 40px;
+}
+
 /* ==========================================================================
    Breadcrumbs & Hero Section
    ========================================================================== */
@@ -66,7 +70,7 @@
   gap: 8px;
   font-size: 13px;
   color: var(--muted);
-  margin-top: 24px;
+  margin: 0;
 }
 
 .unishare-marketplace .crumb a {
@@ -79,8 +83,9 @@
   text-decoration: underline;
 }
 
-.unishare-marketplace .crumb svg {
-  color: var(--soft);
+.unishare-marketplace .crumb .current {
+  color: var(--ink);
+  font-weight: 500;
 }
 
 .unishare-marketplace .kicker {
@@ -100,6 +105,13 @@
   gap: 20px;
   flex-wrap: wrap;
   margin-top: 6px;
+}
+
+.unishare-marketplace .hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .unishare-marketplace h1 {
@@ -360,8 +372,14 @@
   right: 10px;
 }
 
+.unishare-marketplace .date-filter-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
 .unishare-marketplace .date-picker-wrap {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
   border: 1px solid var(--hair);
@@ -372,22 +390,136 @@
   font-weight: 600;
   cursor: pointer;
   background: #ffffff;
-  position: relative;
   color: var(--ink);
-  transition: border-color 0.15s ease;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
 }
 
-.unishare-marketplace .date-picker-wrap:hover {
+.unishare-marketplace .date-picker-wrap:hover,
+.unishare-marketplace .date-picker-wrap.on {
   border-color: var(--brand);
 }
 
-.unishare-marketplace .date-picker-wrap input[type='date'] {
+.unishare-marketplace .date-picker-wrap.on {
+  background: var(--tint);
+  color: var(--brand);
+}
+
+.unishare-marketplace .date-clear-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 0;
+  background: rgba(13, 107, 99, 0.14);
+  color: var(--brand);
+  font-size: 12px;
+  line-height: 1;
+  margin-left: 2px;
+}
+
+.unishare-marketplace .date-clear-btn:hover {
+  background: var(--brand);
+  color: #ffffff;
+}
+
+.unishare-marketplace .date-popover {
   position: absolute;
-  inset: 0;
-  opacity: 0;
-  cursor: pointer;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 40;
+  width: 316px;
+  max-width: calc(100vw - 48px);
+  background: #ffffff;
+  border: 1.5px solid var(--hair);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 14px 32px rgba(22, 27, 26, 0.14);
+}
+
+.unishare-marketplace .date-popover-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 10px;
+}
+
+.unishare-marketplace .date-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.unishare-marketplace .date-preset-chip {
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--ink);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 5px 10px;
+  transition: all 0.15s ease;
+}
+
+.unishare-marketplace .date-preset-chip:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+  background: var(--tint);
+}
+
+.unishare-marketplace .date-inputs-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.unishare-marketplace .date-field label {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.unishare-marketplace .date-field input[type='date'] {
   width: 100%;
-  height: 100%;
+  height: 36px;
+  border: 1px solid var(--hair);
+  border-radius: 8px;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink);
+  background: #ffffff;
+  outline: none;
+}
+
+.unishare-marketplace .date-field input[type='date']:focus {
+  border-color: var(--brand);
+}
+
+.unishare-marketplace .date-popover-summary {
+  margin-top: 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--tint);
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.unishare-marketplace .date-popover-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.unishare-marketplace .date-popover-actions .btn {
+  padding: 7px 14px;
+  font-size: 12.5px;
 }
 
 .unishare-marketplace .spacer-flex {

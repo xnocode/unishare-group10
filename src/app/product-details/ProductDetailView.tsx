@@ -1,9 +1,22 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+
+const emptySubscribe = () => () => {};
+function useInitialDaysParam(): number {
+  return useSyncExternalStore(
+    emptySubscribe,
+    () => {
+      const raw = new URLSearchParams(window.location.search).get('days');
+      const parsed = raw ? Number(raw) : NaN;
+      return Number.isFinite(parsed) && parsed >= 1 ? Math.min(30, Math.round(parsed)) : 1;
+    },
+    () => 1
+  );
+}
 import { DEFAULT_ITEMS, MarketplaceItem } from '../marketplace/marketplace-data';
 import AppNavbar from '../components/AppNavbar';
 import {
@@ -31,7 +44,9 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
   const authChecked = useIsHydrated();
 
   // Product & Interaction State
-  const [rentalDays, setRentalDays] = useState(1);
+  const initialDaysFromQuery = useInitialDaysParam();
+  const [customRentalDays, setCustomRentalDays] = useState<number | null>(null);
+  const rentalDays = customRentalDays ?? initialDaysFromQuery;
   const [borrowRequested, setBorrowRequested] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastVisible, setToastVisible] = useState(false);
@@ -55,6 +70,12 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
   const rawFavsJson = useLocalStorageRaw(favoritesKey);
   const rawWalletJson = useLocalStorageRaw(walletKey);
   const rawCustomItemsJson = useLocalStorageRaw('unishare_marketplace_items');
+  const myProductsKey = getUserScopedKey(
+    'unishare_my_products',
+    resolvedUser.email,
+    isDemoUser
+  );
+  const rawMyProductsJson = useLocalStorageRaw(myProductsKey);
 
   const favorites: Record<string, boolean> = useMemo(() => {
     if (!rawFavsJson) return {};
@@ -96,6 +117,44 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
     }
 
     if (targetId) {
+      if (rawMyProductsJson) {
+        try {
+          const mine = JSON.parse(rawMyProductsJson) as Array<{
+            id: string;
+            name: string;
+            category: string;
+            condition?: string;
+            rate: number;
+            deposit: number;
+            area?: string;
+            maxRentalDays?: number;
+            description?: string;
+            image: string;
+            state?: string;
+            note?: string;
+          }>;
+          const ownMatch = mine.find((it) => it.id === targetId);
+          if (ownMatch) {
+            return {
+              id: ownMatch.id,
+              name: ownMatch.name,
+              category: ownMatch.category,
+              price: ownMatch.rate,
+              deposit: ownMatch.deposit,
+              area: ownMatch.area || 'TSC',
+              owner: resolvedUser.name,
+              ownerEmail: resolvedUser.email,
+              initials: resolvedUser.initials,
+              image: ownMatch.image,
+              available: ownMatch.state !== 'paused',
+              condition: ownMatch.condition,
+              maxRentalDays: ownMatch.maxRentalDays,
+              description: ownMatch.description || ownMatch.note || `Listed by ${resolvedUser.name}.`,
+            };
+          }
+        } catch {}
+      }
+
       const direct = DEFAULT_ITEMS.find((it) => it.id === targetId);
       if (direct) return direct;
 
@@ -106,7 +165,7 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
     }
 
     return DEFAULT_ITEMS[0];
-  }, [productId, rawCustomItemsJson]);
+  }, [productId, rawCustomItemsJson, rawMyProductsJson, resolvedUser.email, resolvedUser.initials, resolvedUser.name]);
 
   // Record item in recently viewed
   useEffect(() => {
@@ -209,7 +268,7 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
   }
 
   return (
-    <div className="product-detail-page unishare-marketplace">
+    <div className="product-detail-page">
       <AppNavbar
         activeNav="marketplace"
         user={{ tokenBalance: walletBalance }}
@@ -220,27 +279,17 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
       {/* Main Container */}
       <main className="wrap">
         {/* Breadcrumb Navigation */}
-        <nav className="crumb" aria-label="Breadcrumb" style={{ marginTop: 14 }}>
-          <Link href="/">Home</Link>
-          <span style={{ margin: '0 4px' }}>›</span>
+        <nav className="crumb" aria-label="Breadcrumb">
+          <Link href="/home">Home</Link>
+          <span>›</span>
           <Link href="/marketplace">Marketplace</Link>
-          <span style={{ margin: '0 4px' }}>›</span>
-          <span style={{ color: 'var(--ink)' }}>{item.name}</span>
+          <span>›</span>
+          <span className="current">{item.name}</span>
         </nav>
 
         {/* Eyebrow */}
-        <div className="eyebrow" style={{ marginTop: 14 }}>
+        <div className="eyebrow">
           {resolvedUser.university} · Verified students only
-        </div>
-
-        {/* Back Link */}
-        <div style={{ marginTop: 12 }}>
-          <Link href="/marketplace" className="pd-back-link">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M19 12H5M12 19l-7-7 7-7" />
-            </svg>
-            <span>Back to Marketplace</span>
-          </Link>
         </div>
 
         {/* Product Details 2-Column Layout */}
@@ -255,13 +304,26 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
                 fill
                 sizes="(max-width: 900px) 100vw, 650px"
                 style={{ objectFit: 'cover' }}
+                unoptimized={item.image.startsWith('data:')}
                 priority
               />
-              <span className="pd-badge-avail">Available today</span>
+              <span className="pd-badge-avail">
+                {item.available === false ? 'Paused' : 'Available today'}
+              </span>
             </div>
 
             {/* Category Tag & Product Title */}
-            <span className="pd-category-tag">{item.category}</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
+              <span className="pd-category-tag" style={{ marginBottom: 0 }}>{item.category}</span>
+              {(item.ownerEmail === resolvedUser.email || item.owner === resolvedUser.name) && (
+                <Link
+                  href="/my-products"
+                  style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--brand)', textDecoration: 'underline' }}
+                >
+                  Your listing · Manage in My Products →
+                </Link>
+              )}
+            </div>
             <h1 className="pd-title">{item.name}</h1>
             <p className="pd-desc">{item.description}</p>
 
@@ -389,7 +451,7 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
                   type="button"
                   id="rental-days-stepper"
                   className="pd-step-btn"
-                  onClick={() => setRentalDays((prev) => Math.max(1, prev - 1))}
+                  onClick={() => setCustomRentalDays(Math.max(1, rentalDays - 1))}
                   disabled={rentalDays <= 1}
                   aria-label="Decrease rental days"
                 >
@@ -401,7 +463,7 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
                 <button
                   type="button"
                   className="pd-step-btn"
-                  onClick={() => setRentalDays((prev) => Math.min(30, prev + 1))}
+                  onClick={() => setCustomRentalDays(Math.min(30, rentalDays + 1))}
                   aria-label="Increase rental days"
                 >
                   +
@@ -415,7 +477,7 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
                     key={d}
                     type="button"
                     className={`pd-preset-btn ${rentalDays === d ? 'active' : ''}`}
-                    onClick={() => setRentalDays(d)}
+                    onClick={() => setCustomRentalDays(d)}
                   >
                     {d} {d === 1 ? 'day' : 'days'}
                   </button>
