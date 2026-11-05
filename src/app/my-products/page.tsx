@@ -12,6 +12,11 @@ import {
   useRequireAuth,
   writeUserScopedJson,
 } from "../lib/user-client";
+import {
+  MarketplaceItem,
+  removeMarketplaceItem,
+  upsertMarketplaceItem,
+} from "../marketplace/marketplace-data";
 import "./my-products.css";
 
 interface ProductItem {
@@ -147,6 +152,35 @@ export default function MyProductsPage() {
     setTimeout(() => setShowToast(false), 2200);
   };
 
+  const syncListingToMarketplace = (
+    item: ProductItem,
+    nextState: "active" | "paused" | "draft",
+    nextRate = item.rate,
+    nextDeposit = item.deposit
+  ) => {
+    if (nextState === "draft") {
+      removeMarketplaceItem(item.id);
+      return;
+    }
+    const marketItem: MarketplaceItem = {
+      id: item.id,
+      name: item.name,
+      category: item.category,
+      price: nextRate,
+      deposit: nextDeposit,
+      area: "TSC",
+      owner: resolvedUser.name,
+      ownerEmail: resolvedUser.email,
+      initials: resolvedUser.initials,
+      image: item.image,
+      available: nextState === "active",
+      condition: item.condition,
+      maxRentalDays: 7,
+      description: `${item.condition} condition ${item.name}. ${item.note}`,
+    };
+    upsertMarketplaceItem(marketItem);
+  };
+
   // State toggles
   const handleToggleState = (item: ProductItem) => {
     if (item.state === "paused") {
@@ -162,6 +196,7 @@ export default function MyProductsPage() {
             : p
         )
       );
+      syncListingToMarketplace(item, "active");
       triggerToast(`Listing "${item.name}" resumed and active.`);
     } else if (item.state === "active") {
       setProducts((prev) =>
@@ -176,6 +211,7 @@ export default function MyProductsPage() {
             : p
         )
       );
+      syncListingToMarketplace(item, "paused");
       triggerToast(`Listing "${item.name}" paused.`);
     }
   };
@@ -183,6 +219,7 @@ export default function MyProductsPage() {
   const handleDeleteDraft = (id: string, name: string) => {
     if (window.confirm(`Delete the draft "${name}"?`)) {
       setProducts((prev) => prev.filter((p) => p.id !== id));
+      removeMarketplaceItem(id);
       triggerToast(`Draft "${name}" was deleted.`);
     }
   };
@@ -200,6 +237,7 @@ export default function MyProductsPage() {
           : p
       )
     );
+    syncListingToMarketplace(item, "active");
     triggerToast(`Draft "${item.name}" finished and published!`);
   };
 
@@ -223,6 +261,7 @@ export default function MyProductsPage() {
         p.id === selectedProduct.id ? { ...p, rate: r, deposit: d } : p
       )
     );
+    syncListingToMarketplace(selectedProduct, selectedProduct.state, r, d);
     setShowPriceModal(false);
     triggerToast(`Updated pricing for ${selectedProduct.name}.`);
   };
@@ -262,6 +301,9 @@ export default function MyProductsPage() {
       owner: `${resolvedUser.name} · You`,
     };
     setProducts((prev) => [newItem, ...prev]);
+    if (!asDraft) {
+      syncListingToMarketplace(newItem, "active");
+    }
     setShowAddModal(false);
     setNewTitle("");
     triggerToast(asDraft ? "Saved new draft listing." : `Published "${newItem.name}"!`);
@@ -370,25 +412,24 @@ export default function MyProductsPage() {
         <nav className="crumbs" aria-label="Breadcrumb">
           <Link href="/home">Home</Link>
           <span>›</span>
-          <span>My products</span>
+          <span className="current">My products</span>
         </nav>
 
         {/* Header Title & Add Product Button */}
+        <div className="eyebrow">
+          {resolvedUser.university} · Verified students only
+        </div>
         <div className="head">
           <div>
-            <div className="eyebrow">
-              {resolvedUser.university} · Verified students only
-            </div>
             <h1>My products</h1>
             <p className="lede">
               Your shared shelf. Manage listings, prices and the days you can
               lend.
             </p>
           </div>
-          <button
+          <Link
             className="btn solid"
-            type="button"
-            onClick={() => setShowAddModal(true)}
+            href="/marketplace/list"
           >
             <svg
               width="12"
@@ -402,7 +443,7 @@ export default function MyProductsPage() {
               <path d="M12 5v14M5 12h14" />
             </svg>
             Add product
-          </button>
+          </Link>
         </div>
 
         {/* 4 Summary Stat Cards */}
@@ -692,39 +733,41 @@ export default function MyProductsPage() {
 
       {/* Footer */}
       <footer>
-        <span>UniShare. Made for university students in Bangladesh.</span>
-        <nav>
-          <a
-            href="#"
-            onClick={(e) => {
-              e.preventDefault();
-              triggerToast("Campus Privacy Policy: Student data is protected.");
-            }}
-          >
-            Privacy
-          </a>
-          <a
-            href="#"
-            onClick={(e) => {
-              e.preventDefault();
-              triggerToast(`${resolvedUser.university} Sharing Honor Code.`);
-            }}
-          >
-            Terms
-          </a>
-          <a
-            href="#"
-            onClick={(e) => {
-              e.preventDefault();
-              triggerToast("Campus Helpdesk: support@unishare.online");
-            }}
-          >
-            Get help
-          </a>
-          <a href="#" onClick={handleLogout}>
-            Log out
-          </a>
-        </nav>
+        <div className="wrap">
+          <span>UniShare. Made for university students in Bangladesh.</span>
+          <nav>
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                triggerToast("Campus Privacy Policy: Student data is protected.");
+              }}
+            >
+              Privacy
+            </a>
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                triggerToast(`${resolvedUser.university} Sharing Honor Code.`);
+              }}
+            >
+              Terms
+            </a>
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                triggerToast("Campus Helpdesk: support@unishare.online");
+              }}
+            >
+              Get help
+            </a>
+            <a href="#" onClick={handleLogout}>
+              Log out
+            </a>
+          </nav>
+        </div>
       </footer>
 
       {/* Modal: Add Product */}

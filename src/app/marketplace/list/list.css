@@ -1,0 +1,571 @@
+/* UniShare · List an Item Page Stylesheet */
+
+.unishare-list-page {
+  --ink: #161b1a;
+  --teal: #0d6b63;
+  --teal-dark: #09524c;
+  --muted: #4b5553;
+  --tint: #e9f2ef;
+  --field: #f5f7f6;
+  --hair: #d5dcda;
+  --line: #161b1a;
+
+  font-family: "DM Sans", var(--font-dm-sans), system-ui, -apple-system, sans-serif;
+  color: var(--ink);
+  background: #ffffff;
+  line-height: 1.45;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.unishare-list-page *,
+.unishare-list-page *::before,
+.unishare-list-page *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.unishare-list-page a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.unishare-list-page button,
+.unishare-list-page input,
+.unishare-list-page select,
+.unishare-list-page textarea {
+  font: inherit;
+  color: inherit;
+}
+
+.unishare-list-page button {
+  cursor: pointer;
+}
+
+.unishare-list-page main.wrap {
+  max-width: 1000px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 24px 24px 56px;
+  flex: 1;
+}
+
+.unishare-list-page .crumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.unishare-list-page .crumb a:hover {
+  color: var(--teal);
+  text-decoration: underline;
+}
+
+.unishare-list-page .crumb .current {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.unishare-list-page .eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--teal);
+  text-transform: uppercase;
+  margin-top: 24px;
+}
+
+.unishare-list-page .hero-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.unishare-list-page h1 {
+  font-family: "Bricolage Grotesque", var(--font-bricolage), "DM Sans", sans-serif;
+  font-size: 34px;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.unishare-list-page .sub {
+  font-size: 14px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+.unishare-list-page .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 13.5px;
+  border: 1.5px solid var(--teal);
+  background: var(--teal);
+  color: #ffffff;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.unishare-list-page .btn:hover {
+  background: var(--teal-dark);
+  border-color: var(--teal-dark);
+}
+
+.unishare-list-page .btn.outline {
+  background: #ffffff;
+  color: var(--teal);
+}
+
+.unishare-list-page .btn.outline:hover {
+  background: var(--tint);
+}
+
+.unishare-list-page .band {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--tint);
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin-top: 22px;
+  flex-wrap: wrap;
+}
+
+.unishare-list-page .band svg {
+  color: var(--teal);
+  flex-shrink: 0;
+}
+
+.unishare-list-page .band b {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.unishare-list-page .band p {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.unishare-list-page .band .band-tag {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--teal);
+  white-space: nowrap;
+}
+
+/* Main 2-column listing layout */
+.unishare-list-page .list-layout {
+  display: grid;
+  grid-template-columns: 1.45fr 1fr;
+  gap: 22px;
+  margin-top: 24px;
+  align-items: start;
+}
+
+.unishare-list-page .form-col {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.unishare-list-page .panel {
+  border: 1.5px solid var(--hair);
+  border-radius: 12px;
+  padding: 22px;
+  background: #ffffff;
+}
+
+.unishare-list-page .panel-head {
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--hair);
+  margin-bottom: 16px;
+}
+
+.unishare-list-page .panel-head h2 {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.unishare-list-page .panel-head p {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
+.unishare-list-page .field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.unishare-list-page .field {
+  margin-bottom: 14px;
+}
+
+.unishare-list-page .field:last-child {
+  margin-bottom: 0;
+}
+
+.unishare-list-page .field label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+.unishare-list-page .field input,
+.unishare-list-page .field select,
+.unishare-list-page .field textarea {
+  width: 100%;
+  border: 1.5px solid var(--hair);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  background: var(--field);
+  outline: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.unishare-list-page .field input:focus,
+.unishare-list-page .field select:focus,
+.unishare-list-page .field textarea:focus {
+  border-color: var(--teal);
+  background: #ffffff;
+}
+
+.unishare-list-page .hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 5px;
+}
+
+.unishare-list-page .error-text {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #b91c1c;
+  margin-top: 10px;
+}
+
+/* Photo selector & upload */
+.unishare-list-page .photo-thumbs {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.unishare-list-page .photo-thumb {
+  position: relative;
+  height: 54px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid transparent;
+  background: var(--field);
+  padding: 0;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.unishare-list-page .photo-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.unishare-list-page .photo-thumb.on {
+  border-color: var(--teal);
+}
+
+.unishare-list-page .upload-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.unishare-list-page .upload-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1.5px dashed var(--hair);
+  background: var(--field);
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.unishare-list-page .upload-label:hover {
+  border-color: var(--teal);
+  color: var(--teal);
+  background: var(--tint);
+}
+
+.unishare-list-page .upload-label input {
+  display: none;
+}
+
+.unishare-list-page .actions-bar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 6px;
+}
+
+/* Sidebar Preview + Guide */
+.unishare-list-page .side-col {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  position: sticky;
+  top: 92px;
+}
+
+.unishare-list-page .preview-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--teal);
+  margin-bottom: 10px;
+}
+
+.unishare-list-page .preview-card {
+  border: 1.5px solid var(--hair);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.unishare-list-page .preview-img-wrap {
+  height: 164px;
+  position: relative;
+  background: var(--field);
+  border-bottom: 1px solid var(--hair);
+}
+
+.unishare-list-page .preview-img-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.unishare-list-page .preview-pill {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: #ffffff;
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.unishare-list-page .preview-body {
+  padding: 16px;
+}
+
+.unishare-list-page .preview-cat {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--teal);
+}
+
+.unishare-list-page .preview-body h3 {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 4px 0 10px;
+}
+
+.unishare-list-page .preview-price {
+  font-size: 13px;
+  color: var(--muted);
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.unishare-list-page .preview-price b {
+  color: var(--teal);
+  font-size: 21px;
+  font-weight: 700;
+}
+
+.unishare-list-page .preview-meta {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+.unishare-list-page .preview-owner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hair);
+}
+
+.unishare-list-page .preview-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--tint);
+  color: var(--teal);
+  border: 1.5px solid var(--teal);
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.unishare-list-page .guide-box {
+  background: var(--field);
+  border: 1px solid var(--hair);
+  border-radius: 12px;
+  padding: 18px;
+}
+
+.unishare-list-page .guide-box h3 {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.unishare-list-page .guide-step {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.unishare-list-page .guide-step:last-child {
+  margin-bottom: 0;
+}
+
+.unishare-list-page .guide-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--tint);
+  color: var(--teal);
+  font-size: 11.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.unishare-list-page .guide-step b {
+  display: block;
+  color: var(--ink);
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+
+.unishare-list-page footer {
+  border-top: 1px solid var(--hair);
+  padding: 20px 0;
+  font-size: 12px;
+  color: var(--muted);
+  background: #ffffff;
+  margin-top: auto;
+}
+
+.unishare-list-page footer .wrap {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.unishare-list-page footer a,
+.unishare-list-page footer button {
+  color: var(--muted);
+  font-weight: 600;
+  margin-left: 18px;
+  background: none;
+  border: 0;
+}
+
+.unishare-list-page footer a:hover,
+.unishare-list-page footer button:hover {
+  color: var(--teal);
+  text-decoration: underline;
+}
+
+.unishare-list-page .toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--ink);
+  color: #ffffff;
+  font-size: 13px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s, transform 0.25s;
+  z-index: 60;
+}
+
+.unishare-list-page .toast.on {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+@media (max-width: 860px) {
+  .unishare-list-page .list-layout {
+    grid-template-columns: 1fr;
+  }
+  .unishare-list-page .side-col {
+    position: static;
+  }
+}
+
+@media (max-width: 600px) {
+  .unishare-list-page .field-grid {
+    grid-template-columns: 1fr;
+  }
+  .unishare-list-page .photo-thumbs {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+

@@ -271,7 +271,7 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
             <p className="sub">What do you need for your campus day?</p>
           </div>
           <div className="acts">
-            <Link className="btn solid" href="#">
+            <Link className="btn solid" href="/marketplace/list">
               <SvgIcon name="plus" size={16} />
               List an item
             </Link>
