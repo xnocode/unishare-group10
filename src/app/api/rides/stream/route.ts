@@ -45,7 +45,9 @@ async function fetchLiveMatches(
     take: 40,
   });
 
+  const seenStreamUserIds = new Set<string>();
   const matched = activeJourneys.filter((journey) => {
+    if (seenStreamUserIds.has(journey.userId)) return false;
     // 1. Destination
     let destMatch = false;
     if (hasDestCoords && journey.destinationLat !== null && journey.destinationLng !== null) {
@@ -71,18 +73,21 @@ async function fetchLiveMatches(
     const currentUserGender = user.gender ? user.gender.toLowerCase() : null;
     const partnerPref = journey.genderPreference.toLowerCase();
 
+    let allowed = false;
     if (genderPreference === "women_only") {
-      return partnerGender === "female" && partnerPref !== "men_only";
+      allowed = partnerGender === "female" && partnerPref !== "men_only";
+    } else if (genderPreference === "men_only") {
+      allowed = partnerGender === "male" && partnerPref !== "women_only";
+    } else if (genderPreference === "no_preference") {
+      if (partnerPref === "women_only") allowed = currentUserGender === "female";
+      else if (partnerPref === "men_only") allowed = currentUserGender === "male";
+      else allowed = true;
     }
-    if (genderPreference === "men_only") {
-      return partnerGender === "male" && partnerPref !== "women_only";
+
+    if (allowed) {
+      seenStreamUserIds.add(journey.userId);
     }
-    if (genderPreference === "no_preference") {
-      if (partnerPref === "women_only") return currentUserGender === "female";
-      if (partnerPref === "men_only") return currentUserGender === "male";
-      return true;
-    }
-    return false;
+    return allowed;
   });
 
   return matched.map((journey) => {

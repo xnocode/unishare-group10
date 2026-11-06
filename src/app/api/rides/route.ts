@@ -162,12 +162,13 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
-    const destination = searchParams.get("destination")?.trim();
+    const browseMode = searchParams.get("browse") === "active";
+    const destination = searchParams.get("destination")?.trim() || "";
     const origin = searchParams.get("origin")?.trim() || "";
     const genderPrefParam = (searchParams.get("genderPreference") || "no_preference").trim().toLowerCase();
 
-    // 1. Destination Validation
-    if (!destination || destination.length < 2) {
+    // 1. Destination Validation (browse=active allows full-campus discovery before choosing a destination)
+    if (!browseMode && (!destination || destination.length < 2)) {
       return NextResponse.json(
         {
           success: false,
@@ -251,10 +252,43 @@ export async function GET(req: NextRequest) {
     });
 
     // 5. Server-Side Safety, Destination & Pickup Filtering
+    const seenPartnerUserIds = new Set<string>();
     const matchedPartners = activeJourneys.filter((journey) => {
+      // Keep at most one (most recent) active journey per verified student
+      if (seenPartnerUserIds.has(journey.userId)) return false;
+
       const partnerUser = journey.user;
 
-      // Check 1: Destination Compatibility
+      // Check 1: Gender Preference Compatibility FIRST (always enforced, including browse=active)
+      // Strictly from self-declared profile; never inferred from photo/name
+      const partnerGender = partnerUser.gender ? partnerUser.gender.toLowerCase() : null;
+      const currentUserGender = user.gender ? user.gender.toLowerCase() : null;
+      const partnerPref = journey.genderPreference.toLowerCase();
+
+      let genderCompatible = false;
+      if (genderPreference === "women_only") {
+        genderCompatible = partnerGender === "female" && partnerPref !== "men_only";
+      } else if (genderPreference === "men_only") {
+        genderCompatible = partnerGender === "male" && partnerPref !== "women_only";
+      } else if (genderPreference === "no_preference") {
+        if (partnerPref === "women_only") {
+          genderCompatible = currentUserGender === "female";
+        } else if (partnerPref === "men_only") {
+          genderCompatible = currentUserGender === "male";
+        } else {
+          genderCompatible = true;
+        }
+      }
+
+      if (!genderCompatible) return false;
+
+      // In browse=active discovery mode, show all safety-eligible peers across campus
+      if (browseMode) {
+        seenPartnerUserIds.add(journey.userId);
+        return true;
+      }
+
+      // Check 2: Destination Compatibility
       let matchesDestination = false;
       if (
         hasDestCoords &&
@@ -274,7 +308,7 @@ export async function GET(req: NextRequest) {
 
       if (!matchesDestination) return false;
 
-      // Check 2: Pickup Location Compatibility
+      // Check 3: Pickup Location Compatibility
       const pickupCheck = isPickupCompatible(
         origin,
         journey.origin,
@@ -286,102 +320,93 @@ export async function GET(req: NextRequest) {
 
       if (!pickupCheck.compatible) return false;
 
-      // Check 3: Gender Preference Compatibility (Strictly from self-declared profile; never inferred from photo/name)
-      const partnerGender = partnerUser.gender ? partnerUser.gender.toLowerCase() : null;
-      const currentUserGender = user.gender ? user.gender.toLowerCase() : null;
-      const partnerPref = journey.genderPreference.toLowerCase();
-
-      // Case 1: Searcher requested "women_only"
-      if (genderPreference === "women_only") {
-        if (partnerGender !== "female") return false;
-        if (partnerPref === "men_only") return false;
-        return true;
-      }
-
-      // Case 2: Searcher requested "men_only"
-      if (genderPreference === "men_only") {
-        if (partnerGender !== "male") return false;
-        if (partnerPref === "women_only") return false;
-        return true;
-      }
-
-      // Case 3: Searcher requested "no_preference"
-      if (genderPreference === "no_preference") {
-        if (partnerPref === "women_only") {
-          return currentUserGender === "female";
-        }
-        if (partnerPref === "men_only") {
-          return currentUserGender === "male";
-        }
-        return true;
-      }
-
-      return false;
+      seenPartnerUserIds.add(journey.userId);
+      return true;
     });
 
     // 6. Privacy Protection: Map to Sanitized Public Companion Cards
     // NEVER expose user.gender or raw private details in the public API response!
-    const sanitizedResults = matchedPartners.map((journey) => {
-      const pickupMeta = isPickupCompatible(
-        origin,
-        journey.origin,
-        hasOriginCoords ? originLat : undefined,
-        hasOriginCoords ? originLng : undefined,
-        journey.originLat,
-        journey.originLng
-      );
+    const sanitizedResults = matchedPartners
+      .map((journey) => {
+        const pickupMeta = isPickupCompatible(
+          origin,
+          journey.origin,
+          hasOriginCoords ? originLat : undefined,
+          hasOriginCoords ? originLng : undefined,
+          journey.originLat,
+          journey.originLng
+        );
 
-      const destMeta = getDestinationCompatibility(
-        destination,
-        journey.destination,
-        hasDestCoords ? destLat : undefined,
-        hasDestCoords ? destLng : undefined,
-        journey.destinationLat,
-        journey.destinationLng
-      );
+        const destMeta = destination.length >= 2
+          ? getDestinationCompatibility(
+              destination,
+              journey.destination,
+              hasDestCoords ? destLat : undefined,
+              hasDestCoords ? destLng : undefined,
+              journey.destinationLat,
+              journey.destinationLng
+            )
+          : { compatibility: "Active on Campus", scorePercent: 70, distanceKm: null };
 
-      const initials = journey.user.fullName
-        .split(" ")
-        .map((p) => p[0])
-        .join("")
-        .slice(0, 2)
-        .toUpperCase();
+        let corridorMatch = false;
+        if (destination.length >= 2) {
+          if (hasDestCoords && journey.destinationLat !== null && journey.destinationLng !== null) {
+            corridorMatch =
+              getHaversineDistanceKm(destLat, destLng, journey.destinationLat, journey.destinationLng) <= 5.0;
+          } else {
+            corridorMatch = isDestinationSimilar(destination, journey.destination);
+          }
+        }
 
-      const shortUni = journey.user.university
-        ? journey.user.university.replace("University of ", "").replace(" University", "")
-        : "Campus";
+        const initials = journey.user.fullName
+          .split(" ")
+          .map((p) => p[0])
+          .join("")
+          .slice(0, 2)
+          .toUpperCase();
 
-      return {
-        id: journey.id,
-        userId: journey.user.id,
-        fullName: journey.user.fullName,
-        avatarInitials: initials,
-        university: journey.user.university || "University of Dhaka",
-        department: journey.user.department || "Academic Department",
-        verificationBadge: `Verified ${shortUni} Student`,
-        verified: journey.user.verified, // Always true
-        isAvailable: journey.status === "ACTIVE",
-        origin: journey.origin,
-        approxPickupDistance: pickupMeta.distanceText,
-        pickupDistanceKm: pickupMeta.distanceKm,
-        destination: journey.destination,
-        destinationCompatibility: destMeta.compatibility,
-        compatibilityScore: destMeta.scorePercent,
-        destinationDistanceKm: destMeta.distanceKm,
-        originCoords:
-          journey.originLat !== null && journey.originLng !== null
-            ? { lat: journey.originLat, lng: journey.originLng }
-            : null,
-        destCoords:
-          journey.destinationLat !== null && journey.destinationLng !== null
-            ? { lat: journey.destinationLat, lng: journey.destinationLng }
-            : null,
-        departureTime: journey.departureTime,
-        genderPreferenceRule: journey.genderPreference,
-        notes: journey.notes,
-        createdAt: journey.createdAt,
-      };
-    });
+        const shortUni = journey.user.university
+          ? journey.user.university.replace("University of ", "").replace(" University", "")
+          : "Campus";
+
+        return {
+          id: journey.id,
+          userId: journey.user.id,
+          fullName: journey.user.fullName,
+          avatarInitials: initials,
+          university: journey.user.university || "University of Dhaka",
+          department: journey.user.department || "Academic Department",
+          verificationBadge: `Verified ${shortUni} Student`,
+          verified: journey.user.verified, // Always true
+          isAvailable: journey.status === "ACTIVE",
+          corridorMatch,
+          origin: journey.origin,
+          approxPickupDistance: pickupMeta.distanceText,
+          pickupDistanceKm: pickupMeta.distanceKm,
+          destination: journey.destination,
+          destinationCompatibility: browseMode && !corridorMatch ? "Active Route" : destMeta.compatibility,
+          compatibilityScore: destMeta.scorePercent,
+          destinationDistanceKm: destMeta.distanceKm,
+          originCoords:
+            journey.originLat !== null && journey.originLng !== null
+              ? { lat: journey.originLat, lng: journey.originLng }
+              : null,
+          destCoords:
+            journey.destinationLat !== null && journey.destinationLng !== null
+              ? { lat: journey.destinationLat, lng: journey.destinationLng }
+              : null,
+          departureTime: journey.departureTime,
+          genderPreferenceRule: journey.genderPreference,
+          notes: journey.notes,
+          createdAt: journey.createdAt,
+        };
+      })
+      .sort((a, b) => {
+        if (a.corridorMatch !== b.corridorMatch) return a.corridorMatch ? -1 : 1;
+        const da = a.pickupDistanceKm ?? 99;
+        const dbDist = b.pickupDistanceKm ?? 99;
+        return da - dbDist;
+      });
 
     return NextResponse.json({
       success: true,
@@ -506,6 +531,15 @@ export async function POST(req: NextRequest) {
     const originLng = typeof body.originLng === "number" ? body.originLng : null;
     const destinationLat = typeof body.destinationLat === "number" ? body.destinationLat : null;
     const destinationLng = typeof body.destinationLng === "number" ? body.destinationLng : null;
+
+    // Close any prior active journeys by this user so each student keeps a single live route
+    await db.travelJourney.updateMany({
+      where: {
+        userId: user.id,
+        status: "ACTIVE",
+      },
+      data: { status: "COMPLETED" },
+    });
 
     // Create active journey
     const journey = await db.travelJourney.create({
