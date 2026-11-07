@@ -1,8 +1,19 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import Link from "next/link";
 import AppNavbar from "../components/AppNavbar";
 import { useCurrentUser } from "../lib/user-client";
+import CampusRouteMap, { MapPeerItem, resolvePeerPoint } from "./CampusRouteMap";
+import {
+  computeFitViewport,
+  DHAKA_CAMPUS_LANDMARKS as DHAKA_CANVAS_LANDMARKS,
+  estimateSharedCommute,
+  findNearestLandmark,
+  LatLngPoint,
+  QUICK_CAMPUS_DESTINATIONS,
+  resolveLandmarkByName,
+} from "./rides-geo";
 import "./rides.css";
 
 interface GoogleLatLng {
@@ -77,6 +88,7 @@ export interface MatchedPartner {
   verificationBadge: string;
   verified: boolean;
   isAvailable: boolean;
+  corridorMatch?: boolean;
   origin: string;
   approxPickupDistance: string;
   pickupDistanceKm: number | null;
@@ -126,15 +138,6 @@ declare global {
   }
 }
 
-const QUICK_CAMPUS_DESTINATIONS = [
-  { label: "TSC, DU", fullName: "TSC, University of Dhaka", lat: 23.7317, lng: 90.3957 },
-  { label: "Curzon Hall", fullName: "Curzon Hall, University of Dhaka", lat: 23.7275, lng: 90.4025 },
-  { label: "Dhanmondi 32", fullName: "Dhanmondi 32, Dhaka", lat: 23.7510, lng: 90.3770 },
-  { label: "Farmgate", fullName: "Farmgate, Dhaka", lat: 23.7580, lng: 90.3900 },
-  { label: "Mirpur 10", fullName: "Mirpur 10 Circle, Dhaka", lat: 23.8070, lng: 90.3686 },
-  { label: "Science Lab", fullName: "Science Lab, Dhaka", lat: 23.7402, lng: 90.3846 },
-];
-
 // Clean light Google Maps theme matching UniShare palette
 const GOOGLE_MAPS_LIGHT_STYLES = [
   { featureType: "all", elementType: "labels.text.fill", stylers: [{ color: "#475569" }] },
@@ -151,21 +154,6 @@ const GOOGLE_MAPS_LIGHT_STYLES = [
   { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#cbd5e1" }] },
   { featureType: "transit", elementType: "geometry", stylers: [{ color: "#eef2f6" }] },
   { featureType: "water", elementType: "geometry", stylers: [{ color: "#c5e3ed" }] },
-];
-
-// Coordinate landmarks for fallback interactive canvas
-const DHAKA_CANVAS_LANDMARKS = [
-  { name: "TSC, University of Dhaka", x: 490, y: 530, lat: 23.7317, lng: 90.3957 },
-  { name: "Curzon Hall, University of Dhaka", x: 575, y: 550, lat: 23.7275, lng: 90.4025 },
-  { name: "Shahbagh, Dhaka", x: 475, y: 475, lat: 23.7388, lng: 90.3954 },
-  { name: "Science Lab, Dhaka", x: 385, y: 470, lat: 23.7402, lng: 90.3846 },
-  { name: "Dhanmondi 32, Dhaka", x: 325, y: 410, lat: 23.7510, lng: 90.3770 },
-  { name: "Dhanmondi 27, Dhaka", x: 295, y: 360, lat: 23.7550, lng: 90.3720 },
-  { name: "Farmgate, Dhaka", x: 485, y: 375, lat: 23.7580, lng: 90.3900 },
-  { name: "Hatirjheel Promenade, Dhaka", x: 670, y: 350, lat: 23.7660, lng: 90.4120 },
-  { name: "Mohakhali DOHS, Dhaka", x: 570, y: 285, lat: 23.7780, lng: 90.4040 },
-  { name: "Banani 11, Dhaka", x: 630, y: 220, lat: 23.7925, lng: 90.4078 },
-  { name: "Mirpur 10 Circle, Dhaka", x: 290, y: 200, lat: 23.8070, lng: 90.3686 },
 ];
 
 export default function RideSharingPage() {
@@ -210,6 +198,8 @@ export default function RideSharingPage() {
   const [isSearching, setIsSearching] = useState(false);
   const [hasSubmittedSearch, setHasSubmittedSearch] = useState(false);
   const [searchResults, setSearchResults] = useState<MatchedPartner[]>([]);
+  const [activeCampusRiders, setActiveCampusRiders] = useState<MatchedPartner[]>([]);
+  const [isLoadingActiveRiders, setIsLoadingActiveRiders] = useState(true);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [selectedPartnerIds, setSelectedPartnerIds] = useState<string[]>([]);
   const [connectedPartnerIds, setConnectedPartnerIds] = useState<string[]>([]);
@@ -320,7 +310,43 @@ export default function RideSharingPage() {
   const directionsRendererRef = useRef<GoogleDirectionsRendererInstance | null>(null);
   const geocoderRef = useRef<GoogleGeocoderInstance | null>(null);
   const [isGoogleMapsReady, setIsGoogleMapsReady] = useState(false);
-  const [zoomScale, setZoomScale] = useState(1);
+  const [mapCenter, setMapCenter] = useState<LatLngPoint>({ lat: 23.744, lng: 90.386 });
+  const [mapZoom, setMapZoom] = useState<number>(13);
+  const [mapViewport, setMapViewport] = useState<{ width: number; height: number }>({ width: 840, height: 640 });
+  const [inspectedPartnerId, setInspectedPartnerId] = useState<string | null>(null);
+
+  const fareEstimate = useMemo(
+    () => estimateSharedCommute(pickupCoords, destCoords, 1 + Math.max(1, selectedPartnerIds.length)),
+    [pickupCoords, destCoords, selectedPartnerIds.length]
+  );
+
+  const mapPeers = useMemo(() => {
+    if (hasSubmittedSearch && searchResults.length > 0) {
+      const matchedIds = new Set(searchResults.map((p) => p.id));
+      const matchedAnnotated = searchResults.map((p) => ({ ...p, corridorMatch: true }));
+      const nearbyOthers = activeCampusRiders
+        .filter((p) => !matchedIds.has(p.id))
+        .map((p) => ({ ...p, corridorMatch: false }));
+      return [...matchedAnnotated, ...nearbyOthers];
+    }
+    return activeCampusRiders;
+  }, [hasSubmittedSearch, searchResults, activeCampusRiders]);
+
+  const focusRouteOnMap = useCallback(
+    (a: LatLngPoint, b: LatLngPoint) => {
+      if (mapInstanceRef.current && window.google?.maps?.LatLngBounds) {
+        const bounds = new window.google.maps.LatLngBounds();
+        bounds.extend(a);
+        bounds.extend(b);
+        mapInstanceRef.current.fitBounds(bounds, 80);
+      } else {
+        const fit = computeFitViewport([a, b], mapViewport.width, mapViewport.height);
+        setMapCenter(fit.center);
+        setMapZoom(fit.zoom);
+      }
+    },
+    [mapViewport.width, mapViewport.height]
+  );
 
   // Toast feedback helper
   const showToast = useCallback((msg: string) => {
@@ -597,15 +623,12 @@ export default function RideSharingPage() {
         }
       );
     } else {
-      // Calculate realistic Dhaka route estimate mathematically
-      const km = (
-        Math.hypot(destCoords.lat - pickupCoords.lat, destCoords.lng - pickupCoords.lng) * 111
-      ).toFixed(1);
-      const estMins = Math.round(Number(km) * 2.8 + 5);
+      // Calculate realistic Dhaka road corridor & duration using true Haversine geometry
+      const est = estimateSharedCommute(pickupCoords, destCoords);
       setRouteInfo({
-        distanceText: `${km} km`,
-        durationText: `~${estMins} mins`,
-        summary: "via Mirpur Rd & Shahbagh",
+        distanceText: `${est.distanceKm.toFixed(1)} km`,
+        durationText: `~${est.durationMins} mins`,
+        summary: est.corridorLabel,
       });
     }
   }, [pickupCoords, destCoords, isGoogleMapsReady]);
@@ -652,6 +675,9 @@ export default function RideSharingPage() {
           } else if (gpsMarkerRef.current) {
             gpsMarkerRef.current.setPosition(currentCoord);
           }
+        } else {
+          setMapCenter(currentCoord);
+          setMapZoom(14);
         }
 
         reverseGeocode(currentCoord, true);
@@ -666,15 +692,49 @@ export default function RideSharingPage() {
     );
   };
 
-  // Zoom controls for both Google Maps & Fallback Canvas
+  // Zoom controls for both Google Maps & Interactive Campus Map
   const handleZoom = (delta: number) => {
     if (mapInstanceRef.current) {
       const currentZoom = mapInstanceRef.current.getZoom() || 13;
       mapInstanceRef.current.setZoom(currentZoom + delta);
     } else {
-      setZoomScale((prev) => Math.max(0.7, Math.min(prev + delta * 0.15, 1.6)));
+      setMapZoom((prev) => Math.max(11, Math.min(17, prev + (delta > 0 ? 1 : -1))));
     }
   };
+
+  // Load active campus riders right away so map shows who is live & open to route sharing
+  const fetchActiveCampusRiders = useCallback(async () => {
+    setIsLoadingActiveRiders(true);
+    try {
+      const queryParams = new URLSearchParams({
+        browse: "active",
+        destination: destination.trim(),
+        origin: pickup.trim(),
+        genderPreference,
+        destLat: String(destCoords.lat),
+        destLng: String(destCoords.lng),
+        originLat: String(pickupCoords.lat),
+        originLng: String(pickupCoords.lng),
+      });
+
+      const res = await fetch(`/api/rides?${queryParams.toString()}`);
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.success && Array.isArray(data.partners)) {
+        setActiveCampusRiders(data.partners);
+      }
+    } catch {
+      // Quietly handle transient network interruption on background map discovery
+    } finally {
+      setIsLoadingActiveRiders(false);
+    }
+  }, [destination, pickup, genderPreference, destCoords, pickupCoords]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchActiveCampusRiders();
+    }, 180);
+    return () => clearTimeout(timer);
+  }, [fetchActiveCampusRiders]);
 
   // -----------------------------------------------------------
   // 6. Real Live Travel Partners Search & Matching Handlers
@@ -761,6 +821,7 @@ export default function RideSharingPage() {
         showToast(`⚠️ ${data.error || "Could not register journey"}`);
       } else {
         setRouteRegisteredSuccess(true);
+        fetchActiveCampusRiders();
         showToast("🟢 Your route has been registered and indexed for student matching!");
       }
     } catch (err) {
@@ -820,15 +881,45 @@ export default function RideSharingPage() {
     }
   };
 
-  // Select / Connect with a single Travel Partner
-  const handleConnectPartner = (partnerId: string, partnerName: string) => {
-    if (connectedPartnerIds.includes(partnerId)) {
-      setConnectedPartnerIds((prev) => prev.filter((id) => id !== partnerId));
-      showToast(`Connection request to ${partnerName} cancelled.`);
-    } else {
-      setConnectedPartnerIds((prev) => [...prev, partnerId]);
-      showToast(`🤝 Travel request sent to verified peer ${partnerName}!`);
+  // Connect with a single Travel Partner via persistent /api/rides/match invitation
+  const handleConnectPartner = async (partner: Pick<MatchedPartner, "id" | "userId" | "fullName" | "destination">) => {
+    if (connectedPartnerIds.includes(partner.id)) {
+      showToast(`✓ Invitation already sent to ${partner.fullName}. Check Requests to message.`);
+      return;
     }
+
+    try {
+      const res = await fetch("/api/rides/match", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          partnerIds: [partner.userId],
+          message: `Heading towards ${partner.destination.split(",")[0]} — want to share a ride and split the fare?`,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        showToast(`⚠️ ${data?.error || "Could not send travel invitation"}`);
+        return;
+      }
+      setConnectedPartnerIds((prev) => Array.from(new Set([...prev, partner.id])));
+      showToast(`🤝 Travel request sent to ${partner.fullName}!`);
+    } catch {
+      showToast("⚠️ Network error sending travel request.");
+    }
+  };
+
+  // Snap current route planner to an active peer's route corridor to split costs
+  const handleAdoptPeerRoute = (partner: Pick<MatchedPartner, "id" | "fullName" | "origin" | "destination" | "originCoords" | "destCoords">) => {
+    const nextOrigin = resolvePeerPoint(partner.originCoords, partner.origin, pickupCoords, 1);
+    const nextDest = resolvePeerPoint(partner.destCoords, partner.destination, destCoords, 2);
+    setPickup(partner.origin);
+    setPickupCoords(nextOrigin);
+    setDestination(partner.destination);
+    setDestCoords(nextDest);
+    setSelectedPartnerIds((prev) => Array.from(new Set([...prev, partner.id])));
+    focusRouteOnMap(nextOrigin, nextDest);
+    showToast(`💰 Matched ${partner.fullName.split(" ")[0]}'s route to split fare!`);
   };
 
   // -----------------------------------------------------------
@@ -902,7 +993,7 @@ export default function RideSharingPage() {
 
     const gmaps = window.google.maps;
 
-    searchResults.forEach((partner) => {
+    mapPeers.forEach((partner) => {
       // Find coordinate for partner
       let coord = partner.originCoords;
       if (!coord) {
@@ -957,7 +1048,7 @@ export default function RideSharingPage() {
 
       partnerMarkersRef.current.push(marker);
     });
-  }, [searchResults, isGoogleMapsReady, selectedPartnerIds, pickupCoords]);
+  }, [mapPeers, isGoogleMapsReady, selectedPartnerIds, pickupCoords]);
 
   // -----------------------------------------------------------
   // Connection Requests & Private Messaging Handlers
@@ -1574,7 +1665,7 @@ export default function RideSharingPage() {
             <line x1="8" y1="2" x2="8" y2="18" />
             <line x1="16" y1="6" x2="16" y2="22" />
           </svg>
-          Google Map
+          {isGoogleMapsReady ? "Google Map" : "Campus Map"}
         </button>
       </div>
 
@@ -1585,16 +1676,14 @@ export default function RideSharingPage() {
             ===================================================== */}
         <aside className={`rides-sidebar ${mobileTab === "map" ? "hide-mobile" : ""}`}>
           <div className="rides-sidebar-scroll">
-            {/* Header / Eyebrow */}
+            {/* Header / Breadcrumb & Requests */}
             <div>
-              <div className="rides-header-eyebrow">
-                <span className="rides-badge-pill">{currentUser.university}</span>
-                <span className="verified-indicator">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                  </svg>
-                  Verified Students Only
-                </span>
+              <div className="rides-top-bar">
+                <nav className="rides-breadcrumb" aria-label="Breadcrumb">
+                  <Link href="/home">Home</Link>
+                  <span aria-hidden="true">›</span>
+                  <span>Rides</span>
+                </nav>
                 <button
                   type="button"
                   className="connection-requests-trigger-btn"
@@ -1616,9 +1705,12 @@ export default function RideSharingPage() {
                   )}
                 </button>
               </div>
+              <p className="rides-eyebrow">
+                {(currentUser.university || "University of Dhaka").toUpperCase()} · VERIFIED STUDENTS ONLY
+              </p>
               <div className="rides-title-block">
                 <h1>Destination Live Matching</h1>
-                <p>Find and travel with verified {currentUser.university} peers heading to the same destination.</p>
+                <p>Find verified {currentUser.university} peers heading along your route and split ride cost.</p>
               </div>
             </div>
 
@@ -1662,10 +1754,20 @@ export default function RideSharingPage() {
                   placeholder="Enter pickup point (or click Pin on Map)"
                   value={pickup}
                   onChange={(e) => {
-                    setPickup(e.target.value);
+                    const val = e.target.value;
+                    setPickup(val);
                     setShowPickupAutocomplete(true);
+                    if (val.trim().length >= 5) {
+                      const matched = resolveLandmarkByName(val);
+                      if (matched) {
+                        const nextPt = { lat: matched.lat, lng: matched.lng };
+                        setPickupCoords(nextPt);
+                        focusRouteOnMap(nextPt, destCoords);
+                      }
+                    }
                   }}
                   onFocus={() => setShowPickupAutocomplete(true)}
+                  onBlur={() => setTimeout(() => setShowPickupAutocomplete(false), 150)}
                   aria-label="Pickup location search"
                 />
                 {pickup && (
@@ -1682,6 +1784,39 @@ export default function RideSharingPage() {
                   </button>
                 )}
               </div>
+
+              {showPickupAutocomplete && !isGoogleMapsReady && (
+                <div className="autocomplete-dropdown" role="listbox" aria-label="Pickup location suggestions">
+                  <div className="autocomplete-dropdown-header">Campus & Dhaka Pickup Hubs</div>
+                  {DHAKA_CANVAS_LANDMARKS.filter(
+                    (lm) =>
+                      !pickup.trim() ||
+                      lm.name.toLowerCase().includes(pickup.trim().toLowerCase()) ||
+                      lm.label.toLowerCase().includes(pickup.trim().toLowerCase())
+                  )
+                    .slice(0, 6)
+                    .map((lm) => (
+                      <div
+                        key={`pickup-${lm.id}`}
+                        className="autocomplete-item"
+                        role="option"
+                        aria-selected={pickup === lm.name}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          const nextPt = { lat: lm.lat, lng: lm.lng };
+                          setPickup(lm.name);
+                          setPickupCoords(nextPt);
+                          setShowPickupAutocomplete(false);
+                          focusRouteOnMap(nextPt, destCoords);
+                          showToast(`📍 Pickup set: ${lm.label}`);
+                        }}
+                      >
+                        <span className="item-icon">📍</span>
+                        <span>{lm.name}</span>
+                      </div>
+                    ))}
+                </div>
+              )}
 
               {/* GPS Current Location Button */}
               <button
@@ -1738,10 +1873,20 @@ export default function RideSharingPage() {
                   placeholder="Search destination (e.g. TSC, DU, Farmgate)"
                   value={destination}
                   onChange={(e) => {
-                    setDestination(e.target.value);
+                    const val = e.target.value;
+                    setDestination(val);
                     setShowDestAutocomplete(true);
+                    if (val.trim().length >= 4) {
+                      const matched = resolveLandmarkByName(val);
+                      if (matched) {
+                        const nextPt = { lat: matched.lat, lng: matched.lng };
+                        setDestCoords(nextPt);
+                        focusRouteOnMap(pickupCoords, nextPt);
+                      }
+                    }
                   }}
                   onFocus={() => setShowDestAutocomplete(true)}
+                  onBlur={() => setTimeout(() => setShowDestAutocomplete(false), 150)}
                   aria-label="Destination search"
                 />
                 {destination && (
@@ -1759,6 +1904,39 @@ export default function RideSharingPage() {
                 )}
               </div>
 
+              {showDestAutocomplete && !isGoogleMapsReady && (
+                <div className="autocomplete-dropdown" role="listbox" aria-label="Destination suggestions">
+                  <div className="autocomplete-dropdown-header">Campus & Commute Corridors</div>
+                  {DHAKA_CANVAS_LANDMARKS.filter(
+                    (lm) =>
+                      !destination.trim() ||
+                      lm.name.toLowerCase().includes(destination.trim().toLowerCase()) ||
+                      lm.label.toLowerCase().includes(destination.trim().toLowerCase())
+                  )
+                    .slice(0, 6)
+                    .map((lm) => (
+                      <div
+                        key={`dest-${lm.id}`}
+                        className="autocomplete-item"
+                        role="option"
+                        aria-selected={destination === lm.name}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          const nextPt = { lat: lm.lat, lng: lm.lng };
+                          setDestination(lm.name);
+                          setDestCoords(nextPt);
+                          setShowDestAutocomplete(false);
+                          focusRouteOnMap(pickupCoords, nextPt);
+                          showToast(`🎯 Destination set: ${lm.label}`);
+                        }}
+                      >
+                        <span className="item-icon">🎯</span>
+                        <span>{lm.name}</span>
+                      </div>
+                    ))}
+                </div>
+              )}
+
               {/* Frequent Campus Hubs Shortcuts */}
               <div className="quick-destinations-block">
                 <div className="quick-dest-label">Frequent Campus Hubs:</div>
@@ -1767,13 +1945,12 @@ export default function RideSharingPage() {
                     <button
                       key={chip.label}
                       type="button"
-                      className={`dest-chip ${destination === chip.fullName ? "active" : ""}`}
+                      className={`dest-chip ${destination === chip.name ? "active" : ""}`}
                       onClick={() => {
-                        setDestination(chip.fullName);
-                        setDestCoords({ lat: chip.lat, lng: chip.lng });
-                        if (mapInstanceRef.current) {
-                          mapInstanceRef.current.panTo({ lat: chip.lat, lng: chip.lng });
-                        }
+                        const nextPt = { lat: chip.lat, lng: chip.lng };
+                        setDestination(chip.name);
+                        setDestCoords(nextPt);
+                        focusRouteOnMap(pickupCoords, nextPt);
                         showToast(`🎯 Destination: ${chip.label}`);
                       }}
                     >
@@ -1859,6 +2036,96 @@ export default function RideSharingPage() {
             {/* -------------------------------------------------
                 5. LIVE SEARCH STATES (Loading, Error, No-Results, Results)
                 ------------------------------------------------- */}
+
+            {/* ACTIVE CAMPUS RIDERS ON LOAD (Pre-search discovery) */}
+            {!isSearching && !searchError && !hasSubmittedSearch && (
+              <div className="active-campus-section">
+                <div className="active-campus-header">
+                  <span className="active-campus-title">
+                    <span className="realtime-pulse-dot" />
+                    Active Campus Commuters
+                  </span>
+                  <span className="results-count-badge">{activeCampusRiders.length}</span>
+                </div>
+                <p className="active-campus-sub">
+                  Verified peers currently open to sharing rides on the map. Click a rider to inspect their corridor and split costs.
+                </p>
+
+                {isLoadingActiveRiders ? (
+                  <div className="active-campus-sub">Loading active commuters...</div>
+                ) : activeCampusRiders.length === 0 ? (
+                  <div className="no-results-actions">
+                    <div className="active-campus-sub">
+                      No other peers have posted an active route right now. Register yours so others heading your way can join.
+                    </div>
+                    <button
+                      type="button"
+                      className="register-route-btn"
+                      onClick={handleRegisterRoute}
+                      disabled={isRegisteringRoute}
+                    >
+                      {isRegisteringRoute ? "Registering Route..." : "Register My Route for Peers"}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="active-campus-mini-list">
+                    {activeCampusRiders.slice(0, 4).map((peer) => {
+                      const peerOrigin = resolvePeerPoint(peer.originCoords, peer.origin, pickupCoords, 1);
+                      const peerDest = resolvePeerPoint(peer.destCoords, peer.destination, destCoords, 2);
+                      const est = estimateSharedCommute(peerOrigin, peerDest, 2);
+                      const isConnected = connectedPartnerIds.includes(peer.id);
+
+                      return (
+                        <div
+                          key={`active-${peer.id}`}
+                          className={`active-campus-mini-card ${peer.corridorMatch ? "corridor" : ""}`}
+                          onClick={() => {
+                            setInspectedPartnerId(peer.id);
+                            focusRouteOnMap(peerOrigin, peerDest);
+                          }}
+                        >
+                          <div className="active-campus-mini-top">
+                            <span className="active-campus-mini-user">
+                              <span className="map-peer-chip-avatar">{peer.avatarInitials}</span>
+                              <span>{peer.fullName}</span>
+                            </span>
+                            <span className="partner-savings-badge">
+                              ~৳{est.sharedFareBdt}/person · -{est.savingsPercent}%
+                            </span>
+                          </div>
+                          <div className="active-campus-mini-route">
+                            {peer.origin.split(",")[0]} → <strong>{peer.destination.split(",")[0]}</strong>
+                            {peer.corridorMatch ? " · Matches your route" : ""}
+                          </div>
+                          <div className="active-campus-mini-bottom">
+                            <button
+                              type="button"
+                              className="multi-clear-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAdoptPeerRoute(peer);
+                              }}
+                            >
+                              Share Route
+                            </button>
+                            <button
+                              type="button"
+                              className={`partner-connect-btn ${isConnected ? "connected" : ""}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleConnectPartner(peer);
+                              }}
+                            >
+                              {isConnected ? "Request Sent" : "Connect"}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* STATE 1: LOADING / SEARCHING SKELETON */}
             {isSearching && (
@@ -2015,6 +2282,9 @@ export default function RideSharingPage() {
                   {searchResults.map((partner) => {
                     const isConnected = connectedPartnerIds.includes(partner.id);
                     const isSelected = selectedPartnerIds.includes(partner.id);
+                    const peerOrigin = resolvePeerPoint(partner.originCoords, partner.origin, pickupCoords, 1);
+                    const peerDest = resolvePeerPoint(partner.destCoords, partner.destination, destCoords, 2);
+                    const partnerFare = estimateSharedCommute(peerOrigin, peerDest, 2);
                     const initials = partner.avatarInitials || partner.fullName
                       .split(" ")
                       .map((p) => p[0])
@@ -2086,6 +2356,9 @@ export default function RideSharingPage() {
                             </svg>
                             {partner.destinationCompatibility}
                           </span>
+                          <span className="partner-savings-badge" title="Estimated shared ride cost per person">
+                            ~৳{partnerFare.sharedFareBdt}/person · Save {partnerFare.savingsPercent}%
+                          </span>
                         </div>
 
                         {partner.notes && (
@@ -2101,7 +2374,7 @@ export default function RideSharingPage() {
                             className={`partner-connect-btn ${isConnected ? "connected" : ""}`}
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleConnectPartner(partner.id, partner.fullName);
+                              handleConnectPartner(partner);
                             }}
                           >
                             {isConnected ? (
@@ -2205,15 +2478,7 @@ export default function RideSharingPage() {
               type="button"
               className="map-control-btn"
               onClick={() => {
-                const gmaps = window.google?.maps;
-                if (mapInstanceRef.current && gmaps?.LatLngBounds) {
-                  const bounds = new gmaps.LatLngBounds();
-                  bounds.extend(pickupCoords);
-                  bounds.extend(destCoords);
-                  mapInstanceRef.current.fitBounds(bounds, 80);
-                } else {
-                  setZoomScale(1);
-                }
+                focusRouteOnMap(pickupCoords, destCoords);
                 showToast("📍 Map centered to full travel route.");
               }}
               title="Fit Full Route"
@@ -2232,130 +2497,80 @@ export default function RideSharingPage() {
             style={{ display: isGoogleMapsReady ? "block" : "none" }}
           />
 
-          {/* 2. Interactive Dhaka Canvas Fallback (Active when API key is pending or loading) */}
+          {/* 2. Interactive Web-Mercator OpenStreetMap Campus Commute Map */}
           {!isGoogleMapsReady && (
-            <svg
-              className={`interactive-map-canvas ${mapPickMode !== "none" ? "picking-cursor" : ""}`}
-              viewBox="0 0 1000 700"
-              preserveAspectRatio="xMidYMid meet"
-              onClick={(e) => {
-                const svgRect = e.currentTarget.getBoundingClientRect();
-                const clickX = ((e.clientX - svgRect.left) / svgRect.width) * 1000;
-                const clickY = ((e.clientY - svgRect.top) / svgRect.height) * 700;
+            <CampusRouteMap
+              pickup={pickup}
+              destination={destination}
+              pickupCoords={pickupCoords}
+              destCoords={destCoords}
+              gpsCoords={gpsCoords}
+              myLiveCoords={myLiveCoords}
+              partnerLiveCoords={
+                trackingSession?.partnerLocation
+                  ? {
+                      lat: trackingSession.partnerLocation.lat,
+                      lng: trackingSession.partnerLocation.lng,
+                      name: trackingSession.partner.fullName,
+                    }
+                  : null
+              }
+              mapPickMode={mapPickMode}
+              center={mapCenter}
+              zoom={mapZoom}
+              peers={mapPeers as MapPeerItem[]}
+              selectedPartnerIds={selectedPartnerIds}
+              connectedPartnerIds={connectedPartnerIds}
+              inspectedPartnerId={inspectedPartnerId}
+              onCenterChange={setMapCenter}
+              onZoomChange={setMapZoom}
+              onViewportResize={setMapViewport}
+              onPickCoordinate={(mode, lat, lng) => {
+                const coord = { lat, lng };
+                const nearest = findNearestLandmark(coord);
+                const resolvedLabel =
+                  Math.hypot(nearest.lat - lat, nearest.lng - lng) < 0.004
+                    ? nearest.name
+                    : `Near ${nearest.label} (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
 
-                const nearest = DHAKA_CANVAS_LANDMARKS.reduce((prev, curr) => {
-                  const d1 = Math.hypot(prev.x - clickX, prev.y - clickY);
-                  const d2 = Math.hypot(curr.x - clickX, curr.y - clickY);
-                  return d1 < d2 ? prev : curr;
-                });
-
-                if (mapPickMode === "pickup") {
-                  setPickup(nearest.name);
-                  setPickupCoords({ lat: nearest.lat, lng: nearest.lng });
-                  setMapPickMode("none");
-                  showToast(`📍 Pickup set: ${nearest.name}`);
+                if (mode === "pickup") {
+                  setPickup(resolvedLabel);
+                  setPickupCoords(coord);
+                  focusRouteOnMap(coord, destCoords);
+                  showToast(`📍 Pickup pinned: ${resolvedLabel.split("(")[0].trim()}`);
                 } else {
-                  setDestination(nearest.name);
-                  setDestCoords({ lat: nearest.lat, lng: nearest.lng });
+                  setDestination(resolvedLabel);
+                  setDestCoords(coord);
+                  focusRouteOnMap(pickupCoords, coord);
+                  showToast(`🎯 Destination pinned: ${resolvedLabel.split("(")[0].trim()}`);
+                }
+                setMapPickMode("none");
+              }}
+              onSelectLandmark={(lm) => {
+                if (mapPickMode === "pickup") {
+                  const pt = { lat: lm.lat, lng: lm.lng };
+                  setPickup(lm.name);
+                  setPickupCoords(pt);
                   setMapPickMode("none");
-                  showToast(`🎯 Destination set: ${nearest.name}`);
+                  focusRouteOnMap(pt, destCoords);
+                  showToast(`📍 Pickup set: ${lm.label}`);
+                } else {
+                  const pt = { lat: lm.lat, lng: lm.lng };
+                  setDestination(lm.name);
+                  setDestCoords(pt);
+                  setMapPickMode("none");
+                  focusRouteOnMap(pickupCoords, pt);
+                  showToast(`🎯 Destination set: ${lm.label}`);
                 }
               }}
-              style={{ transform: `scale(${zoomScale})`, transformOrigin: "center center", transition: "transform 0.2s ease" }}
-              aria-label="Interactive Google Maps Canvas of Dhaka Campus Network"
-            >
-              <defs>
-                <filter id="mapShadow" x="-20%" y="-20%" width="140%" height="140%">
-                  <feDropShadow dx="0" dy="3" stdDeviation="4" floodColor="#000000" floodOpacity="0.12" />
-                </filter>
-              </defs>
-
-              <rect x="0" y="0" width="1000" height="700" fill="#f4f3f0" />
-
-              {/* Water bodies */}
-              <path className="svg-water-body" d="M 50 680 C 200 660, 400 670, 600 640 C 750 610, 850 630, 950 650 L 1000 700 L 0 700 Z" />
-              <path className="svg-water-body" d="M 280 340 C 310 370, 320 420, 310 460 C 295 440, 275 390, 280 340 Z" />
-              <path className="svg-water-body" d="M 610 320 C 660 300, 720 330, 780 320 C 820 310, 790 350, 740 370 C 680 390, 630 360, 610 320 Z" />
-
-              {/* Campus green zones */}
-              <path className="svg-green-space" d="M 450 490 C 500 480, 560 510, 560 570 C 520 590, 460 580, 440 540 Z" />
-              <rect x="490" y="440" width="70" height="45" rx="12" className="svg-green-space" />
-              <circle cx="330" cy="400" r="22" className="svg-green-space" />
-
-              {/* Major Roads */}
-              <path d="M 260 590 L 330 460 L 320 360 L 290 200 L 310 110" className="svg-primary-highway" />
-              <path d="M 480 570 L 475 470 L 485 365 L 570 280 L 630 210 L 510 90" className="svg-primary-highway" />
-              <path d="M 320 460 L 475 470" className="svg-secondary-road" />
-              <path d="M 330 360 L 485 365" className="svg-secondary-road" />
-              <path d="M 485 365 L 670 350 L 780 320" className="svg-secondary-road" />
-
-              {/* Campus Landmark Nodes */}
-              {DHAKA_CANVAS_LANDMARKS.map((lm) => (
-                <g key={lm.name} className="landmark-interactive-node">
-                  <circle cx={lm.x} cy={lm.y} r="5" fill="#64748b" />
-                  <circle cx={lm.x} cy={lm.y} r="2.5" fill="#ffffff" />
-                  <text x={lm.x + 8} y={lm.y + 4} fontSize="10" fontWeight="600" fill="#475569" fontFamily="system-ui">
-                    {lm.name.split(",")[0]}
-                  </text>
-                </g>
-              ))}
-
-              {/* Route line */}
-              <path d="M 295 360 Q 400 440 490 530" className="svg-active-route-casing" />
-              <path d="M 295 360 Q 400 440 490 530" className="svg-active-route-line" />
-
-              {/* Green Pin A */}
-              <g transform="translate(295, 360)" filter="url(#mapShadow)">
-                <ellipse cx="0" cy="0" rx="6" ry="3" fill="rgba(0,0,0,0.2)" />
-                <path d="M 0 -36 C -12 -36, -18 -26, -18 -16 C -18 -4, 0 0, 0 0 C 0 0, 18 -4, 18 -16 C 18 -26, 12 -36, 0 -36 Z" fill="#1e8e3e" stroke="#ffffff" strokeWidth="1.5" />
-                <circle cx="0" cy="-20" r="7" fill="#ffffff" />
-                <text x="0" y="-17" textAnchor="middle" fontSize="9.5" fontWeight="800" fill="#1e8e3e" fontFamily="system-ui">A</text>
-              </g>
-
-              {/* Red Pin B */}
-              <g transform="translate(490, 530)" filter="url(#mapShadow)">
-                <ellipse cx="0" cy="0" rx="6" ry="3" fill="rgba(0,0,0,0.2)" />
-                <path d="M 0 -36 C -12 -36, -18 -26, -18 -16 C -18 -4, 0 0, 0 0 C 0 0, 18 -4, 18 -16 C 18 -26, 12 -36, 0 -36 Z" fill="#d93025" stroke="#ffffff" strokeWidth="1.5" />
-                <circle cx="0" cy="-20" r="7" fill="#ffffff" />
-                <text x="0" y="-17" textAnchor="middle" fontSize="9.5" fontWeight="800" fill="#d93025" fontFamily="system-ui">B</text>
-              </g>
-
-              {/* Eligible Travel Partner Markers on Map Canvas */}
-              {searchResults.map((partner, idx) => {
-                const matchedLm = DHAKA_CANVAS_LANDMARKS.find((lm) =>
-                  partner.origin.toLowerCase().includes(lm.name.toLowerCase().split(",")[0])
-                );
-                const px = matchedLm ? matchedLm.x + (idx % 2 === 0 ? 18 : -18) : 320 + idx * 30;
-                const py = matchedLm ? matchedLm.y + (idx % 2 === 0 ? -18 : 18) : 410 + idx * 25;
-                const isSelected = selectedPartnerIds.includes(partner.id);
-
-                return (
-                  <g
-                    key={partner.id}
-                    className="svg-companion-node"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      togglePartnerSelection(partner.id);
-                      showToast(`📍 Selected ${partner.fullName} (${partner.approxPickupDistance})`);
-                    }}
-                    style={{ cursor: "pointer" }}
-                  >
-                    <circle cx={px} cy={py} r={isSelected ? 16 : 12} fill={isSelected ? "#0d6b63" : "#0284c7"} opacity="0.95" />
-                    <circle cx={px} cy={py} r={isSelected ? 20 : 15} fill="none" stroke={isSelected ? "#0d6b63" : "#0284c7"} strokeWidth="2" strokeDasharray="3,3" opacity="0.8" />
-                    <text x={px} y={py + 4} textAnchor="middle" fontSize="9" fontWeight="800" fill="#ffffff" fontFamily="system-ui">
-                      {partner.avatarInitials}
-                    </text>
-                    <rect x={px - 38} y={py - 27} width="76" height="16" rx="4" fill="#ffffff" stroke={isSelected ? "#0d6b63" : "#cbd5e1"} strokeWidth="1.5" filter="url(#mapShadow)" />
-                    <text x={px} y={py - 15} textAnchor="middle" fontSize="8.5" fontWeight="700" fill={isSelected ? "#0d6b63" : "#1e293b"} fontFamily="system-ui">
-                      {partner.fullName.split(" ")[0]} · {partner.pickupDistanceKm ? `${partner.pickupDistanceKm}km` : "Near"}
-                    </text>
-                  </g>
-                );
-              })}
-            </svg>
+              onInspectPartner={setInspectedPartnerId}
+              onTogglePartnerSelection={togglePartnerSelection}
+              onConnectPartner={(peer) => handleConnectPartner(peer)}
+              onAdoptPeerRoute={(peer) => handleAdoptPeerRoute(peer)}
+            />
           )}
 
-          {/* Route Distance & Estimated Time Floating Pill */}
+          {/* Route Distance, Cost Split & Estimated Time Floating Pill */}
           <div className="map-route-summary-pill">
             <span className="route-badge-item">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -2370,6 +2585,10 @@ export default function RideSharingPage() {
                 <polyline points="12 6 12 12 16 14" />
               </svg>
               {routeInfo.durationText}
+            </span>
+            <span className="route-badge-separator" />
+            <span className="route-cost-split-pill" title={`Estimated solo fare ~৳${fareEstimate.soloFareBdt}`}>
+              Split ~৳{fareEstimate.sharedFareBdt}/person · Save {fareEstimate.savingsPercent}%
             </span>
             <span className="route-badge-separator" />
             <span style={{ fontSize: "12px", color: "var(--muted)" }}>
@@ -2801,9 +3020,13 @@ export default function RideSharingPage() {
             </div>
           )}
 
-          {/* Watermark & Attributions */}
-          <div className="map-watermark-google">Google</div>
-          <div className="map-attribution-text">Map Data ©2026 UniShare Campus Transit Network</div>
+          {/* Watermark & Attributions (Google Maps mode only; CampusRouteMap renders its own OSM attribution) */}
+          {isGoogleMapsReady && (
+            <>
+              <div className="map-watermark-google">Google</div>
+              <div className="map-attribution-text">Map Data ©2026 UniShare Campus Transit Network</div>
+            </>
+          )}
         </main>
       </div>
 
