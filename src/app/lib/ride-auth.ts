@@ -3,6 +3,8 @@ import { db } from "@/app/lib/db";
 import {
   SESSION_COOKIE,
   SessionPayload,
+  VERIFIED_ACCOUNT_COOKIE,
+  VerifiedAccountPayload,
   verifySignedPayload,
   normalizeEmail,
 } from "@/app/lib/auth";
@@ -84,7 +86,7 @@ export async function getAuthenticatedRideUser(
   email = normalizeEmail(email);
 
   try {
-    const user = await db.user.findUnique({
+    let user = await db.user.findUnique({
       where: { email },
       select: {
         id: true,
@@ -98,6 +100,58 @@ export async function getAuthenticatedRideUser(
         tokenBalance: true,
       },
     });
+
+    // Recover authenticated user from signed VERIFIED_ACCOUNT_COOKIE on fresh/ephemeral DB instances
+    if (!user) {
+      const signedAccount = verifySignedPayload<VerifiedAccountPayload>(
+        req.cookies.get(VERIFIED_ACCOUNT_COOKIE)?.value
+      );
+      if (signedAccount && normalizeEmail(signedAccount.email) === email) {
+        user = await db.user.upsert({
+          where: { email },
+          update: {
+            fullName: signedAccount.fullName,
+            university: signedAccount.university,
+            universityId: signedAccount.universityId,
+            isCustomUniversity: signedAccount.isCustomUniversity,
+            studentId: signedAccount.studentId,
+            department: signedAccount.department ?? null,
+            programme: signedAccount.programme ?? null,
+            academicSession: signedAccount.academicSession ?? null,
+            gender: signedAccount.gender ?? null,
+            emailVerified: signedAccount.emailVerified,
+            verified: signedAccount.verified,
+          },
+          create: {
+            email,
+            fullName: signedAccount.fullName,
+            university: signedAccount.university,
+            universityId: signedAccount.universityId,
+            isCustomUniversity: signedAccount.isCustomUniversity,
+            studentId: signedAccount.studentId,
+            department: signedAccount.department ?? null,
+            programme: signedAccount.programme ?? null,
+            academicSession: signedAccount.academicSession ?? null,
+            gender: signedAccount.gender ?? null,
+            passwordHash: signedAccount.passwordHash,
+            emailVerified: signedAccount.emailVerified,
+            verified: signedAccount.verified,
+            tokenBalance: signedAccount.tokenBalance ?? 50,
+          },
+          select: {
+            id: true,
+            email: true,
+            fullName: true,
+            studentId: true,
+            university: true,
+            department: true,
+            gender: true,
+            verified: true,
+            tokenBalance: true,
+          },
+        });
+      }
+    }
 
     return user;
   } catch (err) {
