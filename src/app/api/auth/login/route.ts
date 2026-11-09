@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/app/lib/db";
 import {
   applySessionCookies,
+  canonicalizeEmail,
   DEMO_EMAIL,
   hashPassword,
   isValidEmail,
@@ -54,67 +55,84 @@ export async function POST(req: NextRequest) {
 
     try {
       userRecord = await db.user.findUnique({ where: { email } });
+      // Also support logging in with Gmail dot/+tag canonical equivalents if registered under an alias
+      if (!userRecord) {
+        const canonicalInput = canonicalizeEmail(email);
+        const candidates = await db.user.findMany({
+          where: { OR: [{ emailVerified: true }, { verified: true }] },
+        });
+        userRecord =
+          candidates.find((u) => canonicalizeEmail(u.email) === canonicalInput) ??
+          null;
+      }
     } catch (err) {
       console.warn("Login DB lookup warning:", err);
     }
 
+    const signedAccount = verifySignedPayload<VerifiedAccountPayload>(
+      req.cookies.get(VERIFIED_ACCOUNT_COOKIE)?.value
+    );
+    const matchingSignedAccount =
+      signedAccount &&
+      canonicalizeEmail(signedAccount.email) === canonicalizeEmail(email)
+        ? signedAccount
+        : null;
+
     // Serverless cold-start fallback for verified user created in this browser session
-    if (!userRecord) {
-      const signedAccount = verifySignedPayload<VerifiedAccountPayload>(
-        req.cookies.get(VERIFIED_ACCOUNT_COOKIE)?.value
-      );
-      if (signedAccount && signedAccount.email === email) {
-        try {
-          userRecord = await db.user.upsert({
-            where: { email },
-            update: {
-              fullName: signedAccount.fullName,
-              university: signedAccount.university,
-              universityId: signedAccount.universityId,
-              isCustomUniversity: signedAccount.isCustomUniversity,
-              studentId: signedAccount.studentId,
-              department: signedAccount.department ?? null,
-              programme: signedAccount.programme ?? null,
-              academicSession: signedAccount.academicSession ?? null,
-              passwordHash: signedAccount.passwordHash,
-              emailVerified: signedAccount.emailVerified,
-              verified: signedAccount.verified,
-            },
-            create: {
-              email,
-              fullName: signedAccount.fullName,
-              university: signedAccount.university,
-              universityId: signedAccount.universityId,
-              isCustomUniversity: signedAccount.isCustomUniversity,
-              studentId: signedAccount.studentId,
-              department: signedAccount.department ?? null,
-              programme: signedAccount.programme ?? null,
-              academicSession: signedAccount.academicSession ?? null,
-              passwordHash: signedAccount.passwordHash,
-              emailVerified: signedAccount.emailVerified,
-              verified: signedAccount.verified,
-              tokenBalance: signedAccount.tokenBalance,
-            },
-          });
-        } catch {
-          userRecord = {
-            id: `u_${Buffer.from(email).toString("hex").slice(0, 12)}`,
-            email,
-            fullName: signedAccount.fullName,
-            university: signedAccount.university,
-            universityId: signedAccount.universityId,
-            isCustomUniversity: signedAccount.isCustomUniversity,
-            studentId: signedAccount.studentId,
-            department: signedAccount.department ?? null,
-            programme: signedAccount.programme ?? null,
-            academicSession: signedAccount.academicSession ?? null,
-            createdAt: signedAccount.createdAt ? new Date(signedAccount.createdAt) : new Date(),
-            passwordHash: signedAccount.passwordHash,
-            emailVerified: signedAccount.emailVerified,
-            verified: signedAccount.verified,
-            tokenBalance: signedAccount.tokenBalance,
-          };
-        }
+    if (!userRecord && matchingSignedAccount) {
+      const targetEmail = normalizeEmail(matchingSignedAccount.email);
+      try {
+        userRecord = await db.user.upsert({
+          where: { email: targetEmail },
+          update: {
+            fullName: matchingSignedAccount.fullName,
+            university: matchingSignedAccount.university,
+            universityId: matchingSignedAccount.universityId,
+            isCustomUniversity: matchingSignedAccount.isCustomUniversity,
+            studentId: matchingSignedAccount.studentId,
+            department: matchingSignedAccount.department ?? null,
+            programme: matchingSignedAccount.programme ?? null,
+            academicSession: matchingSignedAccount.academicSession ?? null,
+            passwordHash: matchingSignedAccount.passwordHash,
+            emailVerified: matchingSignedAccount.emailVerified,
+            verified: matchingSignedAccount.verified,
+          },
+          create: {
+            email: targetEmail,
+            fullName: matchingSignedAccount.fullName,
+            university: matchingSignedAccount.university,
+            universityId: matchingSignedAccount.universityId,
+            isCustomUniversity: matchingSignedAccount.isCustomUniversity,
+            studentId: matchingSignedAccount.studentId,
+            department: matchingSignedAccount.department ?? null,
+            programme: matchingSignedAccount.programme ?? null,
+            academicSession: matchingSignedAccount.academicSession ?? null,
+            passwordHash: matchingSignedAccount.passwordHash,
+            emailVerified: matchingSignedAccount.emailVerified,
+            verified: matchingSignedAccount.verified,
+            tokenBalance: matchingSignedAccount.tokenBalance,
+          },
+        });
+      } catch {
+        userRecord = {
+          id: `u_${Buffer.from(targetEmail).toString("hex").slice(0, 12)}`,
+          email: targetEmail,
+          fullName: matchingSignedAccount.fullName,
+          university: matchingSignedAccount.university,
+          universityId: matchingSignedAccount.universityId,
+          isCustomUniversity: matchingSignedAccount.isCustomUniversity,
+          studentId: matchingSignedAccount.studentId,
+          department: matchingSignedAccount.department ?? null,
+          programme: matchingSignedAccount.programme ?? null,
+          academicSession: matchingSignedAccount.academicSession ?? null,
+          createdAt: matchingSignedAccount.createdAt
+            ? new Date(matchingSignedAccount.createdAt)
+            : new Date(),
+          passwordHash: matchingSignedAccount.passwordHash,
+          emailVerified: matchingSignedAccount.emailVerified,
+          verified: matchingSignedAccount.verified,
+          tokenBalance: matchingSignedAccount.tokenBalance,
+        };
       }
     }
 
@@ -150,11 +168,42 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const passwordOk = verifyPassword(
+    let passwordOk = verifyPassword(
       password,
       userRecord.passwordHash,
       userRecord.email
     );
+
+    // If serverless DB had an older/placeholder hash while the signed verified-account cookie carries the updated hash, recover & sync DB
+    if (
+      !passwordOk &&
+      matchingSignedAccount?.passwordHash &&
+      verifyPassword(
+        password,
+        matchingSignedAccount.passwordHash,
+        matchingSignedAccount.email
+      )
+    ) {
+      passwordOk = true;
+      userRecord = {
+        ...userRecord,
+        passwordHash: matchingSignedAccount.passwordHash,
+        emailVerified: true,
+        verified: userRecord.verified || matchingSignedAccount.verified,
+      };
+      try {
+        await db.user.update({
+          where: { email: userRecord.email },
+          data: {
+            passwordHash: matchingSignedAccount.passwordHash,
+            emailVerified: true,
+          },
+        });
+      } catch {
+        // ignore ephemeral DB write errors
+      }
+    }
+
     if (!passwordOk) {
       return NextResponse.json(
         { error: "Incorrect email or password." },

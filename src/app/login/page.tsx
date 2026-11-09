@@ -317,7 +317,7 @@ function LoginContent() {
               {errorMsg && (
                 <div className="err-banner" role="alert" style={{ marginTop: "16px" }}>
                   {errorMsg}
-                  {unverifiedEmail && (
+                  {unverifiedEmail ? (
                     <>
                       {" "}
                       <Link
@@ -327,7 +327,21 @@ function LoginContent() {
                         Confirm email now →
                       </Link>
                     </>
-                  )}
+                  ) : errorMsg.toLowerCase().includes("password") ? (
+                    <>
+                      {" "}
+                      <Link
+                        href={
+                          email.trim()
+                            ? `/forgot-password?email=${encodeURIComponent(email.trim())}`
+                            : "/forgot-password"
+                        }
+                        style={{ color: "inherit", fontWeight: 700, textDecoration: "underline" }}
+                      >
+                        Reset password →
+                      </Link>
+                    </>
+                  ) : null}
                 </div>
               )}
 

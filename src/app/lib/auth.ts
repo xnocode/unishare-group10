@@ -184,11 +184,18 @@ export function verifyPassword(
     }
   }
 
-  // Backward-compatible verification for pre-seeded demo account before migration
+  // Backward-compatible verification for pre-seeded demo/campus test accounts before scrypt migration
+  const seededDemoEmails = new Set([
+    DEMO_EMAIL,
+    "sadia@std.du.ac.bd",
+    "tanvir@std.du.ac.bd",
+  ]);
   if (
     email &&
-    normalizeEmail(email) === DEMO_EMAIL &&
-    (storedHash === "hash" || storedHash === "student_verified_auth")
+    seededDemoEmails.has(normalizeEmail(email)) &&
+    (storedHash === "hash" ||
+      storedHash === "demo_hash" ||
+      storedHash === "student_verified_auth")
   ) {
     return password === "password123";
   }

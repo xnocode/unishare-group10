@@ -85,6 +85,7 @@ export async function POST(req: NextRequest) {
             ...(matchingPending
               ? {
                   fullName: matchingPending.fullName || existing.fullName,
+                  passwordHash: matchingPending.passwordHash || existing.passwordHash,
                   university: existing.university || matchingPending.university,
                   universityId:
                     existing.universityId || matchingPending.universityId,
