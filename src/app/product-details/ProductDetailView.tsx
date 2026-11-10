@@ -50,6 +50,23 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
   const [borrowRequested, setBorrowRequested] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastVisible, setToastVisible] = useState(false);
+  const [remoteItem, setRemoteItem] = useState<MarketplaceItem | null>(null);
+
+  useEffect(() => {
+    if (!productId) return;
+    let active = true;
+    fetch(`/api/marketplace/${encodeURIComponent(productId)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { ok?: boolean; marketItem?: MarketplaceItem } | null) => {
+        if (active && data?.ok && data.marketItem) {
+          setRemoteItem(data.marketItem);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [productId]);
 
   const favoritesKey = getUserScopedKey(
     'unishare_favorites',
@@ -158,14 +175,16 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
       const direct = DEFAULT_ITEMS.find((it) => it.id === targetId);
       if (direct) return direct;
 
+      if (remoteItem && remoteItem.id === targetId) return remoteItem;
+
       const slugMatch = DEFAULT_ITEMS.find((it) =>
         it.name.toLowerCase().replace(/[^a-z0-9]/g, '-').includes((targetId || '').toLowerCase())
       );
       if (slugMatch) return slugMatch;
     }
 
-    return DEFAULT_ITEMS[0];
-  }, [productId, rawCustomItemsJson, rawMyProductsJson, resolvedUser.email, resolvedUser.initials, resolvedUser.name]);
+    return remoteItem || DEFAULT_ITEMS[0];
+  }, [productId, remoteItem, rawCustomItemsJson, rawMyProductsJson, resolvedUser.email, resolvedUser.initials, resolvedUser.name]);
 
   // Record item in recently viewed
   useEffect(() => {

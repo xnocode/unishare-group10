@@ -33,6 +33,8 @@ export async function POST(req: NextRequest) {
       gender?: string;
       idCardFileName?: string;
       faceFileName?: string;
+      idCardPhotoPath?: string;
+      facePhotoPath?: string;
     };
 
     const session = verifySignedPayload<SessionPayload>(
@@ -87,6 +89,10 @@ export async function POST(req: NextRequest) {
     const programme = (body.programme || "").trim() || "BSc (Honours)";
     const academicSession = (body.academicSession || "").trim() || "2023–2024";
     const university = (body.university || session?.university || "").trim();
+    const idCardPhotoPath =
+      typeof body.idCardPhotoPath === "string" ? body.idCardPhotoPath.trim().slice(0, 320) : "";
+    const facePhotoPath =
+      typeof body.facePhotoPath === "string" ? body.facePhotoPath.trim().slice(0, 320) : "";
 
     let updatedUser: {
       id: string;
@@ -119,7 +125,10 @@ export async function POST(req: NextRequest) {
             academicSession,
             ...(university ? { university } : {}),
             ...(body.gender ? { gender: body.gender.trim().toLowerCase() } : {}),
+            ...(idCardPhotoPath ? { idCardPhotoPath } : {}),
+            ...(facePhotoPath ? { facePhotoPath } : {}),
             emailVerified: true,
+            verified: true,
           },
         });
       }
@@ -148,7 +157,7 @@ export async function POST(req: NextRequest) {
         createdAt: matchingAccount.createdAt ? new Date(matchingAccount.createdAt) : new Date(),
         passwordHash: matchingAccount.passwordHash,
         emailVerified: true,
-        verified: matchingAccount.verified,
+        verified: true,
         tokenBalance: matchingAccount.tokenBalance,
       };
     }
@@ -165,7 +174,7 @@ export async function POST(req: NextRequest) {
           programme,
           academicSession,
           createdAt: new Date(),
-          verified: false,
+          verified: true,
           emailVerified: true,
           tokenBalance: 50,
         });

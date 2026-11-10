@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppNavbar from "../components/AppNavbar";
@@ -107,23 +107,44 @@ export default function MyProductsPage() {
     isDemoUser
   );
   const rawProductsJson = useLocalStorageRaw(productsKey);
+  const [serverProducts, setServerProducts] = useState<ProductItem[]>([]);
+
+  useEffect(() => {
+    if (!resolvedUser.email) return;
+    let active = true;
+    fetch("/api/marketplace?mine=true", {
+      headers: { "x-user-email": resolvedUser.email },
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { ok?: boolean; myProducts?: ProductItem[] } | null) => {
+        if (active && data?.ok && Array.isArray(data.myProducts)) {
+          setServerProducts(data.myProducts);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [resolvedUser.email]);
 
   const products: ProductItem[] = useMemo(() => {
-    if (!rawProductsJson) return isDemoUser ? INITIAL_PRODUCTS : [];
-    try {
-      const parsed = JSON.parse(rawProductsJson);
-      return Array.isArray(parsed)
-        ? (parsed as ProductItem[])
-        : isDemoUser
-        ? INITIAL_PRODUCTS
-        : [];
-    } catch {
-      return isDemoUser ? INITIAL_PRODUCTS : [];
+    let localList: ProductItem[] = isDemoUser ? INITIAL_PRODUCTS : [];
+    if (rawProductsJson) {
+      try {
+        const parsed = JSON.parse(rawProductsJson);
+        if (Array.isArray(parsed)) localList = parsed as ProductItem[];
+      } catch {}
     }
-  }, [rawProductsJson, isDemoUser]);
+
+    if (serverProducts.length === 0) return localList;
+    const seen = new Set(serverProducts.map((p) => p.id));
+    return [...serverProducts, ...localList.filter((p) => !seen.has(p.id))];
+  }, [rawProductsJson, isDemoUser, serverProducts]);
 
   const setProducts = (updater: (prev: ProductItem[]) => ProductItem[]) => {
-    writeUserScopedJson(productsKey, updater(products));
+    const next = updater(products);
+    setServerProducts(next);
+    writeUserScopedJson(productsKey, next);
   };
 
   // Modals & toast states
@@ -183,6 +204,7 @@ export default function MyProductsPage() {
 
   // State toggles
   const handleToggleState = (item: ProductItem) => {
+    const nextState: "active" | "paused" = item.state === "paused" ? "active" : "paused";
     if (item.state === "paused") {
       setProducts((prev) =>
         prev.map((p) =>
@@ -214,12 +236,24 @@ export default function MyProductsPage() {
       syncListingToMarketplace(item, "paused");
       triggerToast(`Listing "${item.name}" paused.`);
     }
+    fetch(`/api/marketplace/${encodeURIComponent(item.id)}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...(resolvedUser.email ? { "x-user-email": resolvedUser.email } : {}),
+      },
+      body: JSON.stringify({ status: nextState }),
+    }).catch(() => {});
   };
 
   const handleDeleteDraft = (id: string, name: string) => {
     if (window.confirm(`Delete the draft "${name}"?`)) {
       setProducts((prev) => prev.filter((p) => p.id !== id));
       removeMarketplaceItem(id);
+      fetch(`/api/marketplace/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers: resolvedUser.email ? { "x-user-email": resolvedUser.email } : undefined,
+      }).catch(() => {});
       triggerToast(`Draft "${name}" was deleted.`);
     }
   };
@@ -238,6 +272,14 @@ export default function MyProductsPage() {
       )
     );
     syncListingToMarketplace(item, "active");
+    fetch(`/api/marketplace/${encodeURIComponent(item.id)}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...(resolvedUser.email ? { "x-user-email": resolvedUser.email } : {}),
+      },
+      body: JSON.stringify({ status: "active" }),
+    }).catch(() => {});
     triggerToast(`Draft "${item.name}" finished and published!`);
   };
 
@@ -262,6 +304,14 @@ export default function MyProductsPage() {
       )
     );
     syncListingToMarketplace(selectedProduct, selectedProduct.state, r, d);
+    fetch(`/api/marketplace/${encodeURIComponent(selectedProduct.id)}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...(resolvedUser.email ? { "x-user-email": resolvedUser.email } : {}),
+      },
+      body: JSON.stringify({ rate: r, deposit: d }),
+    }).catch(() => {});
     setShowPriceModal(false);
     triggerToast(`Updated pricing for ${selectedProduct.name}.`);
   };
@@ -271,14 +321,51 @@ export default function MyProductsPage() {
     setShowDatesModal(true);
   };
 
-  const handleCreateProduct = (asDraft = false) => {
+  const handleCreateProduct = async (asDraft = false) => {
     if (!newTitle.trim()) {
       triggerToast("Please provide a product title.");
       return;
     }
     const r = parseInt(newRate, 10) || 30;
     const d = parseInt(newDeposit, 10) || 100;
-    const newItem: ProductItem = {
+    const imageUrl =
+      newCat === "Cameras"
+        ? "/images/products/product-1.jpeg"
+        : newCat === "Study essentials"
+        ? "/images/products/product-2.jpeg"
+        : newCat === "Camera accessories"
+        ? "/images/products/product-3.jpeg"
+        : "/images/products/product-4.jpeg";
+
+    let savedRecord: ProductItem | null = null;
+    try {
+      const res = await fetch("/api/marketplace", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(resolvedUser.email ? { "x-user-email": resolvedUser.email } : {}),
+        },
+        body: JSON.stringify({
+          title: newTitle.trim(),
+          category: newCat,
+          condition: newCondition,
+          rate: r,
+          deposit: d,
+          area: "TSC",
+          imageUrl,
+          status: asDraft ? "draft" : "active",
+        }),
+      });
+      const data = (await res.json().catch(() => null)) as {
+        ok?: boolean;
+        myProduct?: ProductItem;
+      } | null;
+      if (res.ok && data?.ok && data.myProduct) {
+        savedRecord = data.myProduct;
+      }
+    } catch {}
+
+    const newItem: ProductItem = savedRecord || {
       id: `p-${Date.now()}`,
       name: newTitle.trim(),
       category: newCat,
@@ -286,21 +373,14 @@ export default function MyProductsPage() {
       state: asDraft ? "draft" : "active",
       rate: r,
       deposit: d,
-      image:
-        newCat === "Cameras"
-          ? "/images/products/product-1.jpeg"
-          : newCat === "Study essentials"
-          ? "/images/products/product-2.jpeg"
-          : newCat === "Camera accessories"
-          ? "/images/products/product-3.jpeg"
-          : "/images/products/product-4.jpeg",
+      image: imageUrl,
       note: asDraft
         ? "Add availability to finish your listing"
         : "Listed by you today",
       availText: asDraft ? "Not published" : "Available today",
       owner: `${resolvedUser.name} · You`,
     };
-    setProducts((prev) => [newItem, ...prev]);
+    setProducts((prev) => [newItem, ...prev.filter((p) => p.id !== newItem.id)]);
     if (!asDraft) {
       syncListingToMarketplace(newItem, "active");
     }

@@ -68,10 +68,10 @@ function StudentVerificationContent() {
   const setStudentId = (val: string) => setEditedStudentId(val);
 
   // Photos State (do not fake pre-uploaded photos for real users)
-  const [idCardFile, setIdCardFile] = useState<{ name: string; size: string } | null>(
+  const [idCardFile, setIdCardFile] = useState<{ name: string; size: string; file?: File } | null>(
     isDemo ? { name: "student-id-front.jpg", size: "JPG · 2.4 MB" } : null
   );
-  const [faceFile, setFaceFile] = useState<{ name: string; size: string } | null>(
+  const [faceFile, setFaceFile] = useState<{ name: string; size: string; file?: File } | null>(
     isDemo ? { name: "farhana-face.jpg", size: "JPG · 1.8 MB" } : null
   );
 
@@ -101,6 +101,7 @@ function StudentVerificationContent() {
     setIdCardFile({
       name: file.name,
       size: `${ext} · ${formatFileSize(file.size)}`,
+      file,
     });
   };
 
@@ -117,6 +118,7 @@ function StudentVerificationContent() {
     setFaceFile({
       name: file.name,
       size: `${ext} · ${formatFileSize(file.size)}`,
+      file,
     });
   };
 
@@ -157,6 +159,37 @@ function StudentVerificationContent() {
 
     setIsSubmitting(true);
     try {
+      let idCardPhotoPath = "";
+      let facePhotoPath = "";
+
+      const uploadPrivatePhoto = async (file: File | undefined, kind: "kyc-id" | "kyc-face") => {
+        if (!file) return "";
+        const fd = new FormData();
+        fd.append("kind", kind);
+        fd.append("file", file);
+        const upRes = await fetch("/api/uploads", {
+          method: "POST",
+          headers: email ? { "x-user-email": email } : undefined,
+          body: fd,
+        });
+        const upData = (await upRes.json().catch(() => ({}))) as {
+          ok?: boolean;
+          path?: string;
+          error?: string;
+        };
+        if (!upRes.ok || !upData.ok) {
+          throw new Error(upData.error || "Photo upload failed.");
+        }
+        return upData.path || "";
+      };
+
+      if (idCardFile.file) {
+        idCardPhotoPath = await uploadPrivatePhoto(idCardFile.file, "kyc-id");
+      }
+      if (faceFile.file) {
+        facePhotoPath = await uploadPrivatePhoto(faceFile.file, "kyc-face");
+      }
+
       const res = await fetch("/api/auth/student-verification", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -170,6 +203,8 @@ function StudentVerificationContent() {
           academicSession: session,
           idCardFileName: idCardFile.name,
           faceFileName: faceFile.name,
+          ...(idCardPhotoPath ? { idCardPhotoPath } : {}),
+          ...(facePhotoPath ? { facePhotoPath } : {}),
         }),
       });
 
@@ -189,19 +224,23 @@ function StudentVerificationContent() {
       }
 
       setSubmitMsg(
-        "Verification details saved! Moving to Review Pending..."
+        "Student ID verified! Activating your campus access..."
       );
       setTimeout(() => {
         router.push(
-          `/verification-pending?name=${encodeURIComponent(
+          `/verification-approved?name=${encodeURIComponent(
             nameCheck.normalized
           )}&email=${encodeURIComponent(email)}&university=${encodeURIComponent(
             university.trim() || "University of Dhaka"
           )}&studentId=${encodeURIComponent(idCheck.normalized)}`
         );
       }, 450);
-    } catch {
-      setErrorMsg("Network error while saving your student details.");
+    } catch (err) {
+      setErrorMsg(
+        err instanceof Error && err.message
+          ? err.message
+          : "Network error while saving your student details."
+      );
     } finally {
       setIsSubmitting(false);
     }

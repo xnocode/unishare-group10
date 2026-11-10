@@ -127,16 +127,48 @@ export default function MarketplacePage() {
   const rawFavsJson = useLocalStorageRaw(favoritesKey);
   const rawRecentJson = useLocalStorageRaw(recentKey);
   const rawWalletJson = useLocalStorageRaw(walletKey);
+  const [serverItems, setServerItems] = useState<MarketplaceItem[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    const loadServerListings = async () => {
+      try {
+        const res = await fetch('/api/marketplace');
+        const data = (await res.json().catch(() => null)) as {
+          ok?: boolean;
+          items?: MarketplaceItem[];
+        } | null;
+        if (active && res.ok && data?.ok && Array.isArray(data.items)) {
+          setServerItems(data.items);
+        }
+      } catch {
+        // fallback cleanly when offline
+      }
+    };
+    loadServerListings();
+    const handleRefresh = () => loadServerListings();
+    window.addEventListener('unishare-storage', handleRefresh);
+    window.addEventListener('focus', handleRefresh);
+    return () => {
+      active = false;
+      window.removeEventListener('unishare-storage', handleRefresh);
+      window.removeEventListener('focus', handleRefresh);
+    };
+  }, []);
 
   const items: MarketplaceItem[] = useMemo(() => {
-    if (!rawItemsJson) return DEFAULT_ITEMS;
-    try {
-      const parsed = JSON.parse(rawItemsJson);
-      return Array.isArray(parsed) ? (parsed as MarketplaceItem[]) : DEFAULT_ITEMS;
-    } catch {
-      return DEFAULT_ITEMS;
+    let localItems: MarketplaceItem[] = DEFAULT_ITEMS;
+    if (rawItemsJson) {
+      try {
+        const parsed = JSON.parse(rawItemsJson);
+        if (Array.isArray(parsed)) localItems = parsed as MarketplaceItem[];
+      } catch {}
     }
-  }, [rawItemsJson]);
+
+    if (serverItems.length === 0) return localItems;
+    const seenIds = new Set(serverItems.map((it) => it.id));
+    return [...serverItems, ...localItems.filter((it) => !seenIds.has(it.id))];
+  }, [rawItemsJson, serverItems]);
 
   const favorites: Record<string, boolean> = useMemo(() => {
     if (!rawFavsJson) return {};
