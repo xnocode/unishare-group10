@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/app/lib/db";
 import {
+  canonicalizeEmail,
   DEMO_EMAIL,
   isValidEmail,
   normalizeEmail,
@@ -34,6 +35,19 @@ export async function POST(req: NextRequest) {
       if (user) {
         found = true;
         university = user.university || undefined;
+      } else {
+        const canonicalInput = canonicalizeEmail(email);
+        const candidates = await db.user.findMany({
+          where: { OR: [{ emailVerified: true }, { verified: true }] },
+          select: { email: true, university: true },
+        });
+        const aliasMatch = candidates.find(
+          (u) => canonicalizeEmail(u.email) === canonicalInput
+        );
+        if (aliasMatch) {
+          found = true;
+          university = aliasMatch.university || undefined;
+        }
       }
     } catch (err) {
       console.warn("Forgot password DB lookup warning:", err);
@@ -43,7 +57,10 @@ export async function POST(req: NextRequest) {
       const cookieAcc = verifySignedPayload<VerifiedAccountPayload>(
         req.cookies.get(VERIFIED_ACCOUNT_COOKIE)?.value
       );
-      if (cookieAcc && cookieAcc.email === email) {
+      if (
+        cookieAcc &&
+        canonicalizeEmail(cookieAcc.email) === canonicalizeEmail(email)
+      ) {
         found = true;
         university = cookieAcc.university;
       } else if (email === DEMO_EMAIL) {

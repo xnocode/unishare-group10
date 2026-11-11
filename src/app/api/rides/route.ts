@@ -85,7 +85,7 @@ export function isPickupCompatible(
     const distKm = getHaversineDistanceKm(targetLat, targetLng, candidateLat, candidateLng);
     const distText = distKm < 1 ? `${Math.round(distKm * 1000)} m away` : `${distKm.toFixed(1)} km away`;
     return {
-      compatible: distKm <= 6.0, // Compatible pickup within 6 km
+      compatible: distKm <= 25.0, // Metro Dhaka commute range so peers from any neighborhood match
       distanceKm: Math.round(distKm * 100) / 100,
       distanceText: distText,
     };
@@ -512,10 +512,31 @@ export async function GET(req: NextRequest) {
       return da - dbDist;
     });
 
+    const myActiveJourney = await db.travelJourney.findFirst({
+      where: {
+        userId: user.id,
+        status: "ACTIVE",
+      },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        origin: true,
+        destination: true,
+        originLat: true,
+        originLng: true,
+        destinationLat: true,
+        destinationLng: true,
+        genderPreference: true,
+        createdAt: true,
+      },
+    });
+
     return NextResponse.json({
       success: true,
       count: sanitizedResults.length,
       partners: sanitizedResults,
+      currentUserVerified: user.verified,
+      myActiveJourney,
       appliedFilters: {
         destination,
         origin,

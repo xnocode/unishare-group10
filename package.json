@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "prisma generate && next build",
-    "postinstall": "prisma generate",
+    "dev": "node scripts/prepare-prisma.js && prisma generate && next dev",
+    "build": "node scripts/prepare-prisma.js && prisma generate && next build",
+    "postinstall": "node scripts/prepare-prisma.js && prisma generate",
     "start": "next start",
     "lint": "eslint"
   },

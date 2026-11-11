@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // Student Account
@@ -31,8 +32,15 @@ model User {
   // Self-declared profile gender (Private, used strictly for safety preference matching)
   gender             String?
 
+  // Private Student ID Verification Storage Keys (stored strictly in private bucket, never public URLs)
+  idCardPhotoPath    String?
+  facePhotoPath      String?
+
   // Destination-based Live Companion Matching
-  travelJourneys     TravelJourney[]   @relation("UserTravelJourneys")
+  travelJourneys     TravelJourney[]      @relation("UserTravelJourneys")
+
+  // Campus Marketplace Listings
+  marketplaceListings MarketplaceListing[] @relation("UserMarketplaceListings")
 }
 
 model AuthVerificationCode {
@@ -316,4 +324,37 @@ model TravelReview {
   @@index([reviewerId])
   @@index([partnerId])
   @@index([reported])
+}
+
+// -------------------------------------------------------------
+// Campus Marketplace Listings (Cloud DB & Object Storage Backed)
+// -------------------------------------------------------------
+
+model MarketplaceListing {
+  id             String   @id @default(cuid())
+  sellerId       String
+  seller         User     @relation("UserMarketplaceListings", fields: [sellerId], references: [id], onDelete: Cascade)
+  sellerEmail    String
+  sellerName     String
+  sellerInitials String
+  university     String?
+  title          String
+  category       String
+  condition      String   @default("Good")
+  rate           Int
+  deposit        Int
+  area           String   @default("TSC")
+  maxRentalDays  Int      @default(7)
+  description    String
+  imageUrl       String
+  status         String   @default("active") // "active" | "paused" | "draft"
+  isRentedOut    Boolean  @default(false)
+  available      Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([sellerId])
+  @@index([status])
+  @@index([category])
+  @@index([createdAt])
 }

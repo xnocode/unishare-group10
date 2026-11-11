@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/app/lib/db";
 import {
+  canonicalizeEmail,
   deriveNameFromEmail,
   hashPassword,
   isValidEmail,
@@ -84,10 +85,19 @@ export async function POST(req: NextRequest) {
     } | null = null;
 
     try {
-      const existing = await db.user.findUnique({ where: { email } });
+      let existing = await db.user.findUnique({ where: { email } });
+      if (!existing) {
+        const canonicalInput = canonicalizeEmail(email);
+        const candidates = await db.user.findMany({
+          where: { OR: [{ emailVerified: true }, { verified: true }] },
+        });
+        existing =
+          candidates.find((u) => canonicalizeEmail(u.email) === canonicalInput) ??
+          null;
+      }
       if (existing) {
         savedUser = await db.user.update({
-          where: { email },
+          where: { id: existing.id },
           data: { passwordHash: newHash, emailVerified: true },
         });
       }

@@ -217,6 +217,14 @@ export default function RideSharingPage() {
   const [searchResults, setSearchResults] = useState<MatchedPartner[]>([]);
   const [activeCampusRiders, setActiveCampusRiders] = useState<MatchedPartner[]>([]);
   const [isLoadingActiveRiders, setIsLoadingActiveRiders] = useState(true);
+  const [myActiveJourney, setMyActiveJourney] = useState<{
+    id: string;
+    origin: string;
+    destination: string;
+    createdAt?: string;
+  } | null>(null);
+  const [dbUserVerified, setDbUserVerified] = useState<boolean | null>(null);
+  const [isUpdatingBroadcast, setIsUpdatingBroadcast] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [selectedPartnerIds, setSelectedPartnerIds] = useState<string[]>([]);
   const [connectedPartnerIds, setConnectedPartnerIds] = useState<string[]>([]);
@@ -820,9 +828,14 @@ export default function RideSharingPage() {
     }
   };
 
-  // Load active campus riders right away so map shows who is live & open to route sharing
+  // Consistent auth header helper (keeps multi-session & demo requests cleanly authenticated alongside cookies)
+  const getRideAuthHeaders = useCallback((): Record<string, string> => {
+    const email = currentUser?.email?.trim();
+    return email ? { "x-user-email": email } : {};
+  }, [currentUser?.email]);
+
+  // Load active campus riders & self live status right away (polls every 5s so friends appear live)
   const fetchActiveCampusRiders = useCallback(async () => {
-    setIsLoadingActiveRiders(true);
     try {
       const queryParams = new URLSearchParams({
         browse: "active",
@@ -835,24 +848,147 @@ export default function RideSharingPage() {
         originLng: String(pickupCoords.lng),
       });
 
-      const res = await fetch(`/api/rides?${queryParams.toString()}`);
+      const res = await fetch(`/api/rides?${queryParams.toString()}`, {
+        headers: getRideAuthHeaders(),
+      });
       const data = await res.json().catch(() => null);
       if (res.ok && data?.success && Array.isArray(data.partners)) {
         setActiveCampusRiders(data.partners);
+        if (typeof data.currentUserVerified === "boolean") {
+          setDbUserVerified(data.currentUserVerified);
+        }
+        setMyActiveJourney(data.myActiveJourney || null);
       }
     } catch {
       // Quietly handle transient network interruption on background map discovery
     } finally {
       setIsLoadingActiveRiders(false);
     }
-  }, [destination, pickup, genderPreference, destCoords, pickupCoords]);
+  }, [destination, pickup, genderPreference, destCoords, pickupCoords, getRideAuthHeaders]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchActiveCampusRiders();
-    }, 180);
-    return () => clearTimeout(timer);
+    }, 150);
+
+    // Poll active commuters every 5 seconds so new logins from different locations appear live
+    const pollInterval = setInterval(() => {
+      if (typeof document === "undefined" || !document.hidden) {
+        fetchActiveCampusRiders();
+      }
+    }, 5000);
+
+    const handleFocusRefresh = () => {
+      fetchActiveCampusRiders();
+    };
+    window.addEventListener("focus", handleFocusRefresh);
+
+    return () => {
+      clearTimeout(timer);
+      clearInterval(pollInterval);
+      window.removeEventListener("focus", handleFocusRefresh);
+    };
   }, [fetchActiveCampusRiders]);
+
+  // Publish or update the user's active live route so peers see them on the map
+  const publishLiveRoute = useCallback(
+    async (options?: { silent?: boolean; overrideGender?: "no_preference" | "women_only" | "men_only" }) => {
+      const originText = pickup.trim();
+      const destText = destination.trim();
+      const activePref = options?.overrideGender || genderPreference;
+
+      if (originText.length < 2 || destText.length < 2) {
+        if (!options?.silent) showToast("⚠️ Please select both a pickup location and a destination.");
+        return false;
+      }
+
+      if (originText.toLowerCase() === destText.toLowerCase()) {
+        if (!options?.silent) showToast("⚠️ Pickup and destination cannot be the same location.");
+        return false;
+      }
+
+      if (!options?.silent) setIsRegisteringRoute(true);
+      try {
+        const res = await fetch("/api/rides", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...getRideAuthHeaders(),
+          },
+          body: JSON.stringify({
+            origin: originText,
+            destination: destText,
+            originLat: pickupCoords.lat,
+            originLng: pickupCoords.lng,
+            destinationLat: destCoords.lat,
+            destinationLng: destCoords.lng,
+            genderPreference: activePref,
+            notes: `Heading from ${originText.split(",")[0]} towards ${destText.split(",")[0]}. Looking for peer companion.`,
+          }),
+        });
+
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data?.success) {
+          if (res.status === 403) {
+            setDbUserVerified(false);
+          }
+          if (!options?.silent) {
+            showToast(`⚠️ ${data?.error || "Could not go live on map"}`);
+          }
+          return false;
+        }
+
+        if (data.journey) {
+          setMyActiveJourney({
+            id: data.journey.id,
+            origin: data.journey.origin,
+            destination: data.journey.destination,
+            createdAt: data.journey.createdAt,
+          });
+        }
+        setDbUserVerified(true);
+        setRouteRegisteredSuccess(true);
+        fetchActiveCampusRiders();
+        if (!options?.silent) {
+          showToast("🟢 You are now LIVE on the campus map! Peers can see your route.");
+        }
+        return true;
+      } catch (err) {
+        console.error("Register route error:", err);
+        if (!options?.silent) {
+          showToast("⚠️ Network error while publishing live route.");
+        }
+        return false;
+      } finally {
+        if (!options?.silent) setIsRegisteringRoute(false);
+      }
+    },
+    [pickup, destination, genderPreference, pickupCoords, destCoords, getRideAuthHeaders, fetchActiveCampusRiders, showToast]
+  );
+
+  const handlePauseLiveRoute = async () => {
+    if (!myActiveJourney) return;
+    setIsUpdatingBroadcast(true);
+    try {
+      const res = await fetch(`/api/rides/${myActiveJourney.id}`, {
+        method: "DELETE",
+        headers: getRideAuthHeaders(),
+      });
+      if (res.ok) {
+        setMyActiveJourney(null);
+        setRouteRegisteredSuccess(false);
+        fetchActiveCampusRiders();
+        showToast("⏸️ Live route sharing paused.");
+      } else {
+        const data = await res.json().catch(() => null);
+        showToast(`⚠️ ${data?.error || "Could not pause live route."}`);
+      }
+    } catch {
+      showToast("⚠️ Network error while pausing live route.");
+    } finally {
+      setIsUpdatingBroadcast(false);
+    }
+  };
 
   // -----------------------------------------------------------
   // 6. Real Live Travel Partners Search & Matching Handlers
@@ -879,6 +1015,9 @@ export default function RideSharingPage() {
     setHasSubmittedSearch(true);
     setRouteRegisteredSuccess(false);
 
+    // Automatically broadcast current verified user's live route so friends from other locations see them too
+    void publishLiveRoute({ silent: true, overrideGender: activePref });
+
     try {
       const queryParams = new URLSearchParams({
         destination: destination.trim(),
@@ -890,7 +1029,9 @@ export default function RideSharingPage() {
         originLng: String(pickupCoords.lng),
       });
 
-      const res = await fetch(`/api/rides?${queryParams.toString()}`);
+      const res = await fetch(`/api/rides?${queryParams.toString()}`, {
+        headers: getRideAuthHeaders(),
+      });
       const data = await res.json();
 
       if (!res.ok || !data.success) {
@@ -900,10 +1041,16 @@ export default function RideSharingPage() {
       } else {
         const partners = Array.isArray(data.partners) ? data.partners : [];
         setSearchResults(partners);
+        if (typeof data.currentUserVerified === "boolean") {
+          setDbUserVerified(data.currentUserVerified);
+        }
+        if (data.myActiveJourney) {
+          setMyActiveJourney(data.myActiveJourney);
+        }
         if (partners.length > 0) {
           showToast(`🎯 Found ${partners.length} verified travel companion(s)!`);
         } else {
-          showToast("ℹ️ No active travel partners found for this corridor yet.");
+          showToast("ℹ️ No matching partners yet — your route is live for peers.");
         }
       }
     } catch (err) {
@@ -917,37 +1064,7 @@ export default function RideSharingPage() {
 
   // Register Current Student Journey as Active Route
   const handleRegisterRoute = async () => {
-    setIsRegisteringRoute(true);
-    try {
-      const res = await fetch("/api/rides", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          origin: pickup.trim(),
-          destination: destination.trim(),
-          originLat: pickupCoords.lat,
-          originLng: pickupCoords.lng,
-          destinationLat: destCoords.lat,
-          destinationLng: destCoords.lng,
-          genderPreference,
-          notes: `Heading from ${pickup.split(",")[0]} towards ${destination.split(",")[0]}. Looking for peer companion.`,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        showToast(`⚠️ ${data.error || "Could not register journey"}`);
-      } else {
-        setRouteRegisteredSuccess(true);
-        fetchActiveCampusRiders();
-        showToast("🟢 Your route has been registered and indexed for student matching!");
-      }
-    } catch (err) {
-      console.error("Register route error:", err);
-      showToast("⚠️ Network error while registering journey.");
-    } finally {
-      setIsRegisteringRoute(false);
-    }
+    await publishLiveRoute({ silent: false });
   };
 
   // Multi-Partner Selection Handlers
@@ -977,7 +1094,7 @@ export default function RideSharingPage() {
 
       const res = await fetch("/api/rides/match", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getRideAuthHeaders() },
         body: JSON.stringify({
           partnerIds: targetUserIds,
           message: `Heading to ${destination.split(",")[0]}, let's travel together!`,
@@ -1009,7 +1126,7 @@ export default function RideSharingPage() {
     try {
       const res = await fetch("/api/rides/match", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getRideAuthHeaders() },
         body: JSON.stringify({
           partnerIds: [partner.userId],
           message: `Heading towards ${partner.destination.split(",")[0]} — want to share a ride and split the fare?`,
@@ -1173,7 +1290,9 @@ export default function RideSharingPage() {
   // -----------------------------------------------------------
   const fetchConnectionRequests = useCallback(async () => {
     try {
-      const res = await fetch("/api/rides/match");
+      const res = await fetch("/api/rides/match", {
+        headers: getRideAuthHeaders(),
+      });
       const data = await res.json();
       if (data.success) {
         setIncomingRequests(data.incoming || []);
@@ -1182,7 +1301,7 @@ export default function RideSharingPage() {
     } catch (err) {
       console.error("Failed to fetch connection requests:", err);
     }
-  }, []);
+  }, [getRideAuthHeaders]);
 
   useEffect(() => {
     fetchConnectionRequests();
@@ -1194,7 +1313,7 @@ export default function RideSharingPage() {
     try {
       const res = await fetch(`/api/rides/match/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getRideAuthHeaders() },
         body: JSON.stringify({ action }),
       });
       const data = await res.json();
@@ -1631,7 +1750,9 @@ export default function RideSharingPage() {
   const openConversation = async (conversationId: string) => {
     setActiveConversationId(conversationId);
     try {
-      const res = await fetch(`/api/rides/conversations/${conversationId}`);
+      const res = await fetch(`/api/rides/conversations/${conversationId}`, {
+        headers: getRideAuthHeaders(),
+      });
       const data = await res.json();
       if (data.success && data.conversation) {
         setActiveConversation(data.conversation);
@@ -1640,7 +1761,9 @@ export default function RideSharingPage() {
       fetchTrackingState(conversationId);
 
       // Check review status
-      fetch(`/api/rides/conversations/${conversationId}/review`)
+      fetch(`/api/rides/conversations/${conversationId}/review`, {
+        headers: getRideAuthHeaders(),
+      })
         .then((r) => r.json())
         .then((d) => {
           if (d.success) {
@@ -1664,7 +1787,7 @@ export default function RideSharingPage() {
     try {
       const res = await fetch(`/api/rides/conversations/${activeConversationId}/messages`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getRideAuthHeaders() },
         body: JSON.stringify({
           text,
           messageType,
@@ -2156,8 +2279,70 @@ export default function RideSharingPage() {
             </div>
 
             {/* -------------------------------------------------
-                4. FIND TRAVEL PARTNERS ACTION BUTTON
+                4. LIVE ROUTE BROADCAST & FIND TRAVEL PARTNERS
                 ------------------------------------------------- */}
+            {dbUserVerified === false ? (
+              <div className="live-broadcast-card unverified">
+                <div className="live-broadcast-row">
+                  <span className="live-broadcast-status">Student verification pending</span>
+                  <Link href="/student-verification" className="live-verify-link">
+                    Verify Student ID
+                  </Link>
+                </div>
+                <div className="live-broadcast-route">
+                  Complete your Student ID verification so friends and verified peers can see your live route on the map.
+                </div>
+              </div>
+            ) : myActiveJourney ? (
+              <div className="live-broadcast-card active">
+                <div className="live-broadcast-row">
+                  <span className="live-broadcast-status">
+                    <span className="realtime-pulse-dot" />
+                    You are live on map
+                  </span>
+                  <div className="live-broadcast-actions">
+                    <button
+                      type="button"
+                      className="live-go-btn"
+                      onClick={handleRegisterRoute}
+                      disabled={isRegisteringRoute}
+                      title="Update peers with your current pickup and destination"
+                    >
+                      {isRegisteringRoute ? "Updating..." : "Update Route"}
+                    </button>
+                    <button
+                      type="button"
+                      className="live-pause-btn"
+                      onClick={handlePauseLiveRoute}
+                      disabled={isUpdatingBroadcast}
+                    >
+                      {isUpdatingBroadcast ? "..." : "Pause"}
+                    </button>
+                  </div>
+                </div>
+                <div className="live-broadcast-route">
+                  {myActiveJourney.origin.split(",")[0]} → <strong>{myActiveJourney.destination.split(",")[0]}</strong> · Visible to peers
+                </div>
+              </div>
+            ) : (
+              <div className="live-broadcast-card">
+                <div className="live-broadcast-row">
+                  <span className="live-broadcast-status">Share your route live</span>
+                  <button
+                    type="button"
+                    className="live-go-btn"
+                    onClick={handleRegisterRoute}
+                    disabled={isRegisteringRoute}
+                  >
+                    {isRegisteringRoute ? "Going Live..." : "Go Live on Map"}
+                  </button>
+                </div>
+                <div className="live-broadcast-route">
+                  Let logged-in friends & campus riders see your route and split costs.
+                </div>
+              </div>
+            )}
+
             <button
               type="button"
               className="find-partners-btn"
@@ -2207,7 +2392,7 @@ export default function RideSharingPage() {
                   </div>
                 ) : (
                   <div className="active-campus-mini-list">
-                    {activeCampusRiders.slice(0, 4).map((peer) => {
+                    {activeCampusRiders.map((peer) => {
                       const peerOrigin = resolvePeerPoint(peer.originCoords, peer.origin, pickupCoords, 1);
                       const peerDest = resolvePeerPoint(peer.destCoords, peer.destination, destCoords, 2);
                       const est = estimateSharedCommute(peerOrigin, peerDest, 2);

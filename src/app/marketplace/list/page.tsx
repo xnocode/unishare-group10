@@ -41,7 +41,9 @@ export default function ListMarketplaceItemPage() {
   const [selectedPhoto, setSelectedPhoto] = useState(
     getDefaultImageForCategory("Calculators")
   );
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [customPhotoUsed, setCustomPhotoUsed] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [toastMsg, setToastMsg] = useState("");
   const [showToast, setShowToast] = useState(false);
@@ -73,10 +75,11 @@ export default function ListMarketplaceItemPage() {
       setErrorMsg("Please upload an image file (JPG, PNG, or WebP).");
       return;
     }
-    if (file.size > 1_800_000) {
-      setErrorMsg("Image file must be under 1.8 MB.");
+    if (file.size > 2_000_000) {
+      setErrorMsg("Image file must be under 2.0 MB.");
       return;
     }
+    setSelectedFile(file);
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === "string") {
@@ -88,7 +91,7 @@ export default function ListMarketplaceItemPage() {
     reader.readAsDataURL(file);
   };
 
-  const saveListing = (asDraft: boolean) => {
+  const saveListing = async (asDraft: boolean) => {
     setErrorMsg("");
     const cleanTitle = title.trim();
     if (cleanTitle.length < 3) {
@@ -109,63 +112,92 @@ export default function ListMarketplaceItemPage() {
       return;
     }
 
-    const itemId = `item-${Date.now()}`;
-    const cleanDesc =
-      description.trim() ||
-      `${condition} condition ${cleanTitle}. Pickup at ${pickupArea}.`;
+    setIsSaving(true);
+    try {
+      let resolvedImageUrl = selectedPhoto;
 
-    const myRecord: MyProductRecord = {
-      id: itemId,
-      name: cleanTitle,
-      category,
-      condition,
-      state: asDraft ? "draft" : "active",
-      isRentedOut: false,
-      rate: rateNum,
-      deposit: depositNum,
-      area: pickupArea,
-      maxRentalDays: Number.isFinite(maxDaysNum) ? maxDaysNum : 7,
-      description: cleanDesc,
-      image: selectedPhoto,
-      note: asDraft
-        ? "Saved as draft · Finish details to publish"
-        : `Published to ${resolvedUser.university} shelf · ${pickupArea}`,
-      availText: asDraft ? "Not published" : "Available today",
-      owner: `${resolvedUser.name} · You`,
-    };
+      if (selectedFile) {
+        const fd = new FormData();
+        fd.append("kind", "product");
+        fd.append("file", selectedFile);
+        const uploadRes = await fetch("/api/uploads", {
+          method: "POST",
+          headers: resolvedUser.email ? { "x-user-email": resolvedUser.email } : undefined,
+          body: fd,
+        });
+        const uploadData = (await uploadRes.json().catch(() => null)) as {
+          ok?: boolean;
+          url?: string;
+          error?: string;
+        } | null;
+        if (!uploadRes.ok || !uploadData?.ok || !uploadData.url) {
+          setErrorMsg(uploadData?.error || "Failed to upload product photo.");
+          setIsSaving(false);
+          return;
+        }
+        resolvedImageUrl = uploadData.url;
+      }
 
-    let existingProducts: MyProductRecord[] = [];
-    if (rawProductsJson) {
-      try {
-        const parsed = JSON.parse(rawProductsJson);
-        if (Array.isArray(parsed)) existingProducts = parsed as MyProductRecord[];
-      } catch {}
-    }
-    writeUserScopedJson(productsKey, [myRecord, ...existingProducts]);
+      const cleanDesc =
+        description.trim() ||
+        `${condition} condition ${cleanTitle}. Pickup at ${pickupArea}.`;
 
-    if (!asDraft) {
-      const marketEntry: MarketplaceItem = {
-        id: itemId,
-        name: cleanTitle,
-        category,
-        price: rateNum,
-        deposit: depositNum,
-        area: pickupArea,
-        owner: resolvedUser.name,
-        ownerEmail: resolvedUser.email,
-        initials: resolvedUser.initials,
-        image: selectedPhoto,
-        available: true,
-        condition,
-        maxRentalDays: Number.isFinite(maxDaysNum) ? maxDaysNum : 7,
-        description: cleanDesc,
-      };
-      upsertMarketplaceItem(marketEntry);
-      triggerToast(`"${cleanTitle}" published to Marketplace!`);
-      setTimeout(() => router.push("/marketplace"), 550);
-    } else {
-      triggerToast(`Saved "${cleanTitle}" as draft.`);
-      setTimeout(() => router.push("/my-products"), 550);
+      const apiRes = await fetch("/api/marketplace", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(resolvedUser.email ? { "x-user-email": resolvedUser.email } : {}),
+        },
+        body: JSON.stringify({
+          title: cleanTitle,
+          category,
+          condition,
+          rate: rateNum,
+          deposit: depositNum,
+          area: pickupArea,
+          maxRentalDays: Number.isFinite(maxDaysNum) ? maxDaysNum : 7,
+          description: cleanDesc,
+          imageUrl: resolvedImageUrl,
+          status: asDraft ? "draft" : "active",
+        }),
+      });
+
+      const apiData = (await apiRes.json().catch(() => null)) as {
+        ok?: boolean;
+        error?: string;
+        marketItem?: MarketplaceItem;
+        myProduct?: MyProductRecord;
+      } | null;
+
+      if (!apiRes.ok || !apiData?.ok || !apiData.myProduct || !apiData.marketItem) {
+        setErrorMsg(apiData?.error || "Unable to save listing.");
+        setIsSaving(false);
+        return;
+      }
+
+      let existingProducts: MyProductRecord[] = [];
+      if (rawProductsJson) {
+        try {
+          const parsed = JSON.parse(rawProductsJson);
+          if (Array.isArray(parsed)) existingProducts = parsed as MyProductRecord[];
+        } catch {}
+      }
+      writeUserScopedJson(productsKey, [
+        apiData.myProduct,
+        ...existingProducts.filter((p) => p.id !== apiData.myProduct!.id),
+      ]);
+
+      if (!asDraft) {
+        upsertMarketplaceItem(apiData.marketItem);
+        triggerToast(`"${cleanTitle}" published to Marketplace!`);
+        setTimeout(() => router.push("/marketplace"), 550);
+      } else {
+        triggerToast(`Saved "${cleanTitle}" as draft.`);
+        setTimeout(() => router.push("/my-products"), 550);
+      }
+    } catch {
+      setErrorMsg("Network error while saving listing.");
+      setIsSaving(false);
     }
   };
 
@@ -325,6 +357,7 @@ export default function ListMarketplaceItemPage() {
                       className={`photo-thumb ${selectedPhoto === preset.url ? "on" : ""}`}
                       onClick={() => {
                         setSelectedPhoto(preset.url);
+                        setSelectedFile(null);
                         setCustomPhotoUsed(false);
                       }}
                       title={preset.label}
@@ -352,6 +385,7 @@ export default function ListMarketplaceItemPage() {
                       style={{ padding: "6px 12px", fontSize: 12 }}
                       onClick={() => {
                         setCustomPhotoUsed(false);
+                        setSelectedFile(null);
                         setSelectedPhoto(getDefaultImageForCategory(category));
                       }}
                     >
@@ -440,12 +474,13 @@ export default function ListMarketplaceItemPage() {
               <button
                 type="button"
                 className="btn outline"
+                disabled={isSaving}
                 onClick={() => saveListing(true)}
               >
-                Save as draft
+                {isSaving ? "Saving..." : "Save as draft"}
               </button>
-              <button type="submit" className="btn">
-                Publish listing
+              <button type="submit" className="btn" disabled={isSaving}>
+                {isSaving ? "Publishing..." : "Publish listing"}
               </button>
             </div>
           </form>
