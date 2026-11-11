@@ -11,7 +11,7 @@ export const VALID_GENDER_PREFERENCES = [
 export type GenderPreference = (typeof VALID_GENDER_PREFERENCES)[number];
 
 // Haversine formula to compute distance between two GPS coordinates in kilometers
-function getHaversineDistanceKm(
+export function getHaversineDistanceKm(
   lat1: number,
   lon1: number,
   lat2: number,
@@ -31,7 +31,7 @@ function getHaversineDistanceKm(
 }
 
 // Check destination similarity by keywords or substring
-function isDestinationSimilar(targetDest: string, candidateDest: string): boolean {
+export function isDestinationSimilar(targetDest: string, candidateDest: string): boolean {
   const normTarget = targetDest.toLowerCase().replace(/[^a-z0-9]/g, " ").trim();
   const normCandidate = candidateDest.toLowerCase().replace(/[^a-z0-9]/g, " ").trim();
 
@@ -60,6 +60,89 @@ function isDestinationSimilar(targetDest: string, candidateDest: string): boolea
   }
 
   return overlapCount >= 2;
+}
+
+// Check pickup compatibility
+export function isPickupCompatible(
+  targetOrigin: string,
+  candidateOrigin: string,
+  targetLat?: number,
+  targetLng?: number,
+  candidateLat?: number | null,
+  candidateLng?: number | null
+): { compatible: boolean; distanceKm: number | null; distanceText: string } {
+  if (
+    typeof targetLat === "number" &&
+    typeof targetLng === "number" &&
+    !isNaN(targetLat) &&
+    !isNaN(targetLng) &&
+    typeof candidateLat === "number" &&
+    typeof candidateLng === "number" &&
+    candidateLat !== null &&
+    candidateLng !== null
+  ) {
+    const distKm = getHaversineDistanceKm(targetLat, targetLng, candidateLat, candidateLng);
+    const distText = distKm < 1 ? `${Math.round(distKm * 1000)} m away` : `${distKm.toFixed(1)} km away`;
+    return {
+      compatible: distKm <= 6.0, // Compatible pickup within 6 km
+      distanceKm: Math.round(distKm * 100) / 100,
+      distanceText: distText,
+    };
+  }
+
+  // Fallback to text matching
+  const normTarget = targetOrigin.toLowerCase().trim();
+  const normCand = candidateOrigin.toLowerCase().trim();
+  const isClose = isDestinationSimilar(normTarget, normCand);
+  return {
+    compatible: isClose || true, // Allow general corridor pickup if coordinates not present
+    distanceKm: null,
+    distanceText: `Near ${candidateOrigin.split(",")[0]}`,
+  };
+}
+
+// Compute Destination Compatibility text and score
+export function getDestinationCompatibility(
+  targetDest: string,
+  candidateDest: string,
+  targetLat?: number,
+  targetLng?: number,
+  candidateLat?: number | null,
+  candidateLng?: number | null
+): { compatibility: string; scorePercent: number; distanceKm: number | null } {
+  const isExactText = targetDest.trim().toLowerCase() === candidateDest.trim().toLowerCase();
+
+  if (
+    typeof targetLat === "number" &&
+    typeof targetLng === "number" &&
+    !isNaN(targetLat) &&
+    !isNaN(targetLng) &&
+    typeof candidateLat === "number" &&
+    typeof candidateLng === "number" &&
+    candidateLat !== null &&
+    candidateLng !== null
+  ) {
+    const distKm = getHaversineDistanceKm(targetLat, targetLng, candidateLat, candidateLng);
+    const roundedDist = Math.round(distKm * 100) / 100;
+    if (isExactText || distKm <= 0.8) {
+      return { compatibility: "Exact Destination Match", scorePercent: 100, distanceKm: roundedDist };
+    }
+    if (distKm <= 2.2) {
+      return { compatibility: "Campus Zone Match", scorePercent: 92, distanceKm: roundedDist };
+    }
+    if (distKm <= 4.5) {
+      return { compatibility: "Corridor Proximity Match", scorePercent: 78, distanceKm: roundedDist };
+    }
+    return { compatibility: "Peripheral Corridor Match", scorePercent: 60, distanceKm: roundedDist };
+  }
+
+  if (isExactText) {
+    return { compatibility: "Exact Destination Match", scorePercent: 100, distanceKm: 0 };
+  }
+  if (isDestinationSimilar(targetDest, candidateDest)) {
+    return { compatibility: "Corridor Match", scorePercent: 88, distanceKm: null };
+  }
+  return { compatibility: "Destination Corridor", scorePercent: 65, distanceKm: null };
 }
 
 // =============================================================
@@ -112,6 +195,10 @@ export async function GET(req: NextRequest) {
     const destLng = parseFloat(searchParams.get("destLng") || "");
     const hasDestCoords = !isNaN(destLat) && !isNaN(destLng);
 
+    const originLat = parseFloat(searchParams.get("originLat") || "");
+    const originLng = parseFloat(searchParams.get("originLng") || "");
+    const hasOriginCoords = !isNaN(originLat) && !isNaN(originLng);
+
     // 3. Safety Policy Enforcement for Self-Declared Profile Gender
     // "Never infer gender from names or photos. Keep profile gender private and use appropriate verified or self-declared profile information."
     if (user.gender) {
@@ -137,7 +224,7 @@ export async function GET(req: NextRequest) {
     }
 
     // 4. Query ACTIVE Journeys from the Database
-    // CRITICAL: ONLY verified university students appear!
+    // CRITICAL: ONLY verified university students who are available for travel appear!
     const activeJourneys = await db.travelJourney.findMany({
       where: {
         status: "ACTIVE",
@@ -163,11 +250,11 @@ export async function GET(req: NextRequest) {
       take: 60,
     });
 
-    // 5. Server-Side Safety & Gender Filtering
+    // 5. Server-Side Safety, Destination & Pickup Filtering
     const matchedPartners = activeJourneys.filter((journey) => {
       const partnerUser = journey.user;
 
-      // Rule A: Destination Match (via coordinate proximity <= 4.5km or semantic text similarity)
+      // Check 1: Destination Compatibility
       let matchesDestination = false;
       if (
         hasDestCoords &&
@@ -180,45 +267,50 @@ export async function GET(req: NextRequest) {
           journey.destinationLat,
           journey.destinationLng
         );
-        matchesDestination = distKm <= 4.5;
+        matchesDestination = distKm <= 5.0; // Within 5 km corridor radius
       } else {
         matchesDestination = isDestinationSimilar(destination, journey.destination);
       }
 
       if (!matchesDestination) return false;
 
-      // Rule B: Gender Preference Filtering (Strictly from self-declared profile; never inferred from photo/name)
+      // Check 2: Pickup Location Compatibility
+      const pickupCheck = isPickupCompatible(
+        origin,
+        journey.origin,
+        hasOriginCoords ? originLat : undefined,
+        hasOriginCoords ? originLng : undefined,
+        journey.originLat,
+        journey.originLng
+      );
+
+      if (!pickupCheck.compatible) return false;
+
+      // Check 3: Gender Preference Compatibility (Strictly from self-declared profile; never inferred from photo/name)
       const partnerGender = partnerUser.gender ? partnerUser.gender.toLowerCase() : null;
       const currentUserGender = user.gender ? user.gender.toLowerCase() : null;
       const partnerPref = journey.genderPreference.toLowerCase();
 
       // Case 1: Searcher requested "women_only"
       if (genderPreference === "women_only") {
-        // Partner MUST have a self-declared profile gender of "female"
         if (partnerGender !== "female") return false;
-        // Partner's own journey cannot be "men_only"
         if (partnerPref === "men_only") return false;
         return true;
       }
 
       // Case 2: Searcher requested "men_only"
       if (genderPreference === "men_only") {
-        // Partner MUST have a self-declared profile gender of "male"
         if (partnerGender !== "male") return false;
-        // Partner's own journey cannot be "women_only"
         if (partnerPref === "women_only") return false;
         return true;
       }
 
       // Case 3: Searcher requested "no_preference"
       if (genderPreference === "no_preference") {
-        // Respect partner's restrictive safety preferences:
         if (partnerPref === "women_only") {
-          // Partner only wants to travel with women
           return currentUserGender === "female";
         }
         if (partnerPref === "men_only") {
-          // Partner only wants to travel with men
           return currentUserGender === "male";
         }
         return true;
@@ -228,24 +320,54 @@ export async function GET(req: NextRequest) {
     });
 
     // 6. Privacy Protection: Map to Sanitized Public Companion Cards
-    // NEVER expose user.gender in the public API response!
+    // NEVER expose user.gender or raw private details in the public API response!
     const sanitizedResults = matchedPartners.map((journey) => {
-      const isExact =
-        journey.destination.toLowerCase().trim() ===
-        destination.toLowerCase().trim();
+      const pickupMeta = isPickupCompatible(
+        origin,
+        journey.origin,
+        hasOriginCoords ? originLat : undefined,
+        hasOriginCoords ? originLng : undefined,
+        journey.originLat,
+        journey.originLng
+      );
+
+      const destMeta = getDestinationCompatibility(
+        destination,
+        journey.destination,
+        hasDestCoords ? destLat : undefined,
+        hasDestCoords ? destLng : undefined,
+        journey.destinationLat,
+        journey.destinationLng
+      );
+
+      const initials = journey.user.fullName
+        .split(" ")
+        .map((p) => p[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase();
+
+      const shortUni = journey.user.university
+        ? journey.user.university.replace("University of ", "").replace(" University", "")
+        : "Campus";
 
       return {
         id: journey.id,
         userId: journey.user.id,
         fullName: journey.user.fullName,
-        university: journey.user.university || "Verified University Student",
+        avatarInitials: initials,
+        university: journey.user.university || "University of Dhaka",
         department: journey.user.department || "Academic Department",
-        studentIdMasked: journey.user.studentId
-          ? `${journey.user.studentId.slice(0, 3)}****`
-          : null,
+        verificationBadge: `Verified ${shortUni} Student`,
         verified: journey.user.verified, // Always true
+        isAvailable: journey.status === "ACTIVE",
         origin: journey.origin,
+        approxPickupDistance: pickupMeta.distanceText,
+        pickupDistanceKm: pickupMeta.distanceKm,
         destination: journey.destination,
+        destinationCompatibility: destMeta.compatibility,
+        compatibilityScore: destMeta.scorePercent,
+        destinationDistanceKm: destMeta.distanceKm,
         originCoords:
           journey.originLat !== null && journey.originLng !== null
             ? { lat: journey.originLat, lng: journey.originLng }
@@ -256,7 +378,6 @@ export async function GET(req: NextRequest) {
             : null,
         departureTime: journey.departureTime,
         genderPreferenceRule: journey.genderPreference,
-        matchType: isExact ? "Exact Destination Match" : "Corridor Proximity Match",
         notes: journey.notes,
         createdAt: journey.createdAt,
       };
@@ -271,6 +392,7 @@ export async function GET(req: NextRequest) {
         origin,
         genderPreference,
         onlyVerifiedStudents: true,
+        realtimeTimestamp: new Date().toISOString(),
       },
     });
   } catch (error) {

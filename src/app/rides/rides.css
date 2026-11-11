@@ -785,6 +785,33 @@
   gap: 6px;
 }
 
+.realtime-live-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.realtime-pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #16a34a;
+  animation: pulseDot 1.4s infinite;
+}
+
+@keyframes pulseDot {
+  0% { transform: scale(0.85); opacity: 0.5; }
+  50% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(0.85); opacity: 0.5; }
+}
+
 .results-count-badge {
   background: var(--teal);
   color: #ffffff;
@@ -798,6 +825,87 @@
   font-size: 11.5px;
   color: var(--muted);
   font-weight: 500;
+}
+
+/* Multi-partner selection action bar */
+.partner-multi-select-bar {
+  background: #ffffff;
+  border: 1.5px solid var(--teal);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  box-shadow: 0 4px 16px rgba(13, 107, 99, 0.16);
+  animation: slideUp 0.2s ease-out;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(-8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.multi-select-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.multi-select-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--teal);
+}
+
+.multi-select-sub {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.multi-select-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.multi-select-btn {
+  padding: 7px 12px;
+  background: var(--teal);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+
+.multi-select-btn:hover {
+  background: var(--teal-dark);
+}
+
+.multi-clear-btn {
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--radius-sm);
+  color: #64748b;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.multi-clear-btn:hover {
+  background: #f1f5f9;
+  color: var(--ink);
 }
 
 .partner-cards-list {
@@ -817,6 +925,7 @@
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
   transition: all 0.18s ease;
   position: relative;
+  cursor: pointer;
 }
 
 .partner-card:hover {
@@ -828,6 +937,73 @@
   border-color: var(--teal);
   background: #fafffe;
   box-shadow: 0 4px 14px rgba(13, 107, 99, 0.12);
+}
+
+.partner-checkbox-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: -2px;
+}
+
+.partner-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--teal);
+}
+
+.partner-custom-checkbox {
+  width: 17px;
+  height: 17px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  background: #ffffff;
+}
+
+.partner-card.selected .partner-custom-checkbox {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #ffffff;
+}
+
+.partner-metrics-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.partner-distance-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2.5px 8px;
+  border-radius: 6px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.partner-compatibility-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2.5px 8px;
+  border-radius: 6px;
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
 }
 
 .partner-card-top {

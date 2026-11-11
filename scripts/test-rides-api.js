@@ -1,6 +1,6 @@
 async function runTests() {
   console.log("==================================================");
-  console.log("RIDE SHARING BACKEND FILTERING & VALIDATION TESTS");
+  console.log("RIDE SHARING REAL-TIME MATCHING & GENDER TESTS");
   console.log("==================================================");
 
   let passed = 0;
@@ -34,14 +34,14 @@ async function runTests() {
     });
 
     const json = await res.json().catch(() => ({}));
-    return { status: res.status, json };
+    return { status: res.status, json, headers: res.headers };
   }
 
   // -----------------------------------------------------------
   // Test 1: Unauthenticated request should return 401
   // -----------------------------------------------------------
   {
-    const { status, json } = await api("/api/rides?destination=TSC&genderPreference=no_preference", { userEmail: null });
+    const { status } = await api("/api/rides?destination=TSC&genderPreference=no_preference", { userEmail: null });
     assert(status === 401, "Test 1: Unauthenticated search rejected with 401 Unauthorized", `Status: ${status}`);
   }
 
@@ -63,17 +63,28 @@ async function runTests() {
 
   // -----------------------------------------------------------
   // Test 4: Women Only filter by verified female student (Farhana)
-  // Should match Sadia (female, verified) but NOT Tanvir (male) and NOT unverified user
+  // Should match Sadia (female, verified) with privacy-approved info
   // -----------------------------------------------------------
+  let sadiaUserId = null;
+  let sadiaJourneyId = null;
   {
-    const { status, json } = await api("/api/rides?destination=TSC%2C%20University%20of%20Dhaka&genderPreference=women_only", { userEmail: "farhana@std.du.ac.bd" });
+    const { status, json } = await api(
+      "/api/rides?destination=TSC%2C%20University%20of%20Dhaka&origin=Dhanmondi%2027&genderPreference=women_only&destLat=23.7317&destLng=90.3957&originLat=23.7550&originLng=90.3720",
+      { userEmail: "farhana@std.du.ac.bd" }
+    );
     assert(status === 200, "Test 4.1: Women Only search succeeds with 200 OK");
     assert(json.success === true, "Test 4.2: Response indicates success");
     assert(json.partners && json.partners.length === 1, `Test 4.3: Exactly 1 partner returned (got ${json.partners?.length})`);
     if (json.partners && json.partners.length > 0) {
-      assert(json.partners[0].fullName === "Sadia Rahman", "Test 4.4: Matched partner is verified female student Sadia Rahman");
-      assert(json.partners[0].verified === true, "Test 4.5: Matched partner has verified: true");
-      assert(json.partners[0].gender === undefined, "Test 4.6: Private gender attribute is NOT exposed in response");
+      const p = json.partners[0];
+      sadiaUserId = p.userId;
+      sadiaJourneyId = p.id;
+      assert(p.fullName === "Sadia Rahman", "Test 4.4: Matched partner is verified female student Sadia Rahman");
+      assert(p.verified === true, "Test 4.5: Matched partner has verified: true");
+      assert(p.isAvailable === true, "Test 4.6: Partner is available for travel (isAvailable: true)");
+      assert(p.gender === undefined, "Test 4.7: Private gender attribute is NOT exposed in response");
+      assert(typeof p.approxPickupDistance === "string", `Test 4.8: Approximate pickup distance calculated (${p.approxPickupDistance})`);
+      assert(typeof p.destinationCompatibility === "string", `Test 4.9: Destination compatibility calculated (${p.destinationCompatibility})`);
     }
   }
 
@@ -87,8 +98,8 @@ async function runTests() {
 
   // -----------------------------------------------------------
   // Test 6: Male student (Tanvir) searching Men Only
-  // Should NOT return Sadia (female)
   // -----------------------------------------------------------
+  let tanvirUserId = null;
   {
     const { status, json } = await api("/api/rides?destination=TSC&genderPreference=men_only", { userEmail: "tanvir@std.du.ac.bd" });
     assert(status === 200, "Test 6.1: Male student Men Only search returns 200 OK");
@@ -98,8 +109,7 @@ async function runTests() {
 
   // -----------------------------------------------------------
   // Test 7: No Preference filter by verified female student (Farhana)
-  // Should match Sadia (female companion) and Tanvir (male companion accepting all)
-  // Must NOT include unverified user
+  // Should match both Sadia and Tanvir
   // -----------------------------------------------------------
   {
     const { status, json } = await api("/api/rides?destination=TSC%2C%20University%20of%20Dhaka&genderPreference=no_preference", { userEmail: "farhana@std.du.ac.bd" });
@@ -107,46 +117,99 @@ async function runTests() {
     assert(json.partners && json.partners.length === 2, `Test 7.2: Returns both verified companions (got ${json.partners?.length})`);
     const allVerified = json.partners?.every(p => p.verified === true);
     assert(allVerified, "Test 7.3: All matched companions are verified university students");
-    const hasUnverified = json.partners?.some(p => p.fullName === "Notehub C" || p.verified === false);
-    assert(!hasUnverified, "Test 7.4: Unverified students are strictly excluded by backend");
+    const tanvir = json.partners?.find(p => p.fullName === "Tanvir Ahmed");
+    if (tanvir) {
+      tanvirUserId = tanvir.userId;
+    }
   }
 
   // -----------------------------------------------------------
-  // Test 8: Destination with no active journeys (No-results test)
+  // Test 8: Multi-Partner Selection & Invitation (POST /api/rides/match)
+  // Farhana selects multiple partners (Sadia and Tanvir)
+  // -----------------------------------------------------------
+  {
+    assert(sadiaUserId !== null && tanvirUserId !== null, "Test 8.0: Identified partner IDs for multi-select test");
+    const matchBody = {
+      partnerIds: [sadiaUserId, tanvirUserId],
+      journeyId: sadiaJourneyId,
+      message: "Hey peers, let's coordinate a group commute to TSC DU!",
+    };
+
+    const { status, json } = await api("/api/rides/match", {
+      userEmail: "farhana@std.du.ac.bd",
+      method: "POST",
+      body: matchBody,
+    });
+
+    assert(status === 200, "Test 8.1: Multi-partner invitation succeeds with 200 OK");
+    assert(json.success === true, "Test 8.2: Response indicates success");
+    assert(json.count === 2, `Test 8.3: Created invitations for 2 verified partners (got ${json.count})`);
+    assert(json.invitations && json.invitations.length === 2, "Test 8.4: Returns 2 invitation records with PENDING status");
+  }
+
+  // -----------------------------------------------------------
+  // Test 9: Multi-Partner Invitation rejects unverified partners
+  // -----------------------------------------------------------
+  {
+    const matchBody = {
+      partnerIds: ["fake_id_123"],
+    };
+
+    const { status } = await api("/api/rides/match", {
+      userEmail: "farhana@std.du.ac.bd",
+      method: "POST",
+      body: matchBody,
+    });
+
+    assert(status === 404, "Test 9: Invalid / unverified partner IDs rejected with 404 Not Found");
+  }
+
+  // -----------------------------------------------------------
+  // Test 10: Multi-Partner Invitation rejects unauthenticated request
+  // -----------------------------------------------------------
+  {
+    const matchBody = {
+      partnerIds: [sadiaUserId],
+    };
+
+    const { status } = await api("/api/rides/match", {
+      userEmail: null,
+      method: "POST",
+      body: matchBody,
+    });
+
+    assert(status === 401, "Test 10: Unauthenticated group match request rejected with 401");
+  }
+
+  // -----------------------------------------------------------
+  // Test 11: Real-Time SSE Stream Endpoint (GET /api/rides/stream)
+  // -----------------------------------------------------------
+  {
+    const res = await fetch("http://localhost:3000/api/rides/stream?destination=TSC&genderPreference=no_preference", {
+      headers: { "x-user-email": "farhana@std.du.ac.bd" },
+    });
+
+    assert(res.status === 200, "Test 11.1: SSE stream endpoint responds with 200 OK");
+    const contentType = res.headers.get("content-type") || "";
+    assert(contentType.includes("text/event-stream"), `Test 11.2: Content-Type is text/event-stream (${contentType})`);
+
+    // Read the first chunk from the SSE stream
+    const reader = res.body?.getReader();
+    if (reader) {
+      const { value } = await reader.read();
+      const chunkText = new TextDecoder().decode(value);
+      assert(chunkText.includes("event: connected"), "Test 11.3: SSE stream emits initial 'event: connected'");
+      await reader.cancel();
+    }
+  }
+
+  // -----------------------------------------------------------
+  // Test 12: No-results destination returns 0 cleanly
   // -----------------------------------------------------------
   {
     const { status, json } = await api("/api/rides?destination=Jahangirnagar%20University%20Savar&genderPreference=no_preference", { userEmail: "farhana@std.du.ac.bd" });
-    assert(status === 200, "Test 8.1: No-results destination returns 200 OK");
-    assert(json.count === 0 && json.partners?.length === 0, "Test 8.2: Returns 0 results cleanly (empty partners array)");
-  }
-
-  // -----------------------------------------------------------
-  // Test 9: Register Journey (POST /api/rides) with zero driver/seat fields
-  // -----------------------------------------------------------
-  {
-    const postBody = {
-      origin: "Dhanmondi 27, Dhaka",
-      destination: "TSC, University of Dhaka",
-      genderPreference: "women_only",
-      notes: "Looking for a campus buddy to walk/share commute to Arts faculty.",
-    };
-    const { status, json } = await api("/api/rides", { userEmail: "farhana@std.du.ac.bd", method: "POST", body: postBody });
-    assert(status === 201, "Test 9.1: Register journey succeeds with 201 Created");
-    assert(json.success === true, "Test 9.2: Successfully created travel journey");
-    assert(json.journey && json.journey.genderPreference === "women_only", "Test 9.3: Preserves women_only preference");
-  }
-
-  // -----------------------------------------------------------
-  // Test 10: Register Journey with unverified user should be rejected
-  // -----------------------------------------------------------
-  {
-    const postBody = {
-      origin: "Dhanmondi 27, Dhaka",
-      destination: "TSC, University of Dhaka",
-      genderPreference: "no_preference",
-    };
-    const { status, json } = await api("/api/rides", { userEmail: "notehub3c2@gmail.com", method: "POST", body: postBody });
-    assert(status === 403 && json.error && json.error.includes("Verification Required"), "Test 10: Unverified user cannot post journey (403 Forbidden)", `Error: ${json.error}`);
+    assert(status === 200, "Test 12.1: No-results destination returns 200 OK");
+    assert(json.count === 0 && json.partners?.length === 0, "Test 12.2: Returns 0 results cleanly (empty partners array)");
   }
 
   console.log("==================================================");

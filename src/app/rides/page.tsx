@@ -41,7 +41,14 @@ interface GoogleMapsInstance {
 
 interface GoogleMarkerInstance {
   setPosition: (coords: { lat: number; lng: number }) => void;
+  setMap: (map: GoogleMapsInstance | null) => void;
   addListener: (event: string, cb: (e: GoogleMapMouseEvent) => void) => void;
+}
+
+interface GoogleInfoWindowInstance {
+  open: (opts: { map: GoogleMapsInstance; anchor?: GoogleMarkerInstance }) => void;
+  close: () => void;
+  setContent: (content: string) => void;
 }
 
 interface GoogleDirectionsRendererInstance {
@@ -60,10 +67,36 @@ interface GoogleAutocompleteInstance {
   getPlace: () => GooglePlaceResult;
 }
 
+export interface MatchedPartner {
+  id: string;
+  userId: string;
+  fullName: string;
+  avatarInitials: string;
+  university: string;
+  department: string;
+  verificationBadge: string;
+  verified: boolean;
+  isAvailable: boolean;
+  origin: string;
+  approxPickupDistance: string;
+  pickupDistanceKm: number | null;
+  destination: string;
+  destinationCompatibility: string;
+  compatibilityScore: number;
+  destinationDistanceKm?: number | null;
+  originCoords: { lat: number; lng: number } | null;
+  destCoords: { lat: number; lng: number } | null;
+  departureTime: string;
+  genderPreferenceRule: string;
+  notes: string | null;
+  createdAt: string;
+}
+
 interface GoogleMapsNamespace {
   maps: {
     Map: new (el: HTMLElement, opts: Record<string, unknown>) => GoogleMapsInstance;
     Marker: new (opts: Record<string, unknown>) => GoogleMarkerInstance;
+    InfoWindow?: new (opts?: Record<string, unknown>) => GoogleInfoWindowInstance;
     Geocoder: new () => GoogleGeocoderInstance;
     Point: new (x: number, y: number) => unknown;
     LatLngBounds: new () => { extend: (pt: { lat: number; lng: number }) => void };
@@ -176,30 +209,21 @@ export default function RideSharingPage() {
   // Search Submission & Live Matching State
   const [isSearching, setIsSearching] = useState(false);
   const [hasSubmittedSearch, setHasSubmittedSearch] = useState(false);
-  const [searchResults, setSearchResults] = useState<Array<{
-    id: string;
-    userId: string;
-    fullName: string;
-    university: string;
-    department: string;
-    studentIdMasked: string | null;
-    verified: boolean;
-    origin: string;
-    destination: string;
-    originCoords: { lat: number; lng: number } | null;
-    destCoords: { lat: number; lng: number } | null;
-    departureTime: string;
-    genderPreferenceRule: string;
-    matchType: string;
-    notes: string | null;
-    createdAt: string;
-  }>>([]);
+  const [searchResults, setSearchResults] = useState<MatchedPartner[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
-  const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null);
+  const [selectedPartnerIds, setSelectedPartnerIds] = useState<string[]>([]);
   const [connectedPartnerIds, setConnectedPartnerIds] = useState<string[]>([]);
   const [isRegisteringRoute, setIsRegisteringRoute] = useState(false);
   const [routeRegisteredSuccess, setRouteRegisteredSuccess] = useState(false);
+  const [isSendingGroupInvite, setIsSendingGroupInvite] = useState(false);
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
+  const [lastSyncedTime, setLastSyncedTime] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // References for Real-Time SSE Stream & Custom Map Markers
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const partnerMarkersRef = useRef<GoogleMarkerInstance[]>([]);
+  const infoWindowRef = useRef<GoogleInfoWindowInstance | null>(null);
 
   // Mobile View Toggle ("sidebar" | "map")
   const [mobileTab, setMobileTab] = useState<"sidebar" | "map">("sidebar");
@@ -379,14 +403,16 @@ export default function RideSharingPage() {
       });
 
       // Allow dragging markers to update location
-      pickupMarkerRef.current.addListener("dragend", (e) => {
+      pickupMarkerRef.current.addListener("dragend", (e: GoogleMapMouseEvent) => {
+        if (!e?.latLng) return;
         const lat = e.latLng.lat();
         const lng = e.latLng.lng();
         setPickupCoords({ lat, lng });
         reverseGeocode({ lat, lng }, true);
       });
 
-      destMarkerRef.current.addListener("dragend", (e) => {
+      destMarkerRef.current.addListener("dragend", (e: GoogleMapMouseEvent) => {
+        if (!e?.latLng) return;
         const lat = e.latLng.lat();
         const lng = e.latLng.lng();
         setDestCoords({ lat, lng });
@@ -673,7 +699,56 @@ export default function RideSharingPage() {
     }
   };
 
-  // Select / Connect with Travel Partner
+  // Multi-Partner Selection Handlers
+  const togglePartnerSelection = (partnerId: string) => {
+    setSelectedPartnerIds((prev) =>
+      prev.includes(partnerId)
+        ? prev.filter((id) => id !== partnerId)
+        : [...prev, partnerId]
+    );
+  };
+
+  const handleSelectAllPartners = () => {
+    if (selectedPartnerIds.length === searchResults.length) {
+      setSelectedPartnerIds([]);
+    } else {
+      setSelectedPartnerIds(searchResults.map((p) => p.id));
+    }
+  };
+
+  // Send Multi-Partner Travel Request
+  const handleSendGroupInvitations = async () => {
+    if (selectedPartnerIds.length === 0) return;
+    setIsSendingGroupInvite(true);
+    try {
+      const selectedPartners = searchResults.filter((p) => selectedPartnerIds.includes(p.id));
+      const targetUserIds = selectedPartners.map((p) => p.userId);
+
+      const res = await fetch("/api/rides/match", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          partnerIds: targetUserIds,
+          message: `Heading to ${destination.split(",")[0]}, let's travel together!`,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        showToast(`⚠️ ${data.error || "Failed to send travel invitations"}`);
+      } else {
+        setConnectedPartnerIds((prev) => Array.from(new Set([...prev, ...selectedPartnerIds])));
+        showToast(`🤝 Travel requests sent to ${data.count} verified peer${data.count > 1 ? "s" : ""}!`);
+      }
+    } catch (err) {
+      console.error("Group invite error:", err);
+      showToast("⚠️ Network error sending invitations.");
+    } finally {
+      setIsSendingGroupInvite(false);
+    }
+  };
+
+  // Select / Connect with a single Travel Partner
   const handleConnectPartner = (partnerId: string, partnerName: string) => {
     if (connectedPartnerIds.includes(partnerId)) {
       setConnectedPartnerIds((prev) => prev.filter((id) => id !== partnerId));
@@ -683,6 +758,134 @@ export default function RideSharingPage() {
       showToast(`🤝 Travel request sent to verified peer ${partnerName}!`);
     }
   };
+
+  // -----------------------------------------------------------
+  // Real-Time SSE Live Matching Connection
+  // -----------------------------------------------------------
+  useEffect(() => {
+    if (!hasSubmittedSearch || !destination.trim() || destination.trim().length < 2) {
+      return;
+    }
+
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+
+    const streamParams = new URLSearchParams({
+      destination: destination.trim(),
+      origin: pickup.trim(),
+      genderPreference,
+      destLat: String(destCoords.lat),
+      destLng: String(destCoords.lng),
+      originLat: String(pickupCoords.lat),
+      originLng: String(pickupCoords.lng),
+    });
+
+    const es = new EventSource(`/api/rides/stream?${streamParams.toString()}`);
+    eventSourceRef.current = es;
+
+    es.addEventListener("connected", () => {
+      setRealtimeConnected(true);
+      setLastSyncedTime(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+    });
+
+    es.addEventListener("matches", (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (Array.isArray(data.partners)) {
+          setSearchResults(data.partners);
+          setLastSyncedTime(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+        }
+      } catch (err) {
+        console.error("SSE parse error:", err);
+      }
+    });
+
+    es.onerror = () => {
+      setRealtimeConnected(false);
+    };
+
+    return () => {
+      es.close();
+      eventSourceRef.current = null;
+    };
+  }, [hasSubmittedSearch, destination, pickup, genderPreference, destCoords, pickupCoords]);
+
+  // -----------------------------------------------------------
+  // Google Maps: Render Eligible Travel Partners on Map
+  // -----------------------------------------------------------
+  useEffect(() => {
+    if (!isGoogleMapsReady || !mapInstanceRef.current || !window.google?.maps) {
+      return;
+    }
+
+    // Clean up prior markers
+    partnerMarkersRef.current.forEach((m) => m.setMap(null));
+    partnerMarkersRef.current = [];
+
+    if (!infoWindowRef.current && window.google.maps.InfoWindow) {
+      infoWindowRef.current = new window.google.maps.InfoWindow();
+    }
+
+    const gmaps = window.google.maps;
+
+    searchResults.forEach((partner) => {
+      // Find coordinate for partner
+      let coord = partner.originCoords;
+      if (!coord) {
+        const matchedLm = DHAKA_CANVAS_LANDMARKS.find((lm) =>
+          partner.origin.toLowerCase().includes(lm.name.toLowerCase().split(",")[0])
+        );
+        if (matchedLm) {
+          coord = { lat: matchedLm.lat, lng: matchedLm.lng };
+        } else {
+          coord = {
+            lat: pickupCoords.lat + 0.005,
+            lng: pickupCoords.lng + 0.005,
+          };
+        }
+      }
+
+      const isSelected = selectedPartnerIds.includes(partner.id);
+
+      const marker = new gmaps.Marker({
+        position: coord,
+        map: mapInstanceRef.current,
+        title: `${partner.fullName} (${partner.verificationBadge})`,
+        icon: {
+          path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z",
+          fillColor: isSelected ? "#0d6b63" : "#0284c7",
+          fillOpacity: 1,
+          strokeColor: "#ffffff",
+          strokeWeight: 2,
+          scale: isSelected ? 1.6 : 1.35,
+          anchor: new gmaps.Point(12, 24),
+        },
+      });
+
+      marker.addListener("click", () => {
+        if (infoWindowRef.current && mapInstanceRef.current) {
+          const content = `
+            <div style="font-family: inherit; padding: 6px 8px; max-width: 240px;">
+              <div style="font-weight: 800; color: #161b1a; font-size: 13.5px; margin-bottom: 2px;">${partner.fullName}</div>
+              <div style="font-size: 11px; color: #0d6b63; font-weight: 700; margin-bottom: 6px;">${partner.verificationBadge}</div>
+              <div style="font-size: 11.5px; color: #334155; line-height: 1.45;">
+                <div>📍 Pickup: <b>${partner.approxPickupDistance}</b></div>
+                <div>🎯 Destination: <b>${partner.destination.split(",")[0]}</b></div>
+                <div style="color: #16a34a; font-weight: 700; font-size: 10.5px; margin-top: 2px;">✓ ${partner.destinationCompatibility}</div>
+              </div>
+            </div>
+          `;
+          infoWindowRef.current.setContent(content);
+          infoWindowRef.current.open({ map: mapInstanceRef.current, anchor: marker });
+        }
+        togglePartnerSelection(partner.id);
+      });
+
+      partnerMarkersRef.current.push(marker);
+    });
+  }, [searchResults, isGoogleMapsReady, selectedPartnerIds, pickupCoords]);
 
   return (
     <div className="unishare-rides-container">
@@ -1077,23 +1280,64 @@ export default function RideSharingPage() {
               <div className="search-results-section">
                 <div className="results-header-bar">
                   <div className="results-count-title">
-                    <span>Verified Travel Partners</span>
+                    <span>Eligible Travel Partners</span>
                     <span className="results-count-badge">{searchResults.length}</span>
+                    <span className="realtime-live-indicator" title="Connected to real-time companion feed">
+                      <span className="realtime-pulse-dot" />
+                      Live Feed
+                    </span>
                   </div>
                   <div className="results-filter-indicator">
                     {genderPreference === "no_preference"
                       ? "All Verified Peers"
                       : genderPreference === "women_only"
-                      ? "Women Only"
-                      : "Men Only"}
+                        ? "Women Only"
+                        : "Men Only"}
                   </div>
                 </div>
+
+                {/* Multi-Partner Selection Action Bar */}
+                {selectedPartnerIds.length > 0 && (
+                  <div className="partner-multi-select-bar">
+                    <div className="multi-select-info">
+                      <div className="multi-select-title">
+                        👥 {selectedPartnerIds.length} Travel Partner{selectedPartnerIds.length > 1 ? "s" : ""} Selected
+                      </div>
+                      <div className="multi-select-sub">
+                        Ready to coordinate shared commute
+                      </div>
+                    </div>
+                    <div className="multi-select-actions">
+                      <button
+                        type="button"
+                        className="multi-clear-btn"
+                        onClick={() => setSelectedPartnerIds([])}
+                      >
+                        Clear
+                      </button>
+                      <button
+                        type="button"
+                        className="multi-select-btn"
+                        onClick={handleSendGroupInvitations}
+                        disabled={isSendingGroupInvite}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                          <circle cx="9" cy="7" r="4" />
+                          <line x1="19" y1="8" x2="19" y2="14" />
+                          <line x1="22" y1="11" x2="16" y2="11" />
+                        </svg>
+                        {isSendingGroupInvite ? "Inviting..." : `Invite Selected (${selectedPartnerIds.length})`}
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 <div className="partner-cards-list">
                   {searchResults.map((partner) => {
                     const isConnected = connectedPartnerIds.includes(partner.id);
-                    const isSelected = selectedPartnerId === partner.id;
-                    const initials = partner.fullName
+                    const isSelected = selectedPartnerIds.includes(partner.id);
+                    const initials = partner.avatarInitials || partner.fullName
                       .split(" ")
                       .map((p) => p[0])
                       .join("")
@@ -1104,8 +1348,24 @@ export default function RideSharingPage() {
                       <div
                         key={partner.id}
                         className={`partner-card ${isSelected ? "selected" : ""}`}
-                        onClick={() => setSelectedPartnerId(partner.id)}
+                        onClick={() => togglePartnerSelection(partner.id)}
                       >
+                        {/* Checkbox Header Row */}
+                        <div className="partner-checkbox-row">
+                          <span className="partner-checkbox-label">
+                            <span className="partner-custom-checkbox">
+                              {isSelected && (
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5">
+                                  <polyline points="20 6 9 17 4 12" />
+                                </svg>
+                              )}
+                            </span>
+                            {isSelected ? "Partner Selected" : "Click to Select"}
+                          </span>
+                          <span className="partner-match-pill">{partner.destinationCompatibility}</span>
+                        </div>
+
+                        {/* User Identity Block */}
                         <div className="partner-card-top">
                           <div className="partner-user-block">
                             <div className="partner-avatar">{initials}</div>
@@ -1125,13 +1385,29 @@ export default function RideSharingPage() {
                               </div>
                             </div>
                           </div>
-                          <span className="partner-match-pill">{partner.matchType}</span>
                         </div>
 
+                        {/* Corridor & Pickup Distance Badges */}
                         <div className="partner-route-row">
                           <span>{partner.origin.split(",")[0]}</span>
                           <span className="partner-route-arrow">➔</span>
                           <b>{partner.destination.split(",")[0]}</b>
+                        </div>
+
+                        <div className="partner-metrics-pill-row">
+                          <span className="partner-distance-badge" title="Approximate pickup distance">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
+                              <circle cx="12" cy="9" r="2.5" />
+                            </svg>
+                            {partner.approxPickupDistance}
+                          </span>
+                          <span className="partner-compatibility-badge" title="Destination corridor match">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                            {partner.destinationCompatibility}
+                          </span>
                         </div>
 
                         {partner.notes && (
@@ -1140,7 +1416,7 @@ export default function RideSharingPage() {
 
                         <div className="partner-card-footer">
                           <div className="partner-time-info">
-                            <span>Active · Ready to depart</span>
+                            <span>Available · Ready to depart</span>
                           </div>
                           <button
                             type="button"
@@ -1365,6 +1641,39 @@ export default function RideSharingPage() {
                 <circle cx="0" cy="-20" r="7" fill="#ffffff" />
                 <text x="0" y="-17" textAnchor="middle" fontSize="9.5" fontWeight="800" fill="#d93025" fontFamily="system-ui">B</text>
               </g>
+
+              {/* Eligible Travel Partner Markers on Map Canvas */}
+              {searchResults.map((partner, idx) => {
+                const matchedLm = DHAKA_CANVAS_LANDMARKS.find((lm) =>
+                  partner.origin.toLowerCase().includes(lm.name.toLowerCase().split(",")[0])
+                );
+                const px = matchedLm ? matchedLm.x + (idx % 2 === 0 ? 18 : -18) : 320 + idx * 30;
+                const py = matchedLm ? matchedLm.y + (idx % 2 === 0 ? -18 : 18) : 410 + idx * 25;
+                const isSelected = selectedPartnerIds.includes(partner.id);
+
+                return (
+                  <g
+                    key={partner.id}
+                    className="svg-companion-node"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      togglePartnerSelection(partner.id);
+                      showToast(`📍 Selected ${partner.fullName} (${partner.approxPickupDistance})`);
+                    }}
+                    style={{ cursor: "pointer" }}
+                  >
+                    <circle cx={px} cy={py} r={isSelected ? 16 : 12} fill={isSelected ? "#0d6b63" : "#0284c7"} opacity="0.95" />
+                    <circle cx={px} cy={py} r={isSelected ? 20 : 15} fill="none" stroke={isSelected ? "#0d6b63" : "#0284c7"} strokeWidth="2" strokeDasharray="3,3" opacity="0.8" />
+                    <text x={px} y={py + 4} textAnchor="middle" fontSize="9" fontWeight="800" fill="#ffffff" fontFamily="system-ui">
+                      {partner.avatarInitials}
+                    </text>
+                    <rect x={px - 38} y={py - 27} width="76" height="16" rx="4" fill="#ffffff" stroke={isSelected ? "#0d6b63" : "#cbd5e1"} strokeWidth="1.5" filter="url(#mapShadow)" />
+                    <text x={px} y={py - 15} textAnchor="middle" fontSize="8.5" fontWeight="700" fill={isSelected ? "#0d6b63" : "#1e293b"} fontFamily="system-ui">
+                      {partner.fullName.split(" ")[0]} · {partner.pickupDistanceKm ? `${partner.pickupDistanceKm}km` : "Near"}
+                    </text>
+                  </g>
+                );
+              })}
             </svg>
           )}
 
