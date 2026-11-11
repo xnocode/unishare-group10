@@ -46,6 +46,29 @@ export const DHAKA_CAMPUS_LANDMARKS: CampusLandmark[] = [
   { id: "agargaon", label: "Agargaon", name: "Agargaon Metro Station, Dhaka", lat: 23.7784, lng: 90.3797 },
   { id: "motijheel", label: "Motijheel", name: "Motijheel Shapla Chattar, Dhaka", lat: 23.7330, lng: 90.4172 },
   { id: "uttara", label: "Uttara Azampur", name: "Uttara Azampur, Dhaka", lat: 23.8682, lng: 90.4004 },
+
+  // Universities
+  { id: "uits", label: "UITS", name: "UITS, Dhaka", lat: 23.7786, lng: 90.4269, isQuickHub: true },
+  { id: "nsu", label: "NSU", name: "North South University, Dhaka", lat: 23.8137, lng: 90.4255, isQuickHub: true },
+  { id: "brac", label: "BRAC University", name: "BRAC University, Dhaka", lat: 23.7781, lng: 90.4017 },
+  { id: "iub", label: "IUB", name: "Independent University Bangladesh, Dhaka", lat: 23.8206, lng: 90.4278 },
+  { id: "uiu", label: "UIU", name: "United International University, Dhaka", lat: 23.7786, lng: 90.4269 },
+  { id: "aiub", label: "AIUB", name: "American International University Bangladesh, Dhaka", lat: 23.8319, lng: 90.4229 },
+  { id: "buet", label: "BUET", name: "Bangladesh University of Engineering & Technology, Dhaka", lat: 23.7262, lng: 90.3922 },
+  { id: "bracu_annex", label: "BRAC Annex", name: "BRAC University Annex Building, Dhaka", lat: 23.7465, lng: 90.3961 },
+  { id: "diu", label: "DIU", name: "Daffodil International University, Dhaka", lat: 23.7332, lng: 90.3570 },
+  { id: "sust_dhaka", label: "EWU", name: "East West University, Dhaka", lat: 23.7691, lng: 90.4215 },
+  { id: "iubat", label: "IUBAT", name: "IUBAT University, Dhaka", lat: 23.8762, lng: 90.3844 },
+
+  // Extra transit hubs
+  { id: "gulshan1", label: "Gulshan 1", name: "Gulshan 1 Circle, Dhaka", lat: 23.7812, lng: 90.4142 },
+  { id: "gulshan2", label: "Gulshan 2", name: "Gulshan 2 Circle, Dhaka", lat: 23.7961, lng: 90.4147 },
+  { id: "badda", label: "Badda", name: "Badda, Dhaka", lat: 23.7792, lng: 90.4328 },
+  { id: "rampura", label: "Rampura", name: "Rampura Bridge, Dhaka", lat: 23.7626, lng: 90.4273 },
+  { id: "bashundhara", label: "Bashundhara", name: "Bashundhara R/A, Dhaka", lat: 23.8139, lng: 90.4291 },
+  { id: "airport", label: "Airport", name: "Hazrat Shahjalal International Airport, Dhaka", lat: 23.8515, lng: 90.4072 },
+  { id: "gazipur", label: "Gazipur", name: "Gazipur Chowrasta, Dhaka", lat: 23.9999, lng: 90.4208 },
+  { id: "narayanganj", label: "Narayanganj", name: "Narayanganj, Dhaka", lat: 23.6238, lng: 90.5000 },
 ];
 
 export const QUICK_CAMPUS_DESTINATIONS = DHAKA_CAMPUS_LANDMARKS.filter((lm) => lm.isQuickHub);

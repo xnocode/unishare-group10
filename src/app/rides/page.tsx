@@ -1834,7 +1834,7 @@ export default function RideSharingPage() {
                       lm.name.toLowerCase().includes(pickup.trim().toLowerCase()) ||
                       lm.label.toLowerCase().includes(pickup.trim().toLowerCase())
                   )
-                    .slice(0, 6)
+                    .slice(0, 8)
                     .map((lm) => (
                       <div
                         key={`pickup-${lm.id}`}
@@ -1953,7 +1953,7 @@ export default function RideSharingPage() {
                       lm.name.toLowerCase().includes(destination.trim().toLowerCase()) ||
                       lm.label.toLowerCase().includes(destination.trim().toLowerCase())
                   )
-                    .slice(0, 6)
+                    .slice(0, 8)
                     .map((lm) => (
                       <div
                         key={`dest-${lm.id}`}
