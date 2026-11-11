@@ -280,6 +280,17 @@ export default function RideSharingPage() {
   const [isConfirmingArrival, setIsConfirmingArrival] = useState(false);
   const [proximityRadius, setProximityRadius] = useState<number>(100);
 
+  // Review & Safety Reporting State ("How was your ride?")
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewRating, setReviewRating] = useState<number>(5);
+  const [hoverRating, setHoverRating] = useState<number>(0);
+  const [reviewFeedback, setReviewFeedback] = useState("");
+  const [reviewReported, setReviewReported] = useState(false);
+  const [reviewCategory, setReviewCategory] = useState("INAPPROPRIATE_BEHAVIOR");
+  const [reviewDetails, setReviewDetails] = useState("");
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [hasReviewed, setHasReviewed] = useState(false);
+
   // References for Live Tracking Watcher & Markers
   const trackingWatchIdRef = useRef<number | null>(null);
   const partnerLiveMarkerRef = useRef<GoogleMarkerInstance | null>(null);
@@ -1340,6 +1351,9 @@ export default function RideSharingPage() {
         } else if (action === "RESUME_SHARING") {
           startBrowserGeolocation(activeConversationId);
         }
+        if (action === "END_JOURNEY") {
+          setShowReviewModal(true);
+        }
         await fetchTrackingState(activeConversationId);
         const msgRes = await fetch(`/api/rides/conversations/${activeConversationId}/messages`);
         const msgData = await msgRes.json();
@@ -1354,6 +1368,46 @@ export default function RideSharingPage() {
       showToast("⚠️ Network error.");
     } finally {
       setIsUpdatingTrackingAction(false);
+    }
+  };
+
+  const handleSubmitReview = async () => {
+    if (!activeConversationId) return;
+    setIsSubmittingReview(true);
+    try {
+      const res = await fetch(`/api/rides/conversations/${activeConversationId}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rating: reviewRating,
+          feedback: reviewFeedback.trim() || undefined,
+          reported: reviewReported,
+          reportCategory: reviewReported ? reviewCategory : undefined,
+          reportDetails: reviewReported ? reviewDetails.trim() || undefined : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(
+          reviewReported
+            ? "🛡️ Review & Safety Report submitted. Thank you."
+            : "🌟 Thank you for reviewing your commute partner!"
+        );
+        setShowReviewModal(false);
+        setHasReviewed(true);
+        recordNotification(
+          "Review Submitted ⭐",
+          `Your rating and feedback for ${activeConversation?.partnerName || "your travel partner"} has been recorded.`,
+          "car"
+        );
+      } else {
+        showToast(`⚠️ ${data.error || "Failed to submit review"}`);
+      }
+    } catch (err) {
+      console.error("handleSubmitReview error:", err);
+      showToast("⚠️ Network error submitting review.");
+    } finally {
+      setIsSubmittingReview(false);
     }
   };
 
@@ -1375,6 +1429,19 @@ export default function RideSharingPage() {
         setChatMessages(data.conversation.messages || []);
       }
       fetchTrackingState(conversationId);
+
+      // Check review status
+      fetch(`/api/rides/conversations/${conversationId}/review`)
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.success) {
+            setHasReviewed(d.hasReviewed);
+            if (d.isJourneyCompleted && !d.hasReviewed) {
+              setShowReviewModal(true);
+            }
+          }
+        })
+        .catch(() => {});
     } catch (err) {
       console.error("Failed to load conversation:", err);
     }
@@ -2980,6 +3047,154 @@ export default function RideSharingPage() {
                 disabled={isUpdatingConsent}
               >
                 I Agree &amp; Share GPS
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =======================================================
+          6. HOW WAS YOUR RIDE? REVIEW & SAFETY REPORTING MODAL
+          ======================================================= */}
+      {showReviewModal && (
+        <div className="review-modal-overlay" onClick={() => setShowReviewModal(false)}>
+          <div className="review-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="review-modal-header">
+              <h3 className="review-header-title">How was your ride?</h3>
+              <div className="review-header-sub">
+                Rate your commute experience with {activeConversation?.partnerName || "your travel companion"}
+              </div>
+              <button
+                type="button"
+                className="review-modal-close-btn"
+                onClick={() => setShowReviewModal(false)}
+                title="Dismiss review"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="review-modal-body">
+              {/* Partner Card */}
+              <div className="review-partner-preview">
+                <div className="review-partner-avatar">
+                  {activeConversation?.partnerAvatarInitials || "ST"}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: "14px", color: "var(--ink)" }}>
+                    {activeConversation?.partnerName || "Verified Student"}
+                  </div>
+                  <div style={{ fontSize: "11.5px", color: "#64748b" }}>
+                    {activeConversation?.partnerBadge || "Verified Student"} · {activeConversation?.partnerDepartment || "Campus"}
+                  </div>
+                </div>
+              </div>
+
+              {/* Star Rating */}
+              <div className="review-stars-container">
+                <div className="review-stars-row">
+                  {[1, 2, 3, 4, 5].map((star) => {
+                    const isFilled = star <= (hoverRating || reviewRating);
+                    return (
+                      <button
+                        key={star}
+                        type="button"
+                        className={`star-btn ${isFilled ? "filled" : ""}`}
+                        onMouseEnter={() => setHoverRating(star)}
+                        onMouseLeave={() => setHoverRating(0)}
+                        onClick={() => setReviewRating(star)}
+                        title={`Rate ${star} star${star > 1 ? "s" : ""}`}
+                      >
+                        ★
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="review-rating-caption">
+                  {reviewRating === 5 && "🌟 Excellent Commute!"}
+                  {reviewRating === 4 && "👍 Good & Pleasant"}
+                  {reviewRating === 3 && "👌 Fair / Average"}
+                  {reviewRating === 2 && "⚠️ Could be better"}
+                  {reviewRating === 1 && "❌ Poor experience"}
+                </div>
+              </div>
+
+              {/* Written Feedback (Optional) */}
+              <div>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 700, marginBottom: "5px", color: "var(--ink)" }}>
+                  Written Feedback (Optional)
+                </label>
+                <textarea
+                  className="review-textarea-field"
+                  placeholder="Share details about punctuality, friendliness, or coordination..."
+                  value={reviewFeedback}
+                  onChange={(e) => setReviewFeedback(e.target.value)}
+                  maxLength={1000}
+                />
+              </div>
+
+              {/* Inappropriate Behavior / Safety Reporting */}
+              <div>
+                <label className="review-report-toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={reviewReported}
+                    onChange={(e) => setReviewReported(e.target.checked)}
+                  />
+                  <span>⚠️ Report Inappropriate Behavior or Safety Issue</span>
+                </label>
+
+                {reviewReported && (
+                  <div className="review-report-box">
+                    <div>
+                      <label style={{ display: "block", fontSize: "11.5px", fontWeight: 700, marginBottom: "4px", color: "#991b1b" }}>
+                        Safety Issue Category:
+                      </label>
+                      <select
+                        className="review-report-select"
+                        value={reviewCategory}
+                        onChange={(e) => setReviewCategory(e.target.value)}
+                      >
+                        <option value="INAPPROPRIATE_BEHAVIOR">Inappropriate conduct or language</option>
+                        <option value="HARASSMENT">Harassment or disrespectful behavior</option>
+                        <option value="SAFETY_CONCERN">Safety violation or reckless behavior</option>
+                        <option value="NO_SHOW">No-show or abandoned meeting spot</option>
+                        <option value="OTHER">Other concern</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label style={{ display: "block", fontSize: "11.5px", fontWeight: 700, marginBottom: "4px", color: "#991b1b" }}>
+                        Confidential Details for Campus Safety:
+                      </label>
+                      <textarea
+                        className="review-report-textarea"
+                        placeholder="Please describe what occurred. This report is treated with strict confidentiality."
+                        value={reviewDetails}
+                        onChange={(e) => setReviewDetails(e.target.value)}
+                        maxLength={2000}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="review-modal-actions">
+              <button
+                type="button"
+                className="review-btn-skip"
+                onClick={() => setShowReviewModal(false)}
+              >
+                Maybe Later
+              </button>
+              <button
+                type="button"
+                className="review-btn-submit"
+                onClick={handleSubmitReview}
+                disabled={isSubmittingReview}
+              >
+                {isSubmittingReview ? "Submitting..." : "Submit Review"}
               </button>
             </div>
           </div>

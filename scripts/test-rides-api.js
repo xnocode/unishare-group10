@@ -702,9 +702,18 @@ async function runTests() {
   }
 
   // -----------------------------------------------------------
-  // Test 35: Mark Journey Completed & Live Tracking Stoppage
+  // Test 35: Premature Review Blocked & Mark Journey Completed
   // -----------------------------------------------------------
   {
+    // 35a: Attempting to review an in-progress journey must fail with 403 Forbidden
+    const prematureReview = await api(`/api/rides/conversations/${activeConversationId}/review`, {
+      userEmail: "farhana@std.du.ac.bd",
+      method: "POST",
+      body: { rating: 5, feedback: "Great ride!" },
+    });
+    assert(prematureReview.status === 403, "Test 35.0: Review rejected before journey is marked completed (403 Forbidden)");
+
+    // 35b: Mark journey completed
     const endRes = await api(`/api/rides/conversations/${activeConversationId}/tracking/stop`, {
       userEmail: "farhana@std.du.ac.bd",
       method: "POST",
@@ -728,6 +737,111 @@ async function runTests() {
       body: { lat: 23.7317, lng: 90.3957 },
     });
     assert(postAfterEnd.status === 400, "Test 35.6: Location upload rejected after journey ended (400 Bad Request)");
+  }
+
+  // ===========================================================
+  // STEP 8 TESTS: POST-JOURNEY RATINGS, FEEDBACK & REPORTING
+  // ===========================================================
+
+  // -----------------------------------------------------------
+  // Test 36: Query Review Status for Completed Journey
+  // (GET /api/rides/conversations/[id]/review)
+  // -----------------------------------------------------------
+  {
+    const reviewStatus = await api(`/api/rides/conversations/${activeConversationId}/review`, {
+      userEmail: "farhana@std.du.ac.bd",
+    });
+    assert(reviewStatus.status === 200, "Test 36.1: Farhana queries review status (200 OK)");
+    assert(reviewStatus.json.canReview === true, "Test 36.2: canReview is true for completed journey");
+    assert(reviewStatus.json.hasReviewed === false, "Test 36.3: hasReviewed is initially false");
+    assert(reviewStatus.json.partner?.fullName === "Sadia Rahman", "Test 36.4: Partner identified as Sadia Rahman");
+  }
+
+  // -----------------------------------------------------------
+  // Test 37: Submit 5-Star Rating & Written Feedback
+  // (POST /api/rides/conversations/[id]/review)
+  // -----------------------------------------------------------
+  {
+    const submitReviewRes = await api(`/api/rides/conversations/${activeConversationId}/review`, {
+      userEmail: "farhana@std.du.ac.bd",
+      method: "POST",
+      body: {
+        rating: 5,
+        feedback: "Super friendly, coordinated smoothly, and arrived right on time!",
+        reported: false,
+      },
+    });
+    assert(submitReviewRes.status === 200, "Test 37.1: Farhana submits 5-star review successfully (200 OK)");
+    assert(submitReviewRes.json.review?.rating === 5, "Test 37.2: 5-star rating recorded");
+    assert(submitReviewRes.json.review?.feedback?.includes("Super friendly"), "Test 37.3: Written feedback recorded");
+    assert(submitReviewRes.json.review?.reported === false, "Test 37.4: reported is false for positive review");
+  }
+
+  // -----------------------------------------------------------
+  // Test 38: Submit Review with Inappropriate Behavior Safety Report
+  // -----------------------------------------------------------
+  {
+    const reportRes = await api(`/api/rides/conversations/${activeConversationId}/review`, {
+      userEmail: "sadia@std.du.ac.bd",
+      method: "POST",
+      body: {
+        rating: 2,
+        feedback: "Travel partner was disrespectful during transit.",
+        reported: true,
+        reportCategory: "INAPPROPRIATE_BEHAVIOR",
+        reportDetails: "Disrespectful conduct observed at meeting spot.",
+      },
+    });
+    assert(reportRes.status === 200, "Test 38.1: Sadia submits safety report successfully (200 OK)");
+    assert(reportRes.json.review?.reported === true, "Test 38.2: Safety report recorded with reported: true");
+    assert(reportRes.json.review?.reportCategory === "INAPPROPRIATE_BEHAVIOR", "Test 38.3: Category recorded as INAPPROPRIATE_BEHAVIOR");
+
+    // Verify confidential campus safety alert was logged to thread
+    const msgRes = await api(`/api/rides/conversations/${activeConversationId}/messages`, {
+      userEmail: "sadia@std.du.ac.bd",
+    });
+    const safetyMsg = msgRes.json.messages?.find((m) => m.text?.includes("Confidential feedback received"));
+    assert(safetyMsg !== undefined, "Test 38.4: Confidential moderation message emitted");
+  }
+
+  // -----------------------------------------------------------
+  // Test 39: Security & Authorization Protection on Reviews
+  // -----------------------------------------------------------
+  {
+    // Non-participant student (Tanvir) attempts to review
+    const { status: unauthorizedStatus } = await api(`/api/rides/conversations/${activeConversationId}/review`, {
+      userEmail: "tanvir@std.du.ac.bd",
+      method: "POST",
+      body: { rating: 5 },
+    });
+    assert(unauthorizedStatus === 403, "Test 39.1: Unauthorized student blocked from submitting review (403 Forbidden)");
+
+    // Unauthenticated request
+    const { status: unauthStatus } = await api(`/api/rides/conversations/${activeConversationId}/review`, {
+      userEmail: null,
+      method: "POST",
+      body: { rating: 5 },
+    });
+    assert(unauthStatus === 401, "Test 39.2: Unauthenticated review rejected with 401");
+  }
+
+  // -----------------------------------------------------------
+  // Test 40: Input Validation on Rating Values (1-5 integer constraint)
+  // -----------------------------------------------------------
+  {
+    const invalidRatingRes = await api(`/api/rides/conversations/${activeConversationId}/review`, {
+      userEmail: "farhana@std.du.ac.bd",
+      method: "POST",
+      body: { rating: 6 }, // out of bounds
+    });
+    assert(invalidRatingRes.status === 400, "Test 40.1: Rating > 5 rejected with 400 Bad Request");
+
+    const zeroRatingRes = await api(`/api/rides/conversations/${activeConversationId}/review`, {
+      userEmail: "farhana@std.du.ac.bd",
+      method: "POST",
+      body: { rating: 0 }, // out of bounds
+    });
+    assert(zeroRatingRes.status === 400, "Test 40.2: Rating < 1 rejected with 400 Bad Request");
   }
 
   console.log("==================================================");

@@ -212,6 +212,7 @@ model TravelConversation {
 
   messages         TravelMessage[]
   tracking         TravelLiveTracking?
+  reviews          TravelReview[]
 
   @@index([participant1Id])
   @@index([participant2Id])
@@ -289,4 +290,30 @@ model TravelMessage {
   @@index([conversationId])
   @@index([senderId])
   @@index([createdAt])
+}
+
+// Travel Companion Review & Safety Report for Completed Journeys
+model TravelReview {
+  id              String             @id @default(cuid())
+  conversationId  String
+  conversation    TravelConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  reviewerId      String
+  partnerId       String
+
+  // Rating & Feedback
+  rating          Int                // 1 to 5 stars
+  feedback        String?            // Optional written review / feedback
+
+  // Safety & Behavioral Reporting
+  reported        Boolean            @default(false)
+  reportCategory  String?            // e.g. "HARASSMENT", "SAFETY_CONCERN", "INAPPROPRIATE_BEHAVIOR", "NO_SHOW", "OTHER"
+  reportDetails   String?            // Confidential details for campus safety team
+
+  createdAt       DateTime           @default(now())
+
+  @@unique([conversationId, reviewerId])
+  @@index([conversationId])
+  @@index([reviewerId])
+  @@index([partnerId])
+  @@index([reported])
 }
