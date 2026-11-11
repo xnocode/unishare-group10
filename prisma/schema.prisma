@@ -249,12 +249,24 @@ model TravelLiveTracking {
   p2UpdatedAt         DateTime?
 
   // Journey Lifecycle
-  journeyStatus       String             @default("NOT_STARTED") // "NOT_STARTED", "IN_PROGRESS", "COMPLETED", "CANCELLED"
-  startedAt           DateTime?
-  completedAt         DateTime?
+  journeyStatus              String             @default("NOT_STARTED") // "NOT_STARTED", "IN_PROGRESS", "COMPLETED", "CANCELLED"
+  startedAt                  DateTime?
+  completedAt                DateTime?
 
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
+  // Destination & Arrival Detection
+  destinationLat             Float?
+  destinationLng             Float?
+  destinationName            String?
+  proximityThresholdMeters   Float              @default(100) // Configurable arrival threshold (default 100m)
+  p1Arrived                  Boolean            @default(false)
+  p1ArrivedAt                DateTime?
+  p1ConsecutiveArrivalPings  Int                @default(0)
+  p2Arrived                  Boolean            @default(false)
+  p2ArrivedAt                DateTime?
+  p2ConsecutiveArrivalPings  Int                @default(0)
+
+  createdAt                  DateTime           @default(now())
+  updatedAt                  DateTime           @updatedAt
 
   @@index([conversationId])
   @@index([journeyStatus])

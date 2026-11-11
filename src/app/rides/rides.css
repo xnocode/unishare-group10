@@ -2451,6 +2451,93 @@
 }
 
 /* -------------------------------------------------------------
+   JOURNEY ARRIVAL DETECTION & NOTIFICATION STYLES
+   ------------------------------------------------------------- */
+
+.arrival-alert-banner {
+  background: #ecfdf5;
+  border: 1.5px solid #6ee7b7;
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 6px 12px;
+  animation: fadeIn 0.25s ease-out;
+}
+
+.arrival-alert-banner.both {
+  background: #f0fdf4;
+  border-color: #22c55e;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.15);
+}
+
+.arrival-banner-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #065f46;
+}
+
+.arrival-banner-btn {
+  padding: 6px 12px;
+  background: #059669;
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.arrival-banner-btn:hover {
+  background: #047857;
+}
+
+.arrival-manual-confirm-btn {
+  width: 100%;
+  padding: 6px 10px;
+  background: #ffffff;
+  border: 1px dashed #0d6b63;
+  color: #0d6b63;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 4px;
+  transition: all 0.15s ease;
+}
+
+.arrival-manual-confirm-btn:hover {
+  background: var(--mint);
+}
+
+.arrival-threshold-badge {
+  font-size: 10px;
+  color: #64748b;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #f1f5f9;
+  padding: 2px 7px;
+  border-radius: 999px;
+  margin-left: auto;
+}
+
+/* -------------------------------------------------------------
    RESPONSIVE DESIGN (Tablets & Mobile)
    ------------------------------------------------------------- */
 

@@ -120,6 +120,12 @@ export async function GET(req: NextRequest, context: RouteContext) {
       ? partner.university.replace("University of ", "").replace(" University", "")
       : "Campus";
 
+    const myArrived = isP1 ? tracking.p1Arrived : tracking.p2Arrived;
+    const myArrivedAt = isP1 ? tracking.p1ArrivedAt : tracking.p2ArrivedAt;
+    const partnerArrived = isP1 ? tracking.p2Arrived : tracking.p1Arrived;
+    const partnerArrivedAt = isP1 ? tracking.p2ArrivedAt : tracking.p1ArrivedAt;
+    const bothArrived = tracking.p1Arrived && tracking.p2Arrived;
+
     return NextResponse.json({
       success: true,
       tracking: {
@@ -128,11 +134,20 @@ export async function GET(req: NextRequest, context: RouteContext) {
         journeyStatus: tracking.journeyStatus,
         startedAt: tracking.startedAt,
         completedAt: tracking.completedAt,
+        destinationLat: tracking.destinationLat,
+        destinationLng: tracking.destinationLng,
+        destinationName: tracking.destinationName,
+        proximityThresholdMeters: tracking.proximityThresholdMeters,
         myConsent,
         partnerConsent,
         bothConsented,
         mySharing,
         partnerSharing,
+        myArrived,
+        myArrivedAt,
+        partnerArrived,
+        partnerArrivedAt,
+        bothArrived,
         partner: {
           id: partnerId,
           fullName: partner?.fullName || "Travel Companion",
@@ -152,3 +167,70 @@ export async function GET(req: NextRequest, context: RouteContext) {
     );
   }
 }
+
+// PATCH /api/rides/conversations/[id]/tracking — Configure destination & arrival proximity threshold
+export async function PATCH(req: NextRequest, context: RouteContext) {
+  try {
+    const user = await getAuthenticatedRideUser(req);
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized: Please log in." },
+        { status: 401 }
+      );
+    }
+
+    const { id } = await context.params;
+    const conversation = await db.travelConversation.findUnique({
+      where: { id },
+      include: { tracking: true },
+    });
+
+    if (!conversation) {
+      return NextResponse.json(
+        { success: false, error: "Conversation not found." },
+        { status: 404 }
+      );
+    }
+
+    const isP1 = conversation.participant1Id === user.id;
+    const isP2 = conversation.participant2Id === user.id;
+    if (!isP1 && !isP2) {
+      return NextResponse.json(
+        { success: false, error: "Forbidden: Not an authorized participant." },
+        { status: 403 }
+      );
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const updateData: Record<string, unknown> = {};
+
+    if (typeof body.destinationLat === "number") updateData.destinationLat = body.destinationLat;
+    if (typeof body.destinationLng === "number") updateData.destinationLng = body.destinationLng;
+    if (typeof body.destinationName === "string") updateData.destinationName = body.destinationName.trim().slice(0, 200);
+    if (typeof body.proximityThresholdMeters === "number" && body.proximityThresholdMeters > 0) {
+      updateData.proximityThresholdMeters = Math.max(30, Math.min(1000, body.proximityThresholdMeters));
+    }
+
+    const updated = await db.travelLiveTracking.upsert({
+      where: { conversationId: id },
+      update: updateData,
+      create: {
+        conversationId: id,
+        ...updateData,
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: "Tracking destination parameters updated successfully.",
+      tracking: updated,
+    });
+  } catch (error) {
+    console.error("PATCH /api/rides/conversations/[id]/tracking error:", error);
+    return NextResponse.json(
+      { success: false, error: "Internal server error." },
+      { status: 500 }
+    );
+  }
+}
+

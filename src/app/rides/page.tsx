@@ -247,6 +247,15 @@ export default function RideSharingPage() {
     bothConsented: boolean;
     mySharing: boolean;
     partnerSharing: boolean;
+    destinationLat?: number | null;
+    destinationLng?: number | null;
+    destinationName?: string | null;
+    proximityThresholdMeters?: number;
+    myArrived?: boolean;
+    myArrivedAt?: string | null;
+    partnerArrived?: boolean;
+    partnerArrivedAt?: string | null;
+    bothArrived?: boolean;
     partner: { id: string; fullName: string; badge: string };
     partnerLocation: {
       lat: number;
@@ -267,6 +276,9 @@ export default function RideSharingPage() {
   const [partnerDistanceMeters, setPartnerDistanceMeters] = useState<number | null>(null);
   const [myLiveCoords, setMyLiveCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [showConsentModal, setShowConsentModal] = useState(false);
+  const [gpsErrorState, setGpsErrorState] = useState<string | null>(null);
+  const [isConfirmingArrival, setIsConfirmingArrival] = useState(false);
+  const [proximityRadius, setProximityRadius] = useState<number>(100);
 
   // References for Live Tracking Watcher & Markers
   const trackingWatchIdRef = useRef<number | null>(null);
@@ -1081,6 +1093,36 @@ export default function RideSharingPage() {
     []
   );
 
+  // Notification recording helper (reuses UniShare notification storage)
+  const recordNotification = useCallback(
+    (title: string, body: string, icon: "car" | "box" | "wallet" = "car") => {
+      try {
+        const storageKey = `unishare_${currentUser.email || "demo"}_unishare_notifications`;
+        const existing = localStorage.getItem(storageKey);
+        let list: any[] = [];
+        if (existing) {
+          try {
+            list = JSON.parse(existing);
+          } catch {}
+        }
+        list.unshift({
+          id: Date.now(),
+          unread: true,
+          icon,
+          title,
+          body,
+          meta: "Ride · Just now",
+          actionText: "Open Ride",
+          actionHref: "/rides",
+        });
+        localStorage.setItem(storageKey, JSON.stringify(list.slice(0, 50)));
+      } catch {
+        // ignore storage errors
+      }
+    },
+    [currentUser.email]
+  );
+
   // Start browser Geolocation API watchPosition
   const startBrowserGeolocation = useCallback(
     (conversationId: string) => {
@@ -1092,6 +1134,7 @@ export default function RideSharingPage() {
 
       const watchId = navigator.geolocation.watchPosition(
         (pos) => {
+          setGpsErrorState(null);
           const { latitude, longitude, accuracy, heading, speed } = pos.coords;
           const coords = { lat: latitude, lng: longitude };
           setMyLiveCoords(coords);
@@ -1113,10 +1156,35 @@ export default function RideSharingPage() {
               accuracy: accuracy || undefined,
               heading: heading || undefined,
               speed: speed || undefined,
+              destinationLat: destCoords.lat,
+              destinationLng: destCoords.lng,
+              destinationName: destination || "Selected Campus Destination",
+              proximityThresholdMeters: proximityRadius,
             }),
-          }).catch(() => {});
+          })
+            .then((res) => res.json())
+            .then((resData) => {
+              if (resData.newlyArrived) {
+                showToast(`🎯 You have arrived at ${destination || "your destination"}!`);
+                recordNotification(
+                  "You have arrived! 🎯",
+                  `You have safely reached ${destination || "the destination"}. Your travel companion has been notified.`,
+                  "car"
+                );
+              }
+            })
+            .catch(() => {});
         },
         (err) => {
+          let errDesc = "GPS error occurred.";
+          if (err.code === 1) {
+            errDesc = "Location permission denied. Please enable location in your browser to share GPS.";
+          } else if (err.code === 2) {
+            errDesc = "GPS signal unavailable. Trying to acquire satellite lock...";
+          } else if (err.code === 3) {
+            errDesc = "GPS request timed out. Retrying...";
+          }
+          setGpsErrorState(errDesc);
           console.warn("Geolocation watchPosition notice:", err.message);
         },
         {
@@ -1128,17 +1196,28 @@ export default function RideSharingPage() {
 
       trackingWatchIdRef.current = watchId;
     },
-    [showToast, trackingSession, updateLiveTrackingMarkersOnMap]
+    [destCoords.lat, destCoords.lng, destination, proximityRadius, recordNotification, showToast, trackingSession, updateLiveTrackingMarkersOnMap]
   );
 
-  // Fetch current tracking state
+  // Fetch current tracking state & arrival detection
   const fetchTrackingState = useCallback(
     async (conversationId: string) => {
       try {
         const res = await fetch(`/api/rides/conversations/${conversationId}/tracking`);
         const data = await res.json();
         if (data.success && data.tracking) {
+          const prev = trackingSession;
           setTrackingSession(data.tracking);
+
+          // Detect partner arrival transition
+          if (data.tracking.partnerArrived && !prev?.partnerArrived) {
+            showToast(`🎉 ${data.tracking.partner?.fullName} has arrived at the destination!`);
+            recordNotification(
+              `${data.tracking.partner?.fullName} arrived! 🎯`,
+              `${data.tracking.partner?.fullName} has safely reached ${destination || "the destination"}.`,
+              "car"
+            );
+          }
 
           if (data.tracking.partnerLocation) {
             const pLoc = data.tracking.partnerLocation;
@@ -1167,8 +1246,41 @@ export default function RideSharingPage() {
         console.error("fetchTrackingState error:", err);
       }
     },
-    [myLiveCoords, pickupCoords, stopBrowserGeolocation, updateLiveTrackingMarkersOnMap]
+    [destination, myLiveCoords, pickupCoords, recordNotification, showToast, stopBrowserGeolocation, trackingSession, updateLiveTrackingMarkersOnMap]
   );
+
+  // Manual arrival confirmation handler
+  const handleManualArrival = async () => {
+    if (!activeConversationId) return;
+    setIsConfirmingArrival(true);
+    try {
+      const res = await fetch(`/api/rides/conversations/${activeConversationId}/arrival`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ manualArrival: true }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast("🎯 Arrival confirmed! Travel partner notified.");
+        recordNotification(
+          "Arrival Confirmed! 🎯",
+          `You confirmed arrival at ${destination || "the destination"}.`,
+          "car"
+        );
+        fetchTrackingState(activeConversationId);
+        const msgRes = await fetch(`/api/rides/conversations/${activeConversationId}/messages`);
+        const msgData = await msgRes.json();
+        if (msgData.success && Array.isArray(msgData.messages)) {
+          setChatMessages(msgData.messages);
+        }
+      }
+    } catch (err) {
+      console.error("handleManualArrival error:", err);
+      showToast("⚠️ Network error confirming arrival.");
+    } finally {
+      setIsConfirmingArrival(false);
+    }
+  };
 
   // Handle explicit consent grant or revocation
   const handleToggleConsent = async (consent: boolean) => {
@@ -2339,10 +2451,58 @@ export default function RideSharingPage() {
                       </div>
                     </div>
 
+                    {/* GPS Error & Permission Fallback Alert */}
+                    {gpsErrorState && (
+                      <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "6px", padding: "8px 10px", fontSize: "11px", color: "#b91c1c", display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span>⚠️</span>
+                        <span>{gpsErrorState}</span>
+                      </div>
+                    )}
+
                     <div className="tracking-browser-notice">
                       <span>ℹ️</span>
                       <span>{trackingSession.browserLimitationNotice}</span>
                     </div>
+
+                    {/* Configurable Proximity Threshold */}
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: "11px", color: "#64748b", padding: "2px 0" }}>
+                      <span>🎯 Arrival Detection Radius:</span>
+                      <div style={{ display: "flex", gap: "4px" }}>
+                        {[50, 100, 150].map((r) => (
+                          <button
+                            key={r}
+                            type="button"
+                            style={{
+                              padding: "2px 7px",
+                              borderRadius: "999px",
+                              border: "1px solid",
+                              borderColor: proximityRadius === r ? "var(--teal)" : "#cbd5e1",
+                              background: proximityRadius === r ? "var(--mint)" : "#ffffff",
+                              color: proximityRadius === r ? "var(--teal)" : "#64748b",
+                              fontSize: "10.5px",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                            }}
+                            onClick={() => setProximityRadius(r)}
+                          >
+                            {r}m
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Manual Arrival Confirmation Button if not yet arrived */}
+                    {!trackingSession.myArrived && (
+                      <button
+                        type="button"
+                        className="arrival-manual-confirm-btn"
+                        onClick={handleManualArrival}
+                        disabled={isConfirmingArrival}
+                        title="Click if you have reached the destination"
+                      >
+                        <span>📍</span> Reached Destination? Confirm Arrival
+                      </button>
+                    )}
 
                     <div className="tracking-controls-row">
                       <button
@@ -2381,7 +2541,7 @@ export default function RideSharingPage() {
                         disabled={isUpdatingTrackingAction}
                         title="Complete journey and stop tracking for all"
                       >
-                        🏁 End
+                        🏁 Complete Journey
                       </button>
                     </div>
                   </>
@@ -2394,6 +2554,57 @@ export default function RideSharingPage() {
                   </div>
                 )}
               </div>
+
+              {/* Arrival Notification Banners */}
+              {trackingSession?.bothArrived && trackingSession?.journeyStatus !== "COMPLETED" && (
+                <div className="arrival-alert-banner both">
+                  <div className="arrival-banner-info">
+                    <span>🎉</span>
+                    <span>Both travel partners have arrived at {destination || "the destination"}!</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="arrival-banner-btn"
+                    onClick={() => handleTrackingAction("END_JOURNEY")}
+                    disabled={isUpdatingTrackingAction}
+                  >
+                    🏁 Mark Completed
+                  </button>
+                </div>
+              )}
+
+              {trackingSession?.myArrived && !trackingSession?.bothArrived && trackingSession?.journeyStatus !== "COMPLETED" && (
+                <div className="arrival-alert-banner">
+                  <div className="arrival-banner-info">
+                    <span>🎯</span>
+                    <span>You have arrived! Awaiting {activeConversation?.partnerName}...</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="arrival-banner-btn"
+                    onClick={() => handleTrackingAction("END_JOURNEY")}
+                  >
+                    Finish Journey
+                  </button>
+                </div>
+              )}
+
+              {trackingSession?.partnerArrived && !trackingSession?.myArrived && trackingSession?.journeyStatus !== "COMPLETED" && (
+                <div className="arrival-alert-banner">
+                  <div className="arrival-banner-info">
+                    <span>🎯</span>
+                    <span>{activeConversation?.partnerName} has arrived at destination!</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="arrival-banner-btn"
+                    onClick={handleManualArrival}
+                    disabled={isConfirmingArrival}
+                  >
+                    I&apos;ve Arrived Too ✓
+                  </button>
+                </div>
+              )}
 
               {/* Meeting Point Banner */}
               <div className="chat-meeting-banner">

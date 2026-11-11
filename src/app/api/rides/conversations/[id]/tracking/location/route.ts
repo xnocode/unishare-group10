@@ -6,7 +6,27 @@ interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-// POST /api/rides/conversations/[id]/tracking/location — Push browser GPS update
+// Haversine formula to compute distance between two coordinates in kilometers
+function getHaversineDistanceKm(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const R = 6371; // Earth radius in km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+// POST /api/rides/conversations/[id]/tracking/location — Push browser GPS update & detect arrival
 export async function POST(req: NextRequest, context: RouteContext) {
   try {
     const user = await getAuthenticatedRideUser(req);
@@ -89,7 +109,53 @@ export async function POST(req: NextRequest, context: RouteContext) {
     const speed = typeof body.speed === "number" ? body.speed : null;
     const now = new Date();
 
-    const updateData = isP1
+    // Destination & Configurable Proximity Threshold
+    const destLat = typeof body.destinationLat === "number"
+      ? body.destinationLat
+      : (tracking.destinationLat ?? conversation.meetingLat ?? null);
+    const destLng = typeof body.destinationLng === "number"
+      ? body.destinationLng
+      : (tracking.destinationLng ?? conversation.meetingLng ?? null);
+    const destName = typeof body.destinationName === "string"
+      ? body.destinationName.trim()
+      : (tracking.destinationName || conversation.meetingLocation || "the destination");
+    const proximityThreshold = typeof body.proximityThresholdMeters === "number" && body.proximityThresholdMeters > 0
+      ? body.proximityThresholdMeters
+      : tracking.proximityThresholdMeters;
+
+    // -----------------------------------------------------------
+    // ARRIVAL DETECTION ENGINE & FALSE-ALARM PREVENTION
+    // -----------------------------------------------------------
+    let distMeters: number | null = null;
+    let newlyArrived = false;
+    const alreadyArrived = isP1 ? tracking.p1Arrived : tracking.p2Arrived;
+    const partnerArrived = isP1 ? tracking.p2Arrived : tracking.p1Arrived;
+    let consecutivePings = isP1 ? tracking.p1ConsecutiveArrivalPings : tracking.p2ConsecutiveArrivalPings;
+
+    if (destLat !== null && destLng !== null) {
+      const distKm = getHaversineDistanceKm(lat, lng, destLat, destLng);
+      distMeters = Math.round(distKm * 1000);
+
+      // FALSE-ALARM PROTECTION:
+      // If GPS accuracy is worse than 65 meters (or larger than proximity threshold),
+      // it's too noisy to be confident of arrival. Do not increment arrival pings.
+      const isAccuracyAcceptable = accuracy === null || accuracy <= Math.max(65, proximityThreshold);
+
+      if (distMeters <= proximityThreshold && isAccuracyAcceptable) {
+        consecutivePings += 1;
+        // Require either a single high-accuracy ping (<= 30m accuracy) or 2 consecutive accurate pings
+        const isConfidentArrival = (accuracy !== null && accuracy <= 30) || consecutivePings >= 2;
+
+        if (isConfidentArrival && !alreadyArrived) {
+          newlyArrived = true;
+        }
+      } else if (distMeters > proximityThreshold) {
+        // Reset counter if moving away from destination
+        consecutivePings = 0;
+      }
+    }
+
+    const updateData: Record<string, unknown> = isP1
       ? {
           p1Lat: lat,
           p1Lng: lng,
@@ -99,6 +165,12 @@ export async function POST(req: NextRequest, context: RouteContext) {
           p1UpdatedAt: now,
           participant1Sharing: true,
           journeyStatus: "IN_PROGRESS",
+          destinationLat: destLat,
+          destinationLng: destLng,
+          destinationName: destName,
+          proximityThresholdMeters: proximityThreshold,
+          p1ConsecutiveArrivalPings: consecutivePings,
+          ...(newlyArrived ? { p1Arrived: true, p1ArrivedAt: now } : {}),
         }
       : {
           p2Lat: lat,
@@ -109,20 +181,65 @@ export async function POST(req: NextRequest, context: RouteContext) {
           p2UpdatedAt: now,
           participant2Sharing: true,
           journeyStatus: "IN_PROGRESS",
+          destinationLat: destLat,
+          destinationLng: destLng,
+          destinationName: destName,
+          proximityThresholdMeters: proximityThreshold,
+          p2ConsecutiveArrivalPings: consecutivePings,
+          ...(newlyArrived ? { p2Arrived: true, p2ArrivedAt: now } : {}),
         };
 
-    await db.travelLiveTracking.update({
+    const updatedTracking = await db.travelLiveTracking.update({
       where: { conversationId: id },
       data: updateData,
     });
 
+    // Send in-thread arrival notification if newly arrived
+    if (newlyArrived) {
+      await db.travelMessage.create({
+        data: {
+          conversationId: id,
+          senderId: user.id,
+          senderName: user.fullName,
+          text: `🎯 Arrival Confirmed: ${user.fullName} has safely reached ${destName}!`,
+          messageType: "STATUS_UPDATE",
+        },
+      });
+
+      // If both partners have now arrived, emit celebration message
+      if (partnerArrived) {
+        await db.travelMessage.create({
+          data: {
+            conversationId: id,
+            senderId: "system",
+            senderName: "UniShare Transit",
+            text: `🎉 Both travel partners have reached ${destName}! You can now mark the journey completed.`,
+            messageType: "STATUS_UPDATE",
+          },
+        });
+      }
+    }
+
+    const myArrived = isP1 ? updatedTracking.p1Arrived : updatedTracking.p2Arrived;
+    const bothArrived = updatedTracking.p1Arrived && updatedTracking.p2Arrived;
+
     return NextResponse.json({
       success: true,
-      message: "GPS location updated successfully.",
+      message: newlyArrived ? `Arrival detected at ${destName}!` : "GPS location updated successfully.",
       updatedAt: now.toISOString(),
       lat,
       lng,
       accuracy,
+      destinationLat: destLat,
+      destinationLng: destLng,
+      destinationName: destName,
+      distanceToDestinationMeters: distMeters,
+      proximityThresholdMeters: proximityThreshold,
+      consecutiveArrivalPings: consecutivePings,
+      arrived: myArrived,
+      newlyArrived,
+      partnerArrived,
+      bothArrived,
     });
   } catch (error) {
     console.error("POST /api/rides/conversations/[id]/tracking/location error:", error);
@@ -132,3 +249,4 @@ export async function POST(req: NextRequest, context: RouteContext) {
     );
   }
 }
+

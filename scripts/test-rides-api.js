@@ -477,13 +477,13 @@ async function runTests() {
     assert(sadiaGpsRes.status === 200, "Test 26.1: Sadia uploads GPS telemetry with 200 OK");
     assert(sadiaGpsRes.json.lat === 23.7265, "Test 26.2: Coordinates verified");
 
-    // Farhana sends live coordinates (near TSC)
+    // Farhana sends live coordinates while en-route near Farmgate (~3.5km from destination)
     const farhanaGpsRes = await api(`/api/rides/conversations/${activeConversationId}/tracking/location`, {
       userEmail: "farhana@std.du.ac.bd",
       method: "POST",
       body: {
-        lat: 23.7317,
-        lng: 90.3957,
+        lat: 23.7570,
+        lng: 90.3890,
         accuracy: 8.0,
       },
     });
@@ -587,7 +587,7 @@ async function runTests() {
     assert(farhanaCheckRevoked.json.tracking?.bothConsented === false, "Test 29.2: bothConsented is false after revocation");
     assert(farhanaCheckRevoked.json.tracking?.partnerLocation === null, "Test 29.3: Partner location immediately wiped and hidden");
 
-    // Re-grant consent for final completion test
+    // Re-grant consent for arrival & completion tests
     await api(`/api/rides/conversations/${activeConversationId}/tracking/consent`, {
       userEmail: "sadia@std.du.ac.bd",
       method: "POST",
@@ -595,8 +595,114 @@ async function runTests() {
     });
   }
 
+  // ===========================================================
+  // STEP 7 TESTS: JOURNEY ARRIVAL DETECTION & NOTIFICATIONS
+  // ===========================================================
+
   // -----------------------------------------------------------
-  // Test 30: End Journey Closes Tracking Session
+  // Test 30: Configure Destination & Proximity Threshold
+  // (PATCH /api/rides/conversations/[id]/tracking)
+  // -----------------------------------------------------------
+  {
+    const configRes = await api(`/api/rides/conversations/${activeConversationId}/tracking`, {
+      userEmail: "farhana@std.du.ac.bd",
+      method: "PATCH",
+      body: {
+        destinationLat: 23.7317,
+        destinationLng: 90.3957,
+        destinationName: "TSC, University of Dhaka",
+        proximityThresholdMeters: 100,
+      },
+    });
+    assert(configRes.status === 200, "Test 30.1: Configure destination parameters responds with 200 OK");
+    assert(configRes.json.tracking?.destinationLat === 23.7317, "Test 30.2: Destination latitude configured");
+    assert(configRes.json.tracking?.proximityThresholdMeters === 100, "Test 30.3: Proximity threshold set to 100m");
+  }
+
+  // -----------------------------------------------------------
+  // Test 31: Avoid False Arrival Notifications Caused by Inaccurate GPS
+  // (Sadia sends ping near destination but with poor accuracy: 95m > 65m limit)
+  // -----------------------------------------------------------
+  {
+    const noisyGpsRes = await api(`/api/rides/conversations/${activeConversationId}/tracking/location`, {
+      userEmail: "sadia@std.du.ac.bd",
+      method: "POST",
+      body: {
+        lat: 23.7318,
+        lng: 90.3958,
+        accuracy: 95, // Inaccurate GPS reading
+      },
+    });
+    assert(noisyGpsRes.status === 200, "Test 31.1: Location ping accepted with 200 OK");
+    assert(noisyGpsRes.json.arrived === false, "Test 31.2: Inaccurate GPS (accuracy 95m) does NOT trigger false arrival!");
+    assert(noisyGpsRes.json.newlyArrived === false, "Test 31.3: newlyArrived is false for noisy reading");
+  }
+
+  // -----------------------------------------------------------
+  // Test 32: Legitimate Arrival Detection with Accurate GPS
+  // (Sadia reaches TSC within 100m threshold with high accuracy: 15m)
+  // -----------------------------------------------------------
+  {
+    const arriveRes = await api(`/api/rides/conversations/${activeConversationId}/tracking/location`, {
+      userEmail: "sadia@std.du.ac.bd",
+      method: "POST",
+      body: {
+        lat: 23.7317,
+        lng: 90.3957,
+        accuracy: 15, // Accurate GPS reading
+      },
+    });
+    assert(arriveRes.status === 200, "Test 32.1: Accurate arrival location ping succeeds with 200 OK");
+    assert(arriveRes.json.arrived === true, "Test 32.2: Arrival successfully detected for Sadia!");
+    assert(arriveRes.json.newlyArrived === true, "Test 32.3: newlyArrived is true on first arrival");
+    assert(arriveRes.json.distanceToDestinationMeters <= 100, `Test 32.4: Within proximity threshold (${arriveRes.json.distanceToDestinationMeters}m <= 100m)`);
+
+    // Verify in-thread arrival notification was posted
+    const msgRes = await api(`/api/rides/conversations/${activeConversationId}/messages`, {
+      userEmail: "farhana@std.du.ac.bd",
+    });
+    const arrivalMsg = msgRes.json.messages?.find((m) => m.text?.includes("Arrival Confirmed: Sadia Rahman"));
+    assert(arrivalMsg !== undefined, "Test 32.5: In-thread arrival notification message posted for partner");
+  }
+
+  // -----------------------------------------------------------
+  // Test 33: Notify Authorized Partner & Query Arrival Status
+  // (GET /api/rides/conversations/[id]/arrival)
+  // -----------------------------------------------------------
+  {
+    const arrivalCheck = await api(`/api/rides/conversations/${activeConversationId}/arrival`, {
+      userEmail: "farhana@std.du.ac.bd",
+    });
+    assert(arrivalCheck.status === 200, "Test 33.1: Farhana queries arrival endpoint (200 OK)");
+    assert(arrivalCheck.json.arrival?.partnerArrived === true, "Test 33.2: Farhana is informed that Sadia has arrived");
+    assert(typeof arrivalCheck.json.arrival?.partnerArrivedAt === "string", "Test 33.3: Partner arrival timestamp recorded");
+    assert(arrivalCheck.json.arrival?.myArrived === false, "Test 33.4: Farhana has not yet arrived");
+    assert(arrivalCheck.json.arrival?.bothArrived === false, "Test 33.5: bothArrived is false");
+  }
+
+  // -----------------------------------------------------------
+  // Test 34: Second Participant Arrival / Manual Confirmation & Dual Arrival
+  // -----------------------------------------------------------
+  {
+    const farhanaArrive = await api(`/api/rides/conversations/${activeConversationId}/arrival`, {
+      userEmail: "farhana@std.du.ac.bd",
+      method: "POST",
+      body: { manualArrival: true },
+    });
+    assert(farhanaArrive.status === 200, "Test 34.1: Farhana confirms arrival with 200 OK");
+    assert(farhanaArrive.json.arrived === true, "Test 34.2: Farhana arrival confirmed");
+    assert(farhanaArrive.json.bothArrived === true, "Test 34.3: bothArrived is now TRUE!");
+
+    // Verify dual-arrival notification in thread
+    const msgRes = await api(`/api/rides/conversations/${activeConversationId}/messages`, {
+      userEmail: "farhana@std.du.ac.bd",
+    });
+    const dualMsg = msgRes.json.messages?.find((m) => m.text?.includes("Both travel partners have reached"));
+    assert(dualMsg !== undefined, "Test 34.4: Dual arrival celebration notification emitted in conversation thread");
+  }
+
+  // -----------------------------------------------------------
+  // Test 35: Mark Journey Completed & Live Tracking Stoppage
   // -----------------------------------------------------------
   {
     const endRes = await api(`/api/rides/conversations/${activeConversationId}/tracking/stop`, {
@@ -604,24 +710,24 @@ async function runTests() {
       method: "POST",
       body: { action: "END_JOURNEY" },
     });
-    assert(endRes.status === 200, "Test 30.1: Journey ended successfully with 200 OK");
-    assert(endRes.json.action === "END_JOURNEY", "Test 30.2: Action confirmed as END_JOURNEY");
+    assert(endRes.status === 200, "Test 35.1: Participant marks journey completed with 200 OK");
+    assert(endRes.json.action === "END_JOURNEY", "Test 35.2: Action confirmed as END_JOURNEY");
 
     // Verify journey status is COMPLETED
     const finalCheck = await api(`/api/rides/conversations/${activeConversationId}/tracking`, {
       userEmail: "sadia@std.du.ac.bd",
     });
-    assert(finalCheck.json.tracking?.journeyStatus === "COMPLETED", "Test 30.3: journeyStatus is COMPLETED");
-    assert(finalCheck.json.tracking?.connectionStatus === "COMPLETED", "Test 30.4: connectionStatus is COMPLETED");
-    assert(finalCheck.json.tracking?.partnerLocation === null, "Test 30.5: All location coordinates wiped upon journey completion");
+    assert(finalCheck.json.tracking?.journeyStatus === "COMPLETED", "Test 35.3: journeyStatus is COMPLETED");
+    assert(finalCheck.json.tracking?.connectionStatus === "COMPLETED", "Test 35.4: connectionStatus is COMPLETED");
+    assert(finalCheck.json.tracking?.partnerLocation === null, "Test 35.5: All location coordinates wiped upon journey completion");
 
-    // Trying to post location after journey ended returns 400 Bad Request
+    // Location upload rejected after journey ended
     const postAfterEnd = await api(`/api/rides/conversations/${activeConversationId}/tracking/location`, {
       userEmail: "sadia@std.du.ac.bd",
       method: "POST",
       body: { lat: 23.7317, lng: 90.3957 },
     });
-    assert(postAfterEnd.status === 400, "Test 30.6: Location upload rejected after journey ended (400 Bad Request)");
+    assert(postAfterEnd.status === 400, "Test 35.6: Location upload rejected after journey ended (400 Bad Request)");
   }
 
   console.log("==================================================");
