@@ -406,6 +406,144 @@
   transition: background 0.12s ease;
 }
 
+.autocomplete-gps-item {
+  background: #f0fdf4;
+  border-bottom: 1.5px solid #bbf7d0 !important;
+}
+
+.autocomplete-gps-item:hover {
+  background: #dcfce7 !important;
+}
+
+.autocomplete-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.autocomplete-item-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.autocomplete-item-sub {
+  font-size: 11px;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.autocomplete-empty-note {
+  padding: 12px 14px;
+  font-size: 12px;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.partner-card.recommended-partner-highlight {
+  border: 1.8px solid #10b981;
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.15);
+  background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 48px);
+}
+
+.partner-recommendation-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #047857;
+  font-size: 11.5px;
+  font-weight: 700;
+  border-radius: 999px;
+  margin-bottom: 8px;
+}
+
+.partner-recommendation-tag .rec-icon {
+  font-size: 12px;
+}
+
+.partner-explorer-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  background: #e0f2fe;
+  color: #0284c7;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.explorer-pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #0284c7;
+  box-shadow: 0 0 0 0 rgba(2, 132, 199, 0.7);
+  animation: explorerPulse 1.8s infinite;
+}
+
+@keyframes explorerPulse {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(2, 132, 199, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(2, 132, 199, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(2, 132, 199, 0);
+  }
+}
+
+.map-peer-chip.recommended-match {
+  border: 1.8px solid #10b981;
+  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.4);
+  background: #ffffff;
+}
+
+.map-peer-chip.live-searcher {
+  border-color: #38bdf8;
+}
+
+.avatar-pulse {
+  position: relative;
+}
+
+.avatar-pulse::after {
+  content: "";
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 7px;
+  height: 7px;
+  background: #10b981;
+  border-radius: 50%;
+  border: 1.5px solid #ffffff;
+}
+
+.inspector-rec-badge {
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #047857;
+  background: #d1fae5;
+  padding: 2px 8px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
 .autocomplete-item:last-child {
   border-bottom: none;
 }

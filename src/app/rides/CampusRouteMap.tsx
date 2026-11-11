@@ -27,6 +27,9 @@ export interface MapPeerItem {
   verificationBadge: string;
   verified: boolean;
   isAvailable: boolean;
+  isExplorer?: boolean;
+  isRecommendedPartner?: boolean;
+  recommendationBadge?: string | null;
   corridorMatch?: boolean;
   origin: string;
   approxPickupDistance: string;
@@ -592,6 +595,8 @@ export default function CampusRouteMap({
           const isInspected = inspectedPartnerId === peer.id;
           const isCorridor = Boolean(peer.corridorMatch);
           const isConnected = connectedPartnerIds.includes(peer.id);
+          const isRecommended = Boolean(peer.isRecommendedPartner);
+          const isExplorer = Boolean(peer.isExplorer);
 
           if (
             originPx.x < 16 ||
@@ -607,9 +612,9 @@ export default function CampusRouteMap({
               key={`marker-${peer.id}`}
               type="button"
               data-map-interactive="true"
-              className={`map-peer-chip ${isCorridor ? "corridor-match" : "active-nearby"} ${
+              className={`map-peer-chip ${isRecommended ? "recommended-match" : isCorridor ? "corridor-match" : "active-nearby"} ${
                 isSelected ? "selected" : ""
-              } ${isInspected ? "inspected" : ""}`}
+              } ${isInspected ? "inspected" : ""} ${isExplorer ? "live-searcher" : ""}`}
               style={{
                 left: `${originPx.x}px`,
                 top: `${originPx.y}px`,
@@ -620,13 +625,22 @@ export default function CampusRouteMap({
                 e.stopPropagation();
                 onInspectPartner(isInspected ? null : peer.id);
               }}
-              title={`${peer.fullName} heading to ${peer.destination.split(",")[0]} · Est. ৳${fareInfo.sharedFareBdt}/person`}
+              title={`${peer.fullName} · ${peer.recommendationBadge || peer.destination.split(",")[0]}`}
             >
-              <span className="map-peer-chip-avatar">{peer.avatarInitials}</span>
+              <span className={`map-peer-chip-avatar ${isExplorer ? "avatar-pulse" : ""}`}>
+                {peer.avatarInitials}
+              </span>
               <span className="map-peer-chip-body">
-                <span className="map-peer-chip-name">{peer.fullName.split(" ")[0]}</span>
+                <span className="map-peer-chip-name">
+                  {isRecommended && <span className="rec-star">⭐ </span>}
+                  {peer.fullName.split(" ")[0]}
+                </span>
                 <span className="map-peer-chip-dest">
-                  {isCorridor ? `Split ৳${fareInfo.sharedFareBdt}` : `→ ${peer.destination.split(",")[0]}`}
+                  {peer.isExplorer
+                    ? "Live Explorer"
+                    : isCorridor
+                    ? `Split ৳${fareInfo.sharedFareBdt}`
+                    : `→ ${peer.destination.split(",")[0]}`}
                 </span>
               </span>
               {isConnected && <span className="map-peer-chip-check">✓</span>}
@@ -653,6 +667,11 @@ export default function CampusRouteMap({
                 <div className="inspector-meta">
                   {inspectedItem.peer.department} · {inspectedItem.peer.university}
                 </div>
+                {inspectedItem.peer.recommendationBadge && (
+                  <div className="inspector-rec-badge">
+                    {inspectedItem.peer.recommendationBadge}
+                  </div>
+                )}
               </div>
             </div>
             <button

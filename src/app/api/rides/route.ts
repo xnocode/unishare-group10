@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/app/lib/db";
 import { getAuthenticatedRideUser } from "@/app/lib/ride-auth";
+import { recordRidesPresence, getActiveRidersPresence } from "@/app/lib/rides-presence";
 
 export const VALID_GENDER_PREFERENCES = [
   "no_preference",
@@ -224,6 +225,27 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Auto-record current user active searching presence if location is available
+    if (hasOriginCoords && user) {
+      recordRidesPresence({
+        userId: user.id,
+        fullName: user.fullName,
+        avatarInitials: user.fullName.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase(),
+        university: user.university || "University of Dhaka",
+        department: user.department || "Campus Student",
+        verified: user.verified,
+        lat: originLat,
+        lng: originLng,
+        pickupLocation: origin || "My Current Location",
+        destinationLocation: destination || undefined,
+        destinationLat: hasDestCoords ? destLat : null,
+        destinationLng: hasDestCoords ? destLng : null,
+        gender: user.gender,
+        genderPreference,
+        isSearching: true,
+      });
+    }
+
     // 4. Query ACTIVE Journeys from the Database
     // CRITICAL: ONLY verified university students who are available for travel appear!
     const activeJourneys = await db.travelJourney.findMany({
@@ -306,8 +328,6 @@ export async function GET(req: NextRequest) {
         matchesDestination = isDestinationSimilar(destination, journey.destination);
       }
 
-      if (!matchesDestination) return false;
-
       // Check 3: Pickup Location Compatibility
       const pickupCheck = isPickupCompatible(
         origin,
@@ -318,95 +338,179 @@ export async function GET(req: NextRequest) {
         journey.originLng
       );
 
-      if (!pickupCheck.compatible) return false;
+      // Recommend if in pickup range OR matching destination
+      if (!matchesDestination && !pickupCheck.compatible) return false;
 
       seenPartnerUserIds.add(journey.userId);
       return true;
     });
 
-    // 6. Privacy Protection: Map to Sanitized Public Companion Cards
-    // NEVER expose user.gender or raw private details in the public API response!
-    const sanitizedResults = matchedPartners
-      .map((journey) => {
-        const pickupMeta = isPickupCompatible(
-          origin,
-          journey.origin,
-          hasOriginCoords ? originLat : undefined,
-          hasOriginCoords ? originLng : undefined,
-          journey.originLat,
-          journey.originLng
-        );
+    // 6. Privacy Protection & Recommendation Scoring
+    const sanitizedResults = matchedPartners.map((journey) => {
+      const pickupMeta = isPickupCompatible(
+        origin,
+        journey.origin,
+        hasOriginCoords ? originLat : undefined,
+        hasOriginCoords ? originLng : undefined,
+        journey.originLat,
+        journey.originLng
+      );
 
-        const destMeta = destination.length >= 2
-          ? getDestinationCompatibility(
-              destination,
-              journey.destination,
-              hasDestCoords ? destLat : undefined,
-              hasDestCoords ? destLng : undefined,
-              journey.destinationLat,
-              journey.destinationLng
-            )
-          : { compatibility: "Active on Campus", scorePercent: 70, distanceKm: null };
+      const destMeta = destination.length >= 2
+        ? getDestinationCompatibility(
+            destination,
+            journey.destination,
+            hasDestCoords ? destLat : undefined,
+            hasDestCoords ? destLng : undefined,
+            journey.destinationLat,
+            journey.destinationLng
+          )
+        : { compatibility: "Active on Campus", scorePercent: 70, distanceKm: null };
 
-        let corridorMatch = false;
-        if (destination.length >= 2) {
-          if (hasDestCoords && journey.destinationLat !== null && journey.destinationLng !== null) {
-            corridorMatch =
-              getHaversineDistanceKm(destLat, destLng, journey.destinationLat, journey.destinationLng) <= 5.0;
-          } else {
-            corridorMatch = isDestinationSimilar(destination, journey.destination);
-          }
+      let corridorMatch = false;
+      if (destination.length >= 2) {
+        if (hasDestCoords && journey.destinationLat !== null && journey.destinationLng !== null) {
+          corridorMatch =
+            getHaversineDistanceKm(destLat, destLng, journey.destinationLat, journey.destinationLng) <= 5.0;
+        } else {
+          corridorMatch = isDestinationSimilar(destination, journey.destination);
         }
+      }
 
-        const initials = journey.user.fullName
-          .split(" ")
-          .map((p) => p[0])
-          .join("")
-          .slice(0, 2)
-          .toUpperCase();
+      const initials = journey.user.fullName
+        .split(" ")
+        .map((p) => p[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase();
 
-        const shortUni = journey.user.university
-          ? journey.user.university.replace("University of ", "").replace(" University", "")
-          : "Campus";
+      const shortUni = journey.user.university
+        ? journey.user.university.replace("University of ", "").replace(" University", "")
+        : "Campus";
 
-        return {
-          id: journey.id,
-          userId: journey.user.id,
-          fullName: journey.user.fullName,
-          avatarInitials: initials,
-          university: journey.user.university || "University of Dhaka",
-          department: journey.user.department || "Academic Department",
-          verificationBadge: `Verified ${shortUni} Student`,
-          verified: journey.user.verified, // Always true
-          isAvailable: journey.status === "ACTIVE",
-          corridorMatch,
-          origin: journey.origin,
-          approxPickupDistance: pickupMeta.distanceText,
-          pickupDistanceKm: pickupMeta.distanceKm,
-          destination: journey.destination,
-          destinationCompatibility: browseMode && !corridorMatch ? "Active Route" : destMeta.compatibility,
-          compatibilityScore: destMeta.scorePercent,
-          destinationDistanceKm: destMeta.distanceKm,
-          originCoords:
-            journey.originLat !== null && journey.originLng !== null
-              ? { lat: journey.originLat, lng: journey.originLng }
-              : null,
-          destCoords:
-            journey.destinationLat !== null && journey.destinationLng !== null
-              ? { lat: journey.destinationLat, lng: journey.destinationLng }
-              : null,
-          departureTime: journey.departureTime,
-          genderPreferenceRule: journey.genderPreference,
-          notes: journey.notes,
-          createdAt: journey.createdAt,
-        };
-      })
-      .sort((a, b) => {
-        if (a.corridorMatch !== b.corridorMatch) return a.corridorMatch ? -1 : 1;
-        const da = a.pickupDistanceKm ?? 99;
-        const dbDist = b.pickupDistanceKm ?? 99;
-        return da - dbDist;
+      // Recommendation logic: In pickup range or same destination
+      const inPickupRange = pickupMeta.distanceKm !== null && pickupMeta.distanceKm <= 5.0;
+      const sameDestination = corridorMatch || destMeta.scorePercent >= 80;
+      const isRecommendedPartner = inPickupRange || sameDestination;
+
+      let recommendationBadge: string | null = null;
+      if (inPickupRange && sameDestination) {
+        recommendationBadge = "⭐ Top Match · In Range & Same Destination";
+      } else if (inPickupRange) {
+        recommendationBadge = `📍 In Range (${pickupMeta.distanceText})`;
+      } else if (sameDestination) {
+        recommendationBadge = "🎯 Same Destination Match";
+      }
+
+      return {
+        id: journey.id,
+        userId: journey.user.id,
+        fullName: journey.user.fullName,
+        avatarInitials: initials,
+        university: journey.user.university || "University of Dhaka",
+        department: journey.user.department || "Academic Department",
+        verificationBadge: `Verified ${shortUni} Student`,
+        verified: journey.user.verified,
+        isAvailable: journey.status === "ACTIVE",
+        isExplorer: false,
+        isRecommendedPartner,
+        recommendationBadge,
+        corridorMatch,
+        origin: journey.origin,
+        approxPickupDistance: pickupMeta.distanceText,
+        pickupDistanceKm: pickupMeta.distanceKm,
+        destination: journey.destination,
+        destinationCompatibility: browseMode && !corridorMatch ? "Active Route" : destMeta.compatibility,
+        compatibilityScore: isRecommendedPartner ? Math.max(destMeta.scorePercent, 88) : destMeta.scorePercent,
+        destinationDistanceKm: destMeta.distanceKm,
+        originCoords:
+          journey.originLat !== null && journey.originLng !== null
+            ? { lat: journey.originLat, lng: journey.originLng }
+            : null,
+        destCoords:
+          journey.destinationLat !== null && journey.destinationLng !== null
+            ? { lat: journey.destinationLat, lng: journey.destinationLng }
+            : null,
+        departureTime: journey.departureTime,
+        genderPreferenceRule: journey.genderPreference,
+        notes: journey.notes,
+        createdAt: journey.createdAt,
+      };
+    });
+
+    // 7. Include students active on the website searching for rides (who haven't posted/taken a ride yet)
+    const activeSearchers = getActiveRidersPresence(user.id);
+    for (const searcher of activeSearchers) {
+      if (seenPartnerUserIds.has(searcher.userId)) continue;
+
+      // Filter by gender safety if set
+      if (genderPreference === "women_only" && searcher.gender?.toLowerCase() === "male") continue;
+      if (genderPreference === "men_only" && searcher.gender?.toLowerCase() === "female") continue;
+
+      let distKm: number | null = null;
+      let distText = "Nearby on Campus";
+      if (hasOriginCoords) {
+        distKm = getHaversineDistanceKm(originLat, originLng, searcher.lat, searcher.lng);
+        distText = distKm < 1 ? `${Math.round(distKm * 1000)} m away` : `${distKm.toFixed(1)} km away`;
+      }
+
+      const inPickupRange = distKm !== null && distKm <= 5.0;
+      const sameDestination = destination.length >= 2 && searcher.destinationLocation
+        ? isDestinationSimilar(destination, searcher.destinationLocation)
+        : false;
+
+      const isRecommendedPartner = inPickupRange || sameDestination;
+      let recommendationBadge: string | null = null;
+      if (inPickupRange && sameDestination) {
+        recommendationBadge = "⭐ Top Match · Active Now & Same Destination";
+      } else if (inPickupRange) {
+        recommendationBadge = `📍 Active Nearby (${distText})`;
+      } else if (sameDestination) {
+        recommendationBadge = "🎯 Active Searcher · Same Destination";
+      } else {
+        recommendationBadge = "🟢 Active on UniShare now";
+      }
+
+      sanitizedResults.push({
+        id: `searcher-${searcher.userId}`,
+        userId: searcher.userId,
+        fullName: searcher.fullName,
+        avatarInitials: searcher.avatarInitials,
+        university: searcher.university,
+        department: searcher.department,
+        verificationBadge: "🟢 Searching for Rides (Live)",
+        verified: searcher.verified,
+        isAvailable: true,
+        isExplorer: true,
+        isRecommendedPartner,
+        recommendationBadge,
+        corridorMatch: sameDestination,
+        origin: searcher.pickupLocation,
+        approxPickupDistance: distText,
+        pickupDistanceKm: distKm ? Math.round(distKm * 10) / 10 : null,
+        destination: searcher.destinationLocation || "Open to Campus Routes",
+        destinationCompatibility: sameDestination ? "Exact Destination Match" : "Active Explorer",
+        compatibilityScore: isRecommendedPartner ? 90 : 75,
+        destinationDistanceKm: null,
+        originCoords: { lat: searcher.lat, lng: searcher.lng },
+        destCoords: searcher.destinationLat && searcher.destinationLng ? { lat: searcher.destinationLat, lng: searcher.destinationLng } : null,
+        departureTime: new Date(),
+        genderPreferenceRule: searcher.genderPreference || "no_preference",
+        notes: "Currently browsing rides & open to travel companion requests.",
+        createdAt: new Date(searcher.lastActive),
       });
+
+      seenPartnerUserIds.add(searcher.userId);
+    }
+
+    // Sort: Recommended partners first, then corridor matches, then nearest pickup distance
+    sanitizedResults.sort((a, b) => {
+      if (a.isRecommendedPartner !== b.isRecommendedPartner) return a.isRecommendedPartner ? -1 : 1;
+      if (a.corridorMatch !== b.corridorMatch) return a.corridorMatch ? -1 : 1;
+      const da = a.pickupDistanceKm ?? 99;
+      const dbDist = b.pickupDistanceKm ?? 99;
+      return da - dbDist;
+    });
 
     return NextResponse.json({
       success: true,

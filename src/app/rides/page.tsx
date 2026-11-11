@@ -88,6 +88,9 @@ export interface MatchedPartner {
   verificationBadge: string;
   verified: boolean;
   isAvailable: boolean;
+  isExplorer?: boolean;
+  isRecommendedPartner?: boolean;
+  recommendationBadge?: string | null;
   corridorMatch?: boolean;
   origin: string;
   approxPickupDistance: string;
@@ -102,6 +105,16 @@ export interface MatchedPartner {
   genderPreferenceRule: string;
   notes: string | null;
   createdAt: string;
+}
+
+export interface PlaceSuggestion {
+  id: string;
+  label: string;
+  name: string;
+  lat: number;
+  lng: number;
+  type?: string;
+  isQuickHub?: boolean;
 }
 
 interface GoogleMapsNamespace {
@@ -188,9 +201,13 @@ export default function RideSharingPage() {
   const [isLocatingGps, setIsLocatingGps] = useState(false);
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null);
 
-  // Autocomplete UI
+  // Autocomplete UI & Dynamic Place Suggestions
   const [showPickupAutocomplete, setShowPickupAutocomplete] = useState(false);
   const [showDestAutocomplete, setShowDestAutocomplete] = useState(false);
+  const [pickupPlaces, setPickupPlaces] = useState<PlaceSuggestion[]>([]);
+  const [destPlaces, setDestPlaces] = useState<PlaceSuggestion[]>([]);
+  const [isLoadingPickupPlaces, setIsLoadingPickupPlaces] = useState(false);
+  const [isLoadingDestPlaces, setIsLoadingDestPlaces] = useState(false);
   const pickupInputRef = useRef<HTMLInputElement>(null);
   const destInputRef = useRef<HTMLInputElement>(null);
 
@@ -346,6 +363,67 @@ export default function RideSharingPage() {
       }
     },
     [mapViewport.width, mapViewport.height]
+  );
+
+  // -----------------------------------------------------------
+  // Dynamic Location Autocomplete & Search (OSM Nominatim API)
+  // -----------------------------------------------------------
+  useEffect(() => {
+    const q = pickup.trim();
+    const timer = setTimeout(async () => {
+      setIsLoadingPickupPlaces(true);
+      try {
+        const res = await fetch(`/api/rides/places?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        if (data.success && Array.isArray(data.places)) {
+          setPickupPlaces(data.places);
+        }
+      } catch {
+        // Fallback gracefully
+      } finally {
+        setIsLoadingPickupPlaces(false);
+      }
+    }, 180);
+    return () => clearTimeout(timer);
+  }, [pickup]);
+
+  useEffect(() => {
+    const q = destination.trim();
+    const timer = setTimeout(async () => {
+      setIsLoadingDestPlaces(true);
+      try {
+        const res = await fetch(`/api/rides/places?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        if (data.success && Array.isArray(data.places)) {
+          setDestPlaces(data.places);
+        }
+      } catch {
+        // Fallback gracefully
+      } finally {
+        setIsLoadingDestPlaces(false);
+      }
+    }, 180);
+    return () => clearTimeout(timer);
+  }, [destination]);
+
+  // Report active search presence to server so other students see active explorers on campus map
+  const reportRidesPresence = useCallback(
+    (coords: { lat: number; lng: number }, pickupName?: string, destName?: string) => {
+      fetch("/api/rides/presence", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lat: coords.lat,
+          lng: coords.lng,
+          pickupLocation: pickupName || pickup,
+          destinationLocation: destName || destination,
+          destinationLat: destCoords.lat,
+          destinationLng: destCoords.lng,
+          genderPreference,
+        }),
+      }).catch(() => {});
+    },
+    [pickup, destination, destCoords, genderPreference]
   );
 
   // Toast feedback helper
@@ -1827,34 +1905,60 @@ export default function RideSharingPage() {
 
               {showPickupAutocomplete && !isGoogleMapsReady && (
                 <div className="autocomplete-dropdown" role="listbox" aria-label="Pickup location suggestions">
-                  <div className="autocomplete-dropdown-header">Campus & Dhaka Pickup Hubs</div>
-                  {DHAKA_CANVAS_LANDMARKS.filter(
-                    (lm) =>
-                      !pickup.trim() ||
-                      lm.name.toLowerCase().includes(pickup.trim().toLowerCase()) ||
-                      lm.label.toLowerCase().includes(pickup.trim().toLowerCase())
-                  )
-                    .slice(0, 8)
-                    .map((lm) => (
-                      <div
-                        key={`pickup-${lm.id}`}
-                        className="autocomplete-item"
-                        role="option"
-                        aria-selected={pickup === lm.name}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          const nextPt = { lat: lm.lat, lng: lm.lng };
-                          setPickup(lm.name);
-                          setPickupCoords(nextPt);
-                          setShowPickupAutocomplete(false);
-                          focusRouteOnMap(nextPt, destCoords);
-                          showToast(`📍 Pickup set: ${lm.label}`);
-                        }}
-                      >
-                        <span className="item-icon">📍</span>
-                        <span>{lm.name}</span>
+                  {/* Quick Action: Use Current GPS Location */}
+                  <div
+                    className="autocomplete-item autocomplete-gps-item"
+                    role="option"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      setShowPickupAutocomplete(false);
+                      handleUseCurrentLocation();
+                    }}
+                  >
+                    <span className="item-icon">📍</span>
+                    <div className="autocomplete-item-text">
+                      <span className="autocomplete-item-title">Use Current Location (GPS)</span>
+                      <span className="autocomplete-item-sub">Accurately detect my live campus GPS location</span>
+                    </div>
+                  </div>
+
+                  <div className="autocomplete-dropdown-header">
+                    {isLoadingPickupPlaces
+                      ? "Searching live locations..."
+                      : pickup.trim()
+                      ? `Matching Places for "${pickup}"`
+                      : "Recommended Campus & Pickup Hubs"}
+                  </div>
+
+                  {pickupPlaces.map((pl) => (
+                    <div
+                      key={`pickup-${pl.id}`}
+                      className="autocomplete-item"
+                      role="option"
+                      aria-selected={pickup === pl.name}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        const nextPt = { lat: pl.lat, lng: pl.lng };
+                        setPickup(pl.name);
+                        setPickupCoords(nextPt);
+                        setShowPickupAutocomplete(false);
+                        focusRouteOnMap(nextPt, destCoords);
+                        showToast(`📍 Pickup set: ${pl.label}`);
+                        reportRidesPresence(nextPt, pl.name);
+                      }}
+                    >
+                      <span className="item-icon">{pl.type === "university" ? "🎓" : "📍"}</span>
+                      <div className="autocomplete-item-text">
+                        <span className="autocomplete-item-title">{pl.label}</span>
+                        <span className="autocomplete-item-sub">{pl.name}</span>
                       </div>
-                    ))}
+                    </div>
+                  ))}
+                  {pickupPlaces.length === 0 && !isLoadingPickupPlaces && (
+                    <div className="autocomplete-empty-note">
+                      Type any campus, street or landmark to search live
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1946,34 +2050,42 @@ export default function RideSharingPage() {
 
               {showDestAutocomplete && !isGoogleMapsReady && (
                 <div className="autocomplete-dropdown" role="listbox" aria-label="Destination suggestions">
-                  <div className="autocomplete-dropdown-header">Campus & Commute Corridors</div>
-                  {DHAKA_CANVAS_LANDMARKS.filter(
-                    (lm) =>
-                      !destination.trim() ||
-                      lm.name.toLowerCase().includes(destination.trim().toLowerCase()) ||
-                      lm.label.toLowerCase().includes(destination.trim().toLowerCase())
-                  )
-                    .slice(0, 8)
-                    .map((lm) => (
-                      <div
-                        key={`dest-${lm.id}`}
-                        className="autocomplete-item"
-                        role="option"
-                        aria-selected={destination === lm.name}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          const nextPt = { lat: lm.lat, lng: lm.lng };
-                          setDestination(lm.name);
-                          setDestCoords(nextPt);
-                          setShowDestAutocomplete(false);
-                          focusRouteOnMap(pickupCoords, nextPt);
-                          showToast(`🎯 Destination set: ${lm.label}`);
-                        }}
-                      >
-                        <span className="item-icon">🎯</span>
-                        <span>{lm.name}</span>
+                  <div className="autocomplete-dropdown-header">
+                    {isLoadingDestPlaces
+                      ? "Searching destinations..."
+                      : destination.trim()
+                      ? `Matching Destinations for "${destination}"`
+                      : "Recommended Campus Destinations"}
+                  </div>
+                  {destPlaces.map((pl) => (
+                    <div
+                      key={`dest-${pl.id}`}
+                      className="autocomplete-item"
+                      role="option"
+                      aria-selected={destination === pl.name}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        const nextPt = { lat: pl.lat, lng: pl.lng };
+                        setDestination(pl.name);
+                        setDestCoords(nextPt);
+                        setShowDestAutocomplete(false);
+                        focusRouteOnMap(pickupCoords, nextPt);
+                        showToast(`🎯 Destination set: ${pl.label}`);
+                        reportRidesPresence(pickupCoords, pickup, pl.name);
+                      }}
+                    >
+                      <span className="item-icon">{pl.type === "university" ? "🎓" : "🎯"}</span>
+                      <div className="autocomplete-item-text">
+                        <span className="autocomplete-item-title">{pl.label}</span>
+                        <span className="autocomplete-item-sub">{pl.name}</span>
                       </div>
-                    ))}
+                    </div>
+                  ))}
+                  {destPlaces.length === 0 && !isLoadingDestPlaces && (
+                    <div className="autocomplete-empty-note">
+                      Type any campus or destination to search live
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -2335,9 +2447,19 @@ export default function RideSharingPage() {
                     return (
                       <div
                         key={partner.id}
-                        className={`partner-card ${isSelected ? "selected" : ""}`}
+                        className={`partner-card ${isSelected ? "selected" : ""} ${
+                          partner.isRecommendedPartner ? "recommended-partner-highlight" : ""
+                        }`}
                         onClick={() => togglePartnerSelection(partner.id)}
                       >
+                        {/* Recommendation Highlight Banner */}
+                        {partner.recommendationBadge && (
+                          <div className="partner-recommendation-tag">
+                            <span className="rec-icon">⭐</span>
+                            <span>{partner.recommendationBadge}</span>
+                          </div>
+                        )}
+
                         {/* Checkbox Header Row */}
                         <div className="partner-checkbox-row">
                           <span className="partner-checkbox-label">
@@ -2360,12 +2482,19 @@ export default function RideSharingPage() {
                             <div className="partner-name-row">
                               <div className="partner-name">
                                 <span>{partner.fullName}</span>
-                                <span className="partner-verified-badge">
-                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                                    <polyline points="20 6 9 17 4 12" />
-                                  </svg>
-                                  Verified
-                                </span>
+                                {partner.isExplorer ? (
+                                  <span className="partner-explorer-badge" title="Active on website right now searching for rides">
+                                    <span className="explorer-pulse-dot" />
+                                    Active Explorer
+                                  </span>
+                                ) : (
+                                  <span className="partner-verified-badge">
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                      <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                    Verified
+                                  </span>
+                                )}
                               </div>
                               <div className="partner-institution">
                                 {partner.department ? `${partner.department} · ` : ""}
