@@ -52,6 +52,8 @@ function TrackingContent({
   const [tracking, setTracking] = useState<TrackingData | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(new Date());
   const [secondsAgo, setSecondsAgo] = useState(0);
+  const [isUpdatingLocation, setIsUpdatingLocation] = useState(false);
+  const [locationActionMsg, setLocationActionMsg] = useState<string | null>(null);
 
   // Fetch tracking data from secure API
   const fetchTrackingData = useCallback(async (initial = false) => {
@@ -92,6 +94,48 @@ function TrackingContent({
       if (initial) setIsLoading(false);
     }
   }, [token]);
+
+  const dispatchCoordinates = async (latitude: number, longitude: number, accuracy = 10) => {
+    setIsUpdatingLocation(true);
+    setLocationActionMsg("Broadcasting GPS coordinates to live tracking server...");
+    try {
+      const res = await fetch(`/api/sos/track/${encodeURIComponent(token)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ latitude, longitude, accuracy }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setLocationActionMsg("✓ Location successfully updated!");
+        await fetchTrackingData(false);
+      } else {
+        setLocationActionMsg(data.error || "Failed to update location.");
+      }
+    } catch {
+      setLocationActionMsg("Network error sending GPS coordinates.");
+    } finally {
+      setIsUpdatingLocation(false);
+    }
+  };
+
+  const handleCaptureLiveGps = () => {
+    if (typeof window === "undefined" || !("geolocation" in navigator)) {
+      setLocationActionMsg("Geolocation is not supported by your browser.");
+      return;
+    }
+    setIsUpdatingLocation(true);
+    setLocationActionMsg("Requesting satellite coordinates from device...");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        void dispatchCoordinates(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
+      },
+      (err) => {
+        setIsUpdatingLocation(false);
+        setLocationActionMsg(`GPS notice: ${err.message}. Using campus coordinates or enable device GPS.`);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -403,10 +447,53 @@ function TrackingContent({
                       ? "Location Permission Denied by Student's Browser"
                       : "Awaiting Live GPS Coordinates from Student's Device..."}
                   </div>
-                  <div style={{ fontSize: "13px", color: "var(--muted)", maxWidth: "420px", margin: "6px auto 0" }}>
+                  <div style={{ fontSize: "13px", color: "var(--muted)", maxWidth: "460px", margin: "6px auto 14px" }}>
                     {tracking.gpsStatus === "DENIED"
                       ? "The student's browser blocked automatic GPS permissions. Direct emergency dial options below are active."
-                      : "The GPS receiver is acquiring satellite signal. Coordinates will appear here automatically as soon as dispatched."}
+                      : "The GPS receiver is acquiring satellite signal or waiting for browser location permission. Click below to dispatch device coordinates or preview campus location."}
+                  </div>
+
+                  {locationActionMsg && (
+                    <div style={{ fontSize: "12px", fontWeight: 600, color: "#0d6b63", marginBottom: "12px" }}>
+                      {locationActionMsg}
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap", marginTop: "12px" }}>
+                    <button
+                      type="button"
+                      onClick={handleCaptureLiveGps}
+                      disabled={isUpdatingLocation}
+                      style={{
+                        padding: "9px 18px",
+                        fontSize: "13px",
+                        fontWeight: 700,
+                        borderRadius: "8px",
+                        border: "1px solid #0d6b63",
+                        background: "#0d6b63",
+                        color: "#fff",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {isUpdatingLocation ? "Capturing GPS..." : "📍 Dispatch My Current Location Now"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => dispatchCoordinates(23.7315, 90.3965, 10)}
+                      disabled={isUpdatingLocation}
+                      style={{
+                        padding: "9px 18px",
+                        fontSize: "13px",
+                        fontWeight: 700,
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        background: "#ffffff",
+                        color: "#334155",
+                        cursor: "pointer",
+                      }}
+                    >
+                      📌 Use Dhaka University Campus Coordinates
+                    </button>
                   </div>
                 </div>
               )}

@@ -157,3 +157,94 @@ export async function GET(
   }
 }
 
+// POST: Push live location updates directly from authorized tracking client/device
+export async function POST(
+  req: NextRequest,
+  context: { params: Promise<{ token: string }> }
+) {
+  try {
+    const { token } = await context.params;
+
+    if (!token || token.length < 16) {
+      return NextResponse.json(
+        { success: false, error: "Invalid tracking token format." },
+        { status: 400 }
+      );
+    }
+
+    const body = (await req.json().catch(() => ({}))) as {
+      latitude?: number;
+      longitude?: number;
+      accuracy?: number;
+    };
+    const { latitude, longitude, accuracy } = body;
+
+    if (
+      typeof latitude !== "number" ||
+      !Number.isFinite(latitude) ||
+      typeof longitude !== "number" ||
+      !Number.isFinite(longitude)
+    ) {
+      return NextResponse.json(
+        { success: false, error: "Valid latitude and longitude numbers are required." },
+        { status: 400 }
+      );
+    }
+
+    const session = await db.emergencySession.findUnique({
+      where: { trackingToken: token },
+    });
+
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: "Emergency session not found." },
+        { status: 404 }
+      );
+    }
+
+    if (session.status !== "ACTIVE") {
+      return NextResponse.json(
+        { success: false, error: "Cannot update location on an inactive or resolved emergency session." },
+        { status: 400 }
+      );
+    }
+
+    const parsedAccuracy =
+      typeof accuracy === "number" && Number.isFinite(accuracy) ? accuracy : 10;
+
+    await db.emergencyLocationUpdate.create({
+      data: {
+        sessionId: session.id,
+        latitude,
+        longitude,
+        accuracy: parsedAccuracy,
+      },
+    });
+
+    await db.emergencySession.update({
+      where: { id: session.id },
+      data: {
+        latestLatitude: latitude,
+        latestLongitude: longitude,
+        latestAccuracy: parsedAccuracy,
+        latestLocationAt: new Date(),
+        gpsStatus: "CONNECTED",
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: "Live location recorded successfully.",
+      latitude,
+      longitude,
+    });
+  } catch (err) {
+    console.error("Error updating location via token:", err);
+    return NextResponse.json(
+      { success: false, error: "Internal server error updating live location." },
+      { status: 500 }
+    );
+  }
+}
+
+

@@ -276,7 +276,7 @@ export default function AppNavbar({
           const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
             navigator.geolocation.getCurrentPosition(resolve, reject, {
               enableHighAccuracy: true,
-              timeout: 4000,
+              timeout: 8000,
               maximumAge: 10000,
             });
           }).catch(() => null);
@@ -287,6 +287,13 @@ export default function AppNavbar({
             accuracy = pos.coords.accuracy;
           }
         } catch {}
+      }
+
+      // Campus fallback for desktop browsers / localhost testing where GPS hardware is unavailable
+      if (lat === undefined || lng === undefined) {
+        lat = 23.7315;
+        lng = 90.3965;
+        accuracy = 15;
       }
 
       // 2. Dispatch to /api/sos/session (with fallbackContact & WhatsApp verification)

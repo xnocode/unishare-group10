@@ -1013,9 +1013,9 @@ export default function RideSharingPage() {
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
       Math.cos((lat1 * Math.PI) / 180) *
-        Math.cos((lat2 * Math.PI) / 180) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   };
@@ -1114,7 +1114,7 @@ export default function RideSharingPage() {
         if (existing) {
           try {
             list = JSON.parse(existing);
-          } catch {}
+          } catch { }
         }
         list.unshift({
           id: Date.now(),
@@ -1184,7 +1184,7 @@ export default function RideSharingPage() {
                 );
               }
             })
-            .catch(() => {});
+            .catch(() => { });
         },
         (err) => {
           let errDesc = "GPS error occurred.";
@@ -1441,7 +1441,7 @@ export default function RideSharingPage() {
             }
           }
         })
-        .catch(() => {});
+        .catch(() => { });
     } catch (err) {
       console.error("Failed to load conversation:", err);
     }
@@ -2441,17 +2441,16 @@ export default function RideSharingPage() {
                     <span>Live Journey GPS Tracking</span>
                   </div>
                   {trackingSession && (
-                    <span className={`tracking-status-pill ${
-                      trackingSession.connectionStatus === "LIVE" ? "live" :
-                      trackingSession.connectionStatus === "STALE" ? "stale" :
-                      trackingSession.connectionStatus === "PAUSED" ? "paused" :
-                      trackingSession.connectionStatus === "COMPLETED" ? "completed" : "awaiting"
-                    }`}>
+                    <span className={`tracking-status-pill ${trackingSession.connectionStatus === "LIVE" ? "live" :
+                        trackingSession.connectionStatus === "STALE" ? "stale" :
+                          trackingSession.connectionStatus === "PAUSED" ? "paused" :
+                            trackingSession.connectionStatus === "COMPLETED" ? "completed" : "awaiting"
+                      }`}>
                       <span className="tracking-status-dot" />
                       {trackingSession.connectionStatus === "LIVE" ? "Live GPS" :
-                       trackingSession.connectionStatus === "STALE" ? "Signal Weak" :
-                       trackingSession.connectionStatus === "PAUSED" ? "Paused" :
-                       trackingSession.connectionStatus === "COMPLETED" ? "Journey Ended" : "Awaiting Agreement"}
+                        trackingSession.connectionStatus === "STALE" ? "Signal Weak" :
+                          trackingSession.connectionStatus === "PAUSED" ? "Paused" :
+                            trackingSession.connectionStatus === "COMPLETED" ? "Journey Ended" : "Awaiting Agreement"}
                     </span>
                   )}
                 </div>
