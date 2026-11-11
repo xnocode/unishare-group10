@@ -225,6 +225,18 @@ export default function RideSharingPage() {
   const partnerMarkersRef = useRef<GoogleMarkerInstance[]>([]);
   const infoWindowRef = useRef<GoogleInfoWindowInstance | null>(null);
 
+  // Connection Requests & Private Coordination Chat State
+  const [showRequestsModal, setShowRequestsModal] = useState(false);
+  const [requestsTab, setRequestsTab] = useState<"incoming" | "outgoing">("incoming");
+  const [incomingRequests, setIncomingRequests] = useState<any[]>([]);
+  const [outgoingRequests, setOutgoingRequests] = useState<any[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [activeConversation, setActiveConversation] = useState<any | null>(null);
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [newMessageText, setNewMessageText] = useState("");
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+
   // Mobile View Toggle ("sidebar" | "map")
   const [mobileTab, setMobileTab] = useState<"sidebar" | "map">("sidebar");
 
@@ -887,6 +899,144 @@ export default function RideSharingPage() {
     });
   }, [searchResults, isGoogleMapsReady, selectedPartnerIds, pickupCoords]);
 
+  // -----------------------------------------------------------
+  // Connection Requests & Private Messaging Handlers
+  // -----------------------------------------------------------
+  const fetchConnectionRequests = useCallback(async () => {
+    try {
+      const res = await fetch("/api/rides/match");
+      const data = await res.json();
+      if (data.success) {
+        setIncomingRequests(data.incoming || []);
+        setOutgoingRequests(data.outgoing || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch connection requests:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchConnectionRequests();
+    const interval = setInterval(fetchConnectionRequests, 8000);
+    return () => clearInterval(interval);
+  }, [fetchConnectionRequests]);
+
+  const handleRespondRequest = async (id: string, action: "ACCEPT" | "REJECT") => {
+    try {
+      const res = await fetch(`/api/rides/match/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        showToast(`⚠️ ${data.error || "Failed to update request"}`);
+      } else {
+        showToast(action === "ACCEPT" ? "🎉 Connection accepted! Opening conversation..." : "Connection declined.");
+        fetchConnectionRequests();
+        if (action === "ACCEPT" && data.conversationId) {
+          setShowRequestsModal(false);
+          openConversation(data.conversationId);
+        }
+      }
+    } catch (err) {
+      console.error("Respond request error:", err);
+      showToast("⚠️ Network error updating request.");
+    }
+  };
+
+  const openConversation = async (conversationId: string) => {
+    setActiveConversationId(conversationId);
+    try {
+      const res = await fetch(`/api/rides/conversations/${conversationId}`);
+      const data = await res.json();
+      if (data.success && data.conversation) {
+        setActiveConversation(data.conversation);
+        setChatMessages(data.conversation.messages || []);
+      }
+    } catch (err) {
+      console.error("Failed to load conversation:", err);
+    }
+  };
+
+  const handleSendMessage = async (textToSend?: string, messageType = "TEXT", locationName?: string) => {
+    const text = (textToSend || newMessageText).trim();
+    if (!text || !activeConversationId) return;
+
+    setIsSendingMessage(true);
+    try {
+      const res = await fetch(`/api/rides/conversations/${activeConversationId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text,
+          messageType,
+          locationName: locationName || (messageType === "MEETING_LOCATION" ? text : null),
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.message) {
+        setChatMessages((prev) => [...prev, data.message]);
+        if (!textToSend) setNewMessageText("");
+        if (messageType === "MEETING_LOCATION") {
+          setActiveConversation((prev: any) => ({
+            ...prev,
+            meetingLocation: locationName || text,
+            meetingConfirmed: false,
+          }));
+        }
+      }
+    } catch (err) {
+      console.error("Failed to send message:", err);
+      showToast("⚠️ Failed to deliver message.");
+    } finally {
+      setIsSendingMessage(false);
+    }
+  };
+
+  const handleConfirmMeetingSpot = async () => {
+    if (!activeConversationId || !activeConversation?.meetingLocation) return;
+    try {
+      const res = await fetch(`/api/rides/conversations/${activeConversationId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          meetingLocation: activeConversation.meetingLocation,
+          meetingConfirmed: true,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setActiveConversation((prev: any) => ({ ...prev, meetingConfirmed: true }));
+        showToast("🤝 Meeting location confirmed with travel partner!");
+        const msgRes = await fetch(`/api/rides/conversations/${activeConversationId}/messages`);
+        const msgData = await msgRes.json();
+        if (msgData.success && Array.isArray(msgData.messages)) {
+          setChatMessages(msgData.messages);
+        }
+      }
+    } catch (err) {
+      console.error("Confirm meeting spot error:", err);
+    }
+  };
+
+  // Poll conversation messages every 2.5 seconds while chat drawer is open
+  useEffect(() => {
+    if (!activeConversationId) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/rides/conversations/${activeConversationId}/messages`);
+        const data = await res.json();
+        if (data.success && Array.isArray(data.messages)) {
+          setChatMessages(data.messages);
+        }
+      } catch {
+        // ignore polling errors
+      }
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [activeConversationId]);
+
   return (
     <div className="unishare-rides-container">
       {/* Top Application Navbar */}
@@ -937,6 +1087,26 @@ export default function RideSharingPage() {
                   </svg>
                   Verified Students Only
                 </span>
+                <button
+                  type="button"
+                  className="connection-requests-trigger-btn"
+                  onClick={() => {
+                    fetchConnectionRequests();
+                    setShowRequestsModal(true);
+                  }}
+                  title="View travel connection requests"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                    <polyline points="22,6 12,13 2,6" />
+                  </svg>
+                  <span>Requests</span>
+                  {incomingRequests.filter((r) => r.status === "PENDING").length > 0 && (
+                    <span className="requests-badge-count">
+                      {incomingRequests.filter((r) => r.status === "PENDING").length}
+                    </span>
+                  )}
+                </button>
               </div>
               <div className="rides-title-block">
                 <h1>Destination Live Matching</h1>
@@ -1699,11 +1869,361 @@ export default function RideSharingPage() {
             </span>
           </div>
 
+          {/* ===================================================
+              3. PRIVATE TRAVEL COORDINATION CHAT DRAWER
+              =================================================== */}
+          {activeConversationId && activeConversation && (
+            <div className="rides-chat-drawer" role="dialog" aria-label="Private travel companion coordination chat">
+              {/* Header */}
+              <div className="chat-drawer-header">
+                <div className="chat-partner-profile">
+                  <div className="chat-partner-avatar">
+                    {activeConversation.partnerAvatarInitials}
+                  </div>
+                  <div className="chat-partner-name-block">
+                    <div className="chat-partner-name">
+                      <span>{activeConversation.partnerName}</span>
+                      <span className="partner-verified-badge" style={{ fontSize: "9.5px", padding: "1px 5px" }}>
+                        Verified
+                      </span>
+                    </div>
+                    <div className="chat-partner-sub">
+                      {activeConversation.partnerBadge}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="chat-drawer-close-btn"
+                  onClick={() => {
+                    setActiveConversationId(null);
+                    setActiveConversation(null);
+                  }}
+                  title="Close conversation"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Meeting Point Banner */}
+              <div className="chat-meeting-banner">
+                <div className="meeting-banner-text">
+                  <span>📍</span>
+                  <span>
+                    Meetup Spot:{" "}
+                    <b>
+                      {activeConversation.meetingLocation || "No agreed meeting spot yet"}
+                    </b>
+                  </span>
+                </div>
+                {activeConversation.meetingLocation && !activeConversation.meetingConfirmed && (
+                  <button
+                    type="button"
+                    className="meeting-confirm-btn"
+                    onClick={handleConfirmMeetingSpot}
+                  >
+                    Confirm Spot ✓
+                  </button>
+                )}
+                {activeConversation.meetingConfirmed && (
+                  <span style={{ fontSize: "10.5px", fontWeight: 700, color: "#15803d" }}>
+                    Confirmed ✓
+                  </span>
+                )}
+              </div>
+
+              {/* Quick Campus Meetup Spot Chips */}
+              <div className="chat-quick-spots">
+                {[
+                  "TSC Front Gate",
+                  "Shahbagh Metro Gate 2",
+                  "Dhanmondi 27 Mina Bazar",
+                  "Curzon Hall Front",
+                  "Farmgate Footbridge",
+                ].map((spot) => (
+                  <button
+                    key={spot}
+                    type="button"
+                    className="quick-spot-chip"
+                    onClick={() => handleSendMessage(spot, "MEETING_LOCATION", spot)}
+                    title={`Propose meeting at ${spot}`}
+                  >
+                    📍 {spot}
+                  </button>
+                ))}
+              </div>
+
+              {/* Chat Thread Messages List */}
+              <div className="chat-messages-container">
+                {chatMessages.length === 0 && (
+                  <div style={{ textAlign: "center", color: "#64748b", fontSize: "12px", padding: "20px 10px" }}>
+                    Send a message to coordinate your meeting location and departure!
+                  </div>
+                )}
+                {chatMessages.map((msg) => {
+                  const isSelf = msg.isSelf || msg.senderId === currentUser.email;
+
+                  if (msg.messageType === "STATUS_UPDATE") {
+                    return (
+                      <div key={msg.id} className="chat-bubble-row status">
+                        <div className="chat-bubble status">{msg.text}</div>
+                      </div>
+                    );
+                  }
+
+                  if (msg.messageType === "MEETING_LOCATION") {
+                    return (
+                      <div key={msg.id} className={`chat-bubble-row ${isSelf ? "self" : "partner"}`}>
+                        <div className="chat-meeting-card">
+                          <div className="chat-meeting-header">
+                            <span>📍 Proposing Meetup Location</span>
+                          </div>
+                          <div className="chat-meeting-spot-name">
+                            {msg.locationName || msg.text}
+                          </div>
+                          <div style={{ fontSize: "10.5px", color: "#64748b" }}>
+                            Proposed by {msg.senderName}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div key={msg.id} className={`chat-bubble-row ${isSelf ? "self" : "partner"}`}>
+                      <div className={`chat-bubble ${isSelf ? "self" : "partner"}`}>
+                        <div>{msg.text}</div>
+                        <div className="chat-bubble-time">
+                          {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div ref={chatBottomRef} />
+              </div>
+
+              {/* Chat Input Bar */}
+              <form
+                className="chat-input-bar"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSendMessage();
+                }}
+              >
+                <input
+                  type="text"
+                  className="chat-input-field"
+                  placeholder="Coordinate meetup spot & time..."
+                  value={newMessageText}
+                  onChange={(e) => setNewMessageText(e.target.value)}
+                  disabled={isSendingMessage}
+                />
+                <button
+                  type="submit"
+                  className="chat-send-btn"
+                  disabled={isSendingMessage || !newMessageText.trim()}
+                  title="Send message"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <line x1="22" y1="2" x2="11" y2="13" />
+                    <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                  </svg>
+                </button>
+              </form>
+            </div>
+          )}
+
           {/* Watermark & Attributions */}
           <div className="map-watermark-google">Google</div>
           <div className="map-attribution-text">Map Data ©2026 UniShare Campus Transit Network</div>
         </main>
       </div>
+
+      {/* =======================================================
+          4. CONNECTION REQUESTS MODAL (Incoming & Outgoing)
+          ======================================================= */}
+      {showRequestsModal && (
+        <div className="requests-modal-overlay" onClick={() => setShowRequestsModal(false)}>
+          <div className="requests-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="requests-modal-header">
+              <div className="requests-modal-title">
+                <span>📬 Travel Partner Requests</span>
+                <span className="results-count-badge">
+                  {incomingRequests.filter((r) => r.status === "PENDING").length}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="requests-close-btn"
+                onClick={() => setShowRequestsModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="requests-tabs-row">
+              <button
+                type="button"
+                className={`requests-tab-btn ${requestsTab === "incoming" ? "active" : ""}`}
+                onClick={() => setRequestsTab("incoming")}
+              >
+                Incoming Requests ({incomingRequests.length})
+              </button>
+              <button
+                type="button"
+                className={`requests-tab-btn ${requestsTab === "outgoing" ? "active" : ""}`}
+                onClick={() => setRequestsTab("outgoing")}
+              >
+                Sent by Me ({outgoingRequests.length})
+              </button>
+            </div>
+
+            <div className="requests-list-body">
+              {requestsTab === "incoming" && (
+                <>
+                  {incomingRequests.length === 0 ? (
+                    <div style={{ textAlign: "center", color: "#64748b", fontSize: "13px", padding: "30px 10px" }}>
+                      No incoming travel connection requests yet.
+                    </div>
+                  ) : (
+                    incomingRequests.map((req) => (
+                      <div
+                        key={req.id}
+                        className={`request-item-card ${req.status === "ACCEPTED" ? "accepted" : ""}`}
+                      >
+                        <div className="request-item-top">
+                          <div className="request-user-info">
+                            <div className="request-user-avatar">
+                              {req.senderAvatarInitials}
+                            </div>
+                            <div>
+                              <div className="request-user-name">
+                                {req.senderName}
+                              </div>
+                              <div style={{ fontSize: "11px", color: "#64748b" }}>
+                                {req.verificationBadge} · {req.senderDepartment}
+                              </div>
+                            </div>
+                          </div>
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              fontWeight: 700,
+                              color: req.status === "ACCEPTED" ? "#16a34a" : "#ca8a04",
+                            }}
+                          >
+                            {req.status}
+                          </span>
+                        </div>
+
+                        {req.message && (
+                          <div className="request-message-quote">
+                            "{req.message}"
+                          </div>
+                        )}
+
+                        <div className="request-action-row">
+                          {req.status === "PENDING" ? (
+                            <>
+                              <button
+                                type="button"
+                                className="request-reject-btn"
+                                onClick={() => handleRespondRequest(req.id, "REJECT")}
+                              >
+                                Decline
+                              </button>
+                              <button
+                                type="button"
+                                className="request-accept-btn"
+                                onClick={() => handleRespondRequest(req.id, "ACCEPT")}
+                              >
+                                Accept ✓
+                              </button>
+                            </>
+                          ) : req.status === "ACCEPTED" && req.conversationId ? (
+                            <button
+                              type="button"
+                              className="request-chat-btn"
+                              onClick={() => {
+                                setShowRequestsModal(false);
+                                openConversation(req.conversationId);
+                              }}
+                            >
+                              💬 Open Private Chat
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </>
+              )}
+
+              {requestsTab === "outgoing" && (
+                <>
+                  {outgoingRequests.length === 0 ? (
+                    <div style={{ textAlign: "center", color: "#64748b", fontSize: "13px", padding: "30px 10px" }}>
+                      You haven't sent any travel requests yet.
+                    </div>
+                  ) : (
+                    outgoingRequests.map((req) => (
+                      <div
+                        key={req.id}
+                        className={`request-item-card ${req.status === "ACCEPTED" ? "accepted" : ""}`}
+                      >
+                        <div className="request-item-top">
+                          <div className="request-user-info">
+                            <div className="request-user-avatar">
+                              {req.receiverAvatarInitials}
+                            </div>
+                            <div>
+                              <div className="request-user-name">
+                                {req.receiverName}
+                              </div>
+                              <div style={{ fontSize: "11px", color: "#64748b" }}>
+                                {req.verificationBadge}
+                              </div>
+                            </div>
+                          </div>
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              fontWeight: 700,
+                              color: req.status === "ACCEPTED" ? "#16a34a" : "#0d6b63",
+                            }}
+                          >
+                            {req.status}
+                          </span>
+                        </div>
+
+                        <div className="request-action-row">
+                          {req.status === "ACCEPTED" && req.conversationId ? (
+                            <button
+                              type="button"
+                              className="request-chat-btn"
+                              onClick={() => {
+                                setShowRequestsModal(false);
+                                openConversation(req.conversationId);
+                              }}
+                            >
+                              💬 Coordinate in Private Chat
+                            </button>
+                          ) : (
+                            <span style={{ fontSize: "11px", color: "#64748b" }}>
+                              Awaiting peer confirmation
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Floating Toast Notification */}
       {toastMessage && (

@@ -178,17 +178,60 @@ model TravelJourney {
 
 // Multi-Partner Travel Request / Invitation (Zero Driver / Zero Seats)
 model TravelPartnerInvitation {
-  id         String   @id @default(cuid())
-  senderId   String
-  receiverId String
-  journeyId  String?
-  status     String   @default("PENDING") // PENDING, ACCEPTED, DECLINED, CANCELLED
-  message    String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id           String              @id @default(cuid())
+  senderId     String
+  receiverId   String
+  journeyId    String?
+  status       String              @default("PENDING") // PENDING, ACCEPTED, REJECTED, CANCELLED
+  message      String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  conversation TravelConversation?
 
   @@index([senderId])
   @@index([receiverId])
   @@index([journeyId])
   @@index([status])
+}
+
+// Private Peer-to-Peer Travel Coordination Conversation
+model TravelConversation {
+  id               String                   @id @default(cuid())
+  invitationId     String?                  @unique
+  invitation       TravelPartnerInvitation? @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+  participant1Id   String
+  participant2Id   String
+  meetingLocation  String?
+  meetingLat       Float?
+  meetingLng       Float?
+  meetingConfirmed Boolean                  @default(false)
+  status           String                   @default("ACTIVE") // ACTIVE, ARCHIVED
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  messages         TravelMessage[]
+
+  @@index([participant1Id])
+  @@index([participant2Id])
+  @@index([status])
+}
+
+// Travel Partner Private Messages & Meeting Spot Updates
+model TravelMessage {
+  id             String             @id @default(cuid())
+  conversationId String
+  conversation   TravelConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  senderName     String
+  text           String
+  messageType    String             @default("TEXT") // "TEXT" | "MEETING_LOCATION" | "STATUS_UPDATE"
+  locationName   String?
+  locationLat    Float?
+  locationLng    Float?
+  createdAt      DateTime           @default(now())
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@index([createdAt])
 }

@@ -127,6 +127,8 @@ async function runTests() {
   // Test 8: Multi-Partner Selection & Invitation (POST /api/rides/match)
   // Farhana selects multiple partners (Sadia and Tanvir)
   // -----------------------------------------------------------
+  let invitationToSadiaId = null;
+  let invitationToTanvirId = null;
   {
     assert(sadiaUserId !== null && tanvirUserId !== null, "Test 8.0: Identified partner IDs for multi-select test");
     const matchBody = {
@@ -145,6 +147,11 @@ async function runTests() {
     assert(json.success === true, "Test 8.2: Response indicates success");
     assert(json.count === 2, `Test 8.3: Created invitations for 2 verified partners (got ${json.count})`);
     assert(json.invitations && json.invitations.length === 2, "Test 8.4: Returns 2 invitation records with PENDING status");
+
+    const invSadia = json.invitations?.find(i => i.receiverId === sadiaUserId);
+    const invTanvir = json.invitations?.find(i => i.receiverId === tanvirUserId);
+    if (invSadia) invitationToSadiaId = invSadia.id;
+    if (invTanvir) invitationToTanvirId = invTanvir.id;
   }
 
   // -----------------------------------------------------------
@@ -210,6 +217,178 @@ async function runTests() {
     const { status, json } = await api("/api/rides?destination=Jahangirnagar%20University%20Savar&genderPreference=no_preference", { userEmail: "farhana@std.du.ac.bd" });
     assert(status === 200, "Test 12.1: No-results destination returns 200 OK");
     assert(json.count === 0 && json.partners?.length === 0, "Test 12.2: Returns 0 results cleanly (empty partners array)");
+  }
+
+  // ===========================================================
+  // STEP 5 TESTS: CONNECTION REQUESTS & PRIVATE MESSAGING FLOW
+  // ===========================================================
+
+  // -----------------------------------------------------------
+  // Test 13: View Connection Requests (GET /api/rides/match)
+  // -----------------------------------------------------------
+  {
+    // Sadia checks incoming requests
+    const { status, json } = await api("/api/rides/match", { userEmail: "sadia@std.du.ac.bd" });
+    assert(status === 200, "Test 13.1: Sadia views connection requests successfully (200 OK)");
+    assert(Array.isArray(json.incoming), "Test 13.2: Returns incoming requests array");
+    const reqFromFarhana = json.incoming.find(r => r.id === invitationToSadiaId);
+    assert(reqFromFarhana !== undefined, "Test 13.3: Farhana's invitation appears in Sadia's incoming list");
+    assert(reqFromFarhana?.senderName === "Farhana Rahman", "Test 13.4: Sender is verified student Farhana Rahman");
+    assert(reqFromFarhana?.verificationBadge?.includes("Verified"), "Test 13.5: Sender has verified badge");
+    assert(reqFromFarhana?.status === "PENDING", "Test 13.6: Invitation status is PENDING");
+
+    // Farhana checks outgoing requests
+    const farhanaRes = await api("/api/rides/match", { userEmail: "farhana@std.du.ac.bd" });
+    assert(farhanaRes.status === 200, "Test 13.7: Farhana views outgoing connection requests (200 OK)");
+    const sentToSadia = farhanaRes.json.outgoing?.find(r => r.id === invitationToSadiaId);
+    assert(sentToSadia !== undefined, "Test 13.8: Farhana sees request to Sadia in outgoing list");
+  }
+
+  // -----------------------------------------------------------
+  // Test 14: Authorization Protection on Invitation Acceptance
+  // Only the receiver can accept/reject; sender cannot accept own invitation
+  // -----------------------------------------------------------
+  {
+    const { status, json } = await api(`/api/rides/match/${invitationToSadiaId}`, {
+      userEmail: "farhana@std.du.ac.bd", // Farhana is sender, not receiver
+      method: "PATCH",
+      body: { action: "ACCEPT" },
+    });
+    assert(status === 403, "Test 14: Sender cannot accept their own invitation (403 Forbidden)", `Status: ${status}`);
+  }
+
+  // -----------------------------------------------------------
+  // Test 15: Accept Connection Request & Automatically Open Private Conversation
+  // (PATCH /api/rides/match/[id])
+  // -----------------------------------------------------------
+  let activeConversationId = null;
+  {
+    const { status, json } = await api(`/api/rides/match/${invitationToSadiaId}`, {
+      userEmail: "sadia@std.du.ac.bd", // Receiver accepts
+      method: "PATCH",
+      body: { action: "ACCEPT" },
+    });
+    assert(status === 200, "Test 15.1: Sadia accepts invitation with 200 OK");
+    assert(json.success === true, "Test 15.2: Acceptance response indicates success");
+    assert(json.status === "ACCEPTED", "Test 15.3: Status changed to ACCEPTED");
+    assert(json.conversationId !== undefined, "Test 15.4: Private conversation created and conversationId returned");
+    activeConversationId = json.conversationId;
+  }
+
+  // -----------------------------------------------------------
+  // Test 16: List Active Conversations (GET /api/rides/conversations)
+  // -----------------------------------------------------------
+  {
+    const { status, json } = await api("/api/rides/conversations", { userEmail: "farhana@std.du.ac.bd" });
+    assert(status === 200, "Test 16.1: Farhana lists active conversations (200 OK)");
+    assert(json.conversations && json.conversations.length > 0, "Test 16.2: Farhana has at least 1 active conversation");
+    const conv = json.conversations.find(c => c.id === activeConversationId);
+    assert(conv !== undefined, "Test 16.3: Newly opened conversation with Sadia is listed");
+    assert(conv?.partnerName === "Sadia Rahman", "Test 16.4: Conversation partner is Sadia Rahman");
+    assert(conv?.partnerBadge?.includes("Verified"), "Test 16.5: Partner badge shows Verified University Student");
+  }
+
+  // -----------------------------------------------------------
+  // Test 17: Fetch Private Conversation Details & Initial System Message
+  // (GET /api/rides/conversations/[id])
+  // -----------------------------------------------------------
+  {
+    const { status, json } = await api(`/api/rides/conversations/${activeConversationId}`, {
+      userEmail: "sadia@std.du.ac.bd",
+    });
+    assert(status === 200, "Test 17.1: Sadia fetches conversation details (200 OK)");
+    assert(json.conversation?.partnerName === "Farhana Rahman", "Test 17.2: Partner name is Farhana Rahman");
+    assert(json.conversation?.phone === undefined, "Test 17.3: Partner phone number is NOT exposed (privacy protected)");
+    assert(json.conversation?.gender === undefined, "Test 17.4: Partner private gender is NOT exposed (privacy protected)");
+    assert(json.conversation?.messages && json.conversation.messages.length >= 1, "Test 17.5: Contains initial system connection message");
+  }
+
+  // -----------------------------------------------------------
+  // Test 18: Send Private Text Message (POST /api/rides/conversations/[id]/messages)
+  // -----------------------------------------------------------
+  {
+    const msgRes = await api(`/api/rides/conversations/${activeConversationId}/messages`, {
+      userEmail: "farhana@std.du.ac.bd",
+      method: "POST",
+      body: {
+        text: "Hi Sadia! Let's travel together to campus today.",
+        messageType: "TEXT",
+      },
+    });
+    assert(msgRes.status === 200, "Test 18.1: Farhana sends text message successfully (200 OK)");
+    assert(msgRes.json.message?.text === "Hi Sadia! Let's travel together to campus today.", "Test 18.2: Message content saved correctly");
+    assert(msgRes.json.message?.isSelf === true, "Test 18.3: isSelf is true for sender");
+  }
+
+  // -----------------------------------------------------------
+  // Test 19: Propose Meeting Location (MEETING_LOCATION type)
+  // -----------------------------------------------------------
+  {
+    const meetRes = await api(`/api/rides/conversations/${activeConversationId}/messages`, {
+      userEmail: "sadia@std.du.ac.bd",
+      method: "POST",
+      body: {
+        text: "Let's meet at TSC Front Gate at 9:30 AM",
+        messageType: "MEETING_LOCATION",
+        locationName: "TSC Front Gate",
+        locationLat: 23.7317,
+        locationLng: 90.3957,
+      },
+    });
+    assert(meetRes.status === 200, "Test 19.1: Sadia proposes meeting spot with 200 OK");
+    assert(meetRes.json.message?.messageType === "MEETING_LOCATION", "Test 19.2: Message type is MEETING_LOCATION");
+    assert(meetRes.json.message?.locationName === "TSC Front Gate", "Test 19.3: Location name is recorded");
+    assert(meetRes.json.message?.locationLat === 23.7317, "Test 19.4: Latitude coordinate saved");
+  }
+
+  // -----------------------------------------------------------
+  // Test 20: Confirm Intended Meeting Location (PATCH /api/rides/conversations/[id])
+  // -----------------------------------------------------------
+  {
+    const confirmRes = await api(`/api/rides/conversations/${activeConversationId}`, {
+      userEmail: "farhana@std.du.ac.bd",
+      method: "PATCH",
+      body: {
+        confirmMeeting: true,
+      },
+    });
+    assert(confirmRes.status === 200, "Test 20.1: Farhana confirms meeting spot with 200 OK");
+    assert(confirmRes.json.meetingConfirmed === true, "Test 20.2: meetingConfirmed is now true");
+    assert(confirmRes.json.meetingLocation === "TSC Front Gate", "Test 20.3: Confirmed location is TSC Front Gate");
+  }
+
+  // -----------------------------------------------------------
+  // Test 21: Strict Authorization Guard — Third-Party Cannot Read/Post
+  // Tanvir is not a participant in Farhana & Sadia's conversation
+  // -----------------------------------------------------------
+  {
+    // Tanvir attempts to read conversation
+    const { status: readStatus } = await api(`/api/rides/conversations/${activeConversationId}`, {
+      userEmail: "tanvir@std.du.ac.bd",
+    });
+    assert(readStatus === 403, "Test 21.1: Unauthorized student blocked from reading conversation (403 Forbidden)");
+
+    // Tanvir attempts to post to conversation
+    const { status: postStatus } = await api(`/api/rides/conversations/${activeConversationId}/messages`, {
+      userEmail: "tanvir@std.du.ac.bd",
+      method: "POST",
+      body: { text: "Can I join your chat?" },
+    });
+    assert(postStatus === 403, "Test 21.2: Unauthorized student blocked from posting in conversation (403 Forbidden)");
+  }
+
+  // -----------------------------------------------------------
+  // Test 22: Cancel Connection Request by Sender (PATCH /api/rides/match/[id])
+  // Farhana cancels the pending invitation sent to Tanvir
+  // -----------------------------------------------------------
+  {
+    const cancelRes = await api(`/api/rides/match/${invitationToTanvirId}`, {
+      userEmail: "farhana@std.du.ac.bd",
+      method: "PATCH",
+      body: { action: "CANCEL" },
+    });
+    assert(cancelRes.status === 200, "Test 22.1: Sender cancels pending invitation with 200 OK");
+    assert(cancelRes.json.status === "CANCELLED", "Test 22.2: Status updated to CANCELLED");
   }
 
   console.log("==================================================");

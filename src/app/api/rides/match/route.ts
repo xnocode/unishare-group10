@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// GET /api/rides/match — List active partner invitations for current student
+// GET /api/rides/match — List active partner invitations & requests for current student
 export async function GET(req: NextRequest) {
   try {
     const user = await getAuthenticatedRideUser(req);
@@ -127,18 +127,104 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const invitations = await db.travelPartnerInvitation.findMany({
+    const allInvitations = await db.travelPartnerInvitation.findMany({
       where: {
         OR: [{ senderId: user.id }, { receiverId: user.id }],
       },
+      include: {
+        conversation: {
+          select: {
+            id: true,
+            status: true,
+            meetingLocation: true,
+            meetingConfirmed: true,
+          },
+        },
+      },
       orderBy: { createdAt: "desc" },
-      take: 20,
+      take: 40,
     });
+
+    // Fetch user details for all involved counterpart IDs
+    const counterpartIds = Array.from(
+      new Set(
+        allInvitations.map((inv) =>
+          inv.senderId === user.id ? inv.receiverId : inv.senderId
+        )
+      )
+    );
+
+    const counterpartUsers = await db.user.findMany({
+      where: { id: { in: counterpartIds } },
+      select: {
+        id: true,
+        fullName: true,
+        university: true,
+        department: true,
+        verified: true,
+      },
+    });
+
+    const userMap = new Map(counterpartUsers.map((u) => [u.id, u]));
+
+    const incoming = allInvitations
+      .filter((inv) => inv.receiverId === user.id)
+      .map((inv) => {
+        const sender = userMap.get(inv.senderId);
+        const initials = sender?.fullName
+          ? sender.fullName.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
+          : "ST";
+        const shortUni = sender?.university
+          ? sender.university.replace("University of ", "").replace(" University", "")
+          : "Campus";
+
+        return {
+          id: inv.id,
+          senderId: inv.senderId,
+          senderName: sender?.fullName || "Verified Student",
+          senderAvatarInitials: initials,
+          senderUniversity: sender?.university || "University of Dhaka",
+          senderDepartment: sender?.department || "Academic Department",
+          verificationBadge: `Verified ${shortUni} Student`,
+          status: inv.status,
+          message: inv.message,
+          conversationId: inv.conversation?.id || null,
+          createdAt: inv.createdAt,
+        };
+      });
+
+    const outgoing = allInvitations
+      .filter((inv) => inv.senderId === user.id)
+      .map((inv) => {
+        const receiver = userMap.get(inv.receiverId);
+        const initials = receiver?.fullName
+          ? receiver.fullName.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
+          : "ST";
+        const shortUni = receiver?.university
+          ? receiver.university.replace("University of ", "").replace(" University", "")
+          : "Campus";
+
+        return {
+          id: inv.id,
+          receiverId: inv.receiverId,
+          receiverName: receiver?.fullName || "Verified Student",
+          receiverAvatarInitials: initials,
+          receiverUniversity: receiver?.university || "University of Dhaka",
+          receiverDepartment: receiver?.department || "Academic Department",
+          verificationBadge: `Verified ${shortUni} Student`,
+          status: inv.status,
+          message: inv.message,
+          conversationId: inv.conversation?.id || null,
+          createdAt: inv.createdAt,
+        };
+      });
 
     return NextResponse.json({
       success: true,
-      count: invitations.length,
-      invitations,
+      count: allInvitations.length,
+      incoming,
+      outgoing,
+      invitations: allInvitations,
     });
   } catch (error) {
     console.error("GET /api/rides/match error:", error);
@@ -148,3 +234,4 @@ export async function GET(req: NextRequest) {
     );
   }
 }
+
