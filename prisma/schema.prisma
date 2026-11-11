@@ -28,10 +28,11 @@ model User {
   emergencyContacts  EmergencyContact[]
   emergencySessions  EmergencySession[]
 
-  // Ride Sharing Relations
-  hostedRides        Ride[]            @relation("HostedRides")
-  rideRequests       RideRequest[]     @relation("PassengerRequests")
-  rideParticipations RideParticipant[] @relation("RideParticipations")
+  // Self-declared profile gender (Private, used strictly for safety preference matching)
+  gender             String?
+
+  // Destination-based Live Companion Matching
+  travelJourneys     TravelJourney[]   @relation("UserTravelJourneys")
 }
 
 model AuthVerificationCode {
@@ -147,73 +148,30 @@ model EmergencySmsDispatch {
 }
 
 // -------------------------------------------------------------
-// Campus Ride Sharing Models
+// Campus Ride Sharing · Destination-Based Live Student Matching
+// Strictly Peer-to-Peer Student Travel Partners (Zero Seats / Zero Drivers)
 // -------------------------------------------------------------
 
-// 1. Ride Listing / Offer (Pickup, Destination, Vehicle, Gender Preferences)
-model Ride {
-  id               String            @id @default(cuid())
-  hostId           String
-  host             User              @relation("HostedRides", fields: [hostId], references: [id], onDelete: Cascade)
-  vehicle          String            // "Car" | "Rickshaw" | "Bike"
-  vehicleModel     String            // e.g. "Toyota Corolla (White) · Dhaka Metro Ga 21-4820"
-  origin           String            // Pickup point e.g. "Dhanmondi 27, Dhaka"
-  destination      String            // Dropoff point e.g. "TSC, University of Dhaka"
-  departureTime    DateTime
-  totalSeats       Int               @default(3)
-  seatsLeft        Int               @default(3)
-  genderPreference String            @default("any") // "any" | "women_only" | "men_only" | "no_preference"
-  fareTokens       Int               @default(0)     // Cost in tokens per seat
-  status           String            @default("SCHEDULED") // SCHEDULED, ACTIVE, COMPLETED, CANCELLED
+model TravelJourney {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation("UserTravelJourneys", fields: [userId], references: [id], onDelete: Cascade)
+  origin           String   // Pickup point e.g. "Dhanmondi 27, Dhaka"
+  originLat        Float?
+  originLng        Float?
+  destination      String   // Dropoff / Destination e.g. "TSC, University of Dhaka"
+  destinationLat   Float?
+  destinationLng   Float?
+  departureTime    DateTime @default(now())
+  genderPreference String   @default("no_preference") // "no_preference" | "women_only" | "men_only"
+  status           String   @default("ACTIVE")         // "ACTIVE" | "COMPLETED" | "CANCELLED"
   notes            String?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  requests         RideRequest[]
-  participants     RideParticipant[]
-
-  @@index([hostId])
-  @@index([origin, destination])
-  @@index([departureTime])
-  @@index([status])
-}
-
-// 2. Ride Join Request (Booking / Passenger Requests)
-model RideRequest {
-  id               String            @id @default(cuid())
-  rideId           String
-  ride             Ride              @relation(fields: [rideId], references: [id], onDelete: Cascade)
-  passengerId      String
-  passenger        User              @relation("PassengerRequests", fields: [passengerId], references: [id], onDelete: Cascade)
-  seatsRequested   Int               @default(1)
-  pickupLocation   String?           // Specific pickup location requested by passenger
-  dropoffLocation  String?           // Specific dropoff location requested by passenger
-  gender           String?           // Stored gender for safety preference matching
-  status           String            @default("PENDING") // PENDING, ACCEPTED, REJECTED, CANCELLED
-  notes            String?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-
-  @@index([rideId])
-  @@index([passengerId])
-  @@index([status])
-}
-
-// 3. Ride Participants (Confirmed Passengers & Host in a Ride)
-model RideParticipant {
-  id              String            @id @default(cuid())
-  rideId          String
-  ride            Ride              @relation(fields: [rideId], references: [id], onDelete: Cascade)
-  userId          String
-  user            User              @relation("RideParticipations", fields: [userId], references: [id], onDelete: Cascade)
-  role            String            @default("PASSENGER") // "HOST" | "PASSENGER"
-  seatsOccupied   Int               @default(1)
-  pickupLocation  String?
-  dropoffLocation String?
-  farePaid        Int               @default(0)
-  joinedAt        DateTime          @default(now())
-
-  @@unique([rideId, userId])
-  @@index([rideId])
   @@index([userId])
+  @@index([destination])
+  @@index([genderPreference])
+  @@index([status])
+  @@index([departureTime])
 }

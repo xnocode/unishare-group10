@@ -528,7 +528,7 @@
   transform: translateY(0);
 }
 
-/* Search Status Honest Banner */
+/* Search Status Honest Banner & Live States */
 .search-status-banner {
   background: var(--mint);
   border: 1.5px solid #b7dfd9;
@@ -564,6 +564,414 @@
   gap: 4px;
   margin-top: 4px;
 }
+
+/* -------------------------------------------------------------
+   LIVE SEARCH RESULTS, LOADING, NO-RESULTS & ERROR STATES
+   ------------------------------------------------------------- */
+
+/* 1. Loading / Searching State */
+.search-loading-state {
+  background: #ffffff;
+  border: 1.5px solid #d9e7e4;
+  border-radius: var(--radius-md);
+  padding: 20px 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+  animation: fadeIn 0.25s ease-out;
+}
+
+.searching-pulse-indicator {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.searching-pulse-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2.5px solid var(--teal);
+  animation: radarPing 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+  opacity: 0.6;
+}
+
+.searching-pulse-core {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--teal);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 10px rgba(13, 107, 99, 0.4);
+}
+
+@keyframes radarPing {
+  0% { transform: scale(0.6); opacity: 0.9; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
+.searching-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.searching-subtitle {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+  max-width: 280px;
+}
+
+/* 2. Error State */
+.search-error-state {
+  background: #fef2f2;
+  border: 1.5px solid #fca5a5;
+  border-radius: var(--radius-md);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.search-error-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #991b1b;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.search-error-message {
+  font-size: 12.5px;
+  color: #7f1d1d;
+  line-height: 1.45;
+}
+
+.search-error-btn {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 6px 14px;
+  background: #ffffff;
+  border: 1px solid #f87171;
+  border-radius: var(--radius-sm);
+  color: #991b1b;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.search-error-btn:hover {
+  background: #fee2e2;
+}
+
+/* 3. No Results State */
+.search-no-results-state {
+  background: #ffffff;
+  border: 1.5px dashed #cbd5e1;
+  border-radius: var(--radius-md);
+  padding: 22px 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+  animation: fadeIn 0.25s ease-out;
+}
+
+.no-results-icon-wrap {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.no-results-title {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.no-results-desc {
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.45;
+  max-width: 300px;
+}
+
+.no-results-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.switch-filter-btn {
+  width: 100%;
+  padding: 8px 14px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.switch-filter-btn:hover {
+  background: #e2e8f0;
+}
+
+.register-route-btn {
+  width: 100%;
+  padding: 9px 14px;
+  background: var(--mint);
+  border: 1px solid var(--teal);
+  border-radius: var(--radius-sm);
+  color: var(--teal);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.register-route-btn:hover {
+  background: #d4ede6;
+}
+
+/* 4. Active Results List & Cards */
+.search-results-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: fadeIn 0.25s ease-out;
+}
+
+.results-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--hair);
+}
+
+.results-count-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.results-count-badge {
+  background: var(--teal);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+
+.results-filter-indicator {
+  font-size: 11.5px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.partner-cards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.partner-card {
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  transition: all 0.18s ease;
+  position: relative;
+}
+
+.partner-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.partner-card.selected {
+  border-color: var(--teal);
+  background: #fafffe;
+  box-shadow: 0 4px 14px rgba(13, 107, 99, 0.12);
+}
+
+.partner-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.partner-user-block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.partner-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--mint);
+  color: var(--teal);
+  border: 1.5px solid #b7dfd9;
+  font-size: 13px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.partner-name-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.partner-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.partner-verified-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--mint);
+  color: var(--teal);
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid #b7dfd9;
+}
+
+.partner-institution {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.partner-match-pill {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+  white-space: nowrap;
+}
+
+.partner-route-row {
+  background: #f8faf9;
+  border: 1px solid #e6f0ed;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.35;
+}
+
+.partner-route-arrow {
+  color: var(--teal);
+  font-weight: bold;
+}
+
+.partner-notes-bubble {
+  font-size: 12px;
+  color: #475569;
+  background: #f1f5f9;
+  border-left: 3px solid var(--teal);
+  padding: 6px 10px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-style: italic;
+  line-height: 1.35;
+}
+
+.partner-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.partner-time-info {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.partner-connect-btn {
+  padding: 7px 14px;
+  background: var(--teal);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+
+.partner-connect-btn:hover {
+  background: var(--teal-dark);
+}
+
+.partner-connect-btn.connected {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
 
 /* -------------------------------------------------------------
    MAP AREA (Large Interactive Canvas)

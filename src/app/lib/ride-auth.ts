@@ -14,6 +14,7 @@ export interface AuthenticatedUser {
   studentId: string | null;
   university: string | null;
   department: string | null;
+  gender: string | null;
   verified: boolean;
   tokenBalance: number;
 }
@@ -92,6 +93,7 @@ export async function getAuthenticatedRideUser(
         studentId: true,
         university: true,
         department: true,
+        gender: true,
         verified: true,
         tokenBalance: true,
       },

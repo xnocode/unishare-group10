@@ -56,3 +56,40 @@ export async function GET(req: NextRequest) {
   });
 }
 
+// PATCH /api/auth/me — Self-declare profile gender securely
+export async function PATCH(req: NextRequest) {
+  const sessionToken = req.cookies.get(SESSION_COOKIE)?.value;
+  const session = verifySignedPayload<SessionPayload>(sessionToken);
+
+  if (!session) {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const body = await req.json().catch(() => ({}));
+    const gender = typeof body.gender === "string" ? body.gender.trim().toLowerCase() : null;
+
+    if (gender && !["female", "male", "other"].includes(gender)) {
+      return NextResponse.json(
+        { ok: false, error: "Gender must be 'female', 'male', or 'other'." },
+        { status: 400 }
+      );
+    }
+
+    const updated = await db.user.update({
+      where: { email: session.email },
+      data: { gender },
+    });
+
+    return NextResponse.json({
+      ok: true,
+      message: "Profile gender updated successfully.",
+      user: toPublicUser(updated),
+    });
+  } catch (err) {
+    console.error("PATCH /api/auth/me error:", err);
+    return NextResponse.json({ ok: false, error: "Failed to update profile." }, { status: 500 });
+  }
+}
+
+

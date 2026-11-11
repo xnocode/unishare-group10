@@ -29,6 +29,7 @@ export async function POST(req: NextRequest) {
       department?: string;
       programme?: string;
       academicSession?: string;
+      gender?: string;
       idCardFileName?: string;
       faceFileName?: string;
     };
@@ -116,6 +117,7 @@ export async function POST(req: NextRequest) {
             programme,
             academicSession,
             ...(university ? { university } : {}),
+            ...(body.gender ? { gender: body.gender.trim().toLowerCase() } : {}),
             emailVerified: true,
           },
         });

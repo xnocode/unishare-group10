@@ -173,9 +173,32 @@ export default function RideSharingPage() {
   const pickupInputRef = useRef<HTMLInputElement>(null);
   const destInputRef = useRef<HTMLInputElement>(null);
 
-  // Search Submission & Feedback
+  // Search Submission & Live Matching State
   const [isSearching, setIsSearching] = useState(false);
   const [hasSubmittedSearch, setHasSubmittedSearch] = useState(false);
+  const [searchResults, setSearchResults] = useState<Array<{
+    id: string;
+    userId: string;
+    fullName: string;
+    university: string;
+    department: string;
+    studentIdMasked: string | null;
+    verified: boolean;
+    origin: string;
+    destination: string;
+    originCoords: { lat: number; lng: number } | null;
+    destCoords: { lat: number; lng: number } | null;
+    departureTime: string;
+    genderPreferenceRule: string;
+    matchType: string;
+    notes: string | null;
+    createdAt: string;
+  }>>([]);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null);
+  const [connectedPartnerIds, setConnectedPartnerIds] = useState<string[]>([]);
+  const [isRegisteringRoute, setIsRegisteringRoute] = useState(false);
+  const [routeRegisteredSuccess, setRouteRegisteredSuccess] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Mobile View Toggle ("sidebar" | "map")
@@ -556,9 +579,14 @@ export default function RideSharingPage() {
   };
 
   // -----------------------------------------------------------
-  // 6. Find Travel Partners Action
+  // 6. Real Live Travel Partners Search & Matching Handlers
   // -----------------------------------------------------------
-  const handleFindPartners = () => {
+  const handleFindPartners = async (overrideGender?: "no_preference" | "women_only" | "men_only") => {
+    const activePref = overrideGender || genderPreference;
+    if (overrideGender) {
+      setGenderPreference(overrideGender);
+    }
+
     if (!pickup.trim()) {
       showToast("⚠️ Please select a pickup location.");
       pickupInputRef.current?.focus();
@@ -571,11 +599,89 @@ export default function RideSharingPage() {
     }
 
     setIsSearching(true);
-    setTimeout(() => {
+    setSearchError(null);
+    setHasSubmittedSearch(true);
+    setRouteRegisteredSuccess(false);
+
+    try {
+      const queryParams = new URLSearchParams({
+        destination: destination.trim(),
+        origin: pickup.trim(),
+        genderPreference: activePref,
+        destLat: String(destCoords.lat),
+        destLng: String(destCoords.lng),
+        originLat: String(pickupCoords.lat),
+        originLng: String(pickupCoords.lng),
+      });
+
+      const res = await fetch(`/api/rides?${queryParams.toString()}`);
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        setSearchError(data.error || "Failed to search for travel companions. Please try again.");
+        setSearchResults([]);
+        showToast(`⚠️ ${data.error || "Search error"}`);
+      } else {
+        const partners = Array.isArray(data.partners) ? data.partners : [];
+        setSearchResults(partners);
+        if (partners.length > 0) {
+          showToast(`🎯 Found ${partners.length} verified travel companion(s)!`);
+        } else {
+          showToast("ℹ️ No active travel partners found for this corridor yet.");
+        }
+      }
+    } catch (err) {
+      console.error("Live companion search error:", err);
+      setSearchError("Network connection error. Please ensure the server is running and try again.");
+      setSearchResults([]);
+    } finally {
       setIsSearching(false);
-      setHasSubmittedSearch(true);
-      showToast("🎯 Route indexed! Ready to match with campus peers.");
-    }, 450);
+    }
+  };
+
+  // Register Current Student Journey as Active Route
+  const handleRegisterRoute = async () => {
+    setIsRegisteringRoute(true);
+    try {
+      const res = await fetch("/api/rides", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          origin: pickup.trim(),
+          destination: destination.trim(),
+          originLat: pickupCoords.lat,
+          originLng: pickupCoords.lng,
+          destinationLat: destCoords.lat,
+          destinationLng: destCoords.lng,
+          genderPreference,
+          notes: `Heading from ${pickup.split(",")[0]} towards ${destination.split(",")[0]}. Looking for peer companion.`,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        showToast(`⚠️ ${data.error || "Could not register journey"}`);
+      } else {
+        setRouteRegisteredSuccess(true);
+        showToast("🟢 Your route has been registered and indexed for student matching!");
+      }
+    } catch (err) {
+      console.error("Register route error:", err);
+      showToast("⚠️ Network error while registering journey.");
+    } finally {
+      setIsRegisteringRoute(false);
+    }
+  };
+
+  // Select / Connect with Travel Partner
+  const handleConnectPartner = (partnerId: string, partnerName: string) => {
+    if (connectedPartnerIds.includes(partnerId)) {
+      setConnectedPartnerIds((prev) => prev.filter((id) => id !== partnerId));
+      showToast(`Connection request to ${partnerName} cancelled.`);
+    } else {
+      setConnectedPartnerIds((prev) => [...prev, partnerId]);
+      showToast(`🤝 Travel request sent to verified peer ${partnerName}!`);
+    }
   };
 
   return (
@@ -859,7 +965,7 @@ export default function RideSharingPage() {
             <button
               type="button"
               className="find-partners-btn"
-              onClick={handleFindPartners}
+              onClick={() => handleFindPartners()}
               disabled={isSearching}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
@@ -869,21 +975,204 @@ export default function RideSharingPage() {
               {isSearching ? "Searching Corridor..." : "Find Travel Partners"}
             </button>
 
-            {/* Honest Status Banner */}
-            {hasSubmittedSearch && (
-              <div className="search-status-banner">
-                <div className="search-status-header">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <polyline points="20 6 9 17 4 12" />
+            {/* -------------------------------------------------
+                5. LIVE SEARCH STATES (Loading, Error, No-Results, Results)
+                ------------------------------------------------- */}
+
+            {/* STATE 1: LOADING / SEARCHING SKELETON */}
+            {isSearching && (
+              <div className="search-loading-state" role="status" aria-live="polite">
+                <div className="searching-pulse-indicator">
+                  <div className="searching-pulse-ring" />
+                  <div className="searching-pulse-core">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                      <circle cx="11" cy="11" r="8" />
+                      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                  </div>
+                </div>
+                <div>
+                  <div className="searching-title">Scanning Campus Corridors...</div>
+                  <div className="searching-subtitle">
+                    Filtering verified student peers traveling towards <b>{destination.split(",")[0]}</b> with <b>{genderPreference === "no_preference" ? "No Preference" : genderPreference === "women_only" ? "Women Only" : "Men Only"}</b>.
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* STATE 2: ERROR STATE */}
+            {!isSearching && searchError && (
+              <div className="search-error-state" role="alert">
+                <div className="search-error-header">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
                   </svg>
-                  Matching Parameters Ready
+                  Search Policy Notice
                 </div>
-                <div className="search-status-details">
-                  Selected corridor: <b>{pickup.split(",")[0]}</b> ➔ <b>{destination.split(",")[0]}</b> ({routeInfo.distanceText}, {routeInfo.durationText}).
-                  Filter: <b>{genderPreference === "no_preference" ? "All Verified Students" : genderPreference === "women_only" ? "Women Only" : "Men Only"}</b>.
+                <div className="search-error-message">{searchError}</div>
+                <button
+                  type="button"
+                  className="search-error-btn"
+                  onClick={() => handleFindPartners("no_preference")}
+                >
+                  Switch to "No Preference" & Retry
+                </button>
+              </div>
+            )}
+
+            {/* STATE 3: NO RESULTS STATE */}
+            {!isSearching && !searchError && hasSubmittedSearch && searchResults.length === 0 && (
+              <div className="search-no-results-state">
+                <div className="no-results-icon-wrap">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M16 16s-1.5-2-4-2-4 2-4 2" />
+                    <line x1="9" y1="9" x2="9.01" y2="9" />
+                    <line x1="15" y1="9" x2="15.01" y2="9" />
+                  </svg>
                 </div>
-                <div className="search-status-footer">
-                  <span>🟢 Connected to live corridor network · Awaiting companion peer discovery</span>
+                <div>
+                  <div className="no-results-title">No Travel Partners Found Yet</div>
+                  <div className="no-results-desc">
+                    No verified peers are currently traveling to <b>{destination.split(",")[0]}</b> matching your filter.
+                  </div>
+                </div>
+
+                <div className="no-results-actions">
+                  {genderPreference !== "no_preference" && (
+                    <button
+                      type="button"
+                      className="switch-filter-btn"
+                      onClick={() => handleFindPartners("no_preference")}
+                    >
+                      Search with "No Preference" (All Verified Students)
+                    </button>
+                  )}
+
+                  {!routeRegisteredSuccess ? (
+                    <button
+                      type="button"
+                      className="register-route-btn"
+                      onClick={handleRegisterRoute}
+                      disabled={isRegisteringRoute}
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                        <path d="M12 5v14M5 12h14" />
+                      </svg>
+                      {isRegisteringRoute ? "Registering Route..." : "Register My Route for Peers"}
+                    </button>
+                  ) : (
+                    <div className="search-status-footer" style={{ justifyContent: "center", marginTop: 4 }}>
+                      <span>🟢 Your route is indexed! Peers searching this corridor will discover you.</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* STATE 4: ACTIVE VERIFIED PARTNERS RESULTS LIST */}
+            {!isSearching && !searchError && hasSubmittedSearch && searchResults.length > 0 && (
+              <div className="search-results-section">
+                <div className="results-header-bar">
+                  <div className="results-count-title">
+                    <span>Verified Travel Partners</span>
+                    <span className="results-count-badge">{searchResults.length}</span>
+                  </div>
+                  <div className="results-filter-indicator">
+                    {genderPreference === "no_preference"
+                      ? "All Verified Peers"
+                      : genderPreference === "women_only"
+                      ? "Women Only"
+                      : "Men Only"}
+                  </div>
+                </div>
+
+                <div className="partner-cards-list">
+                  {searchResults.map((partner) => {
+                    const isConnected = connectedPartnerIds.includes(partner.id);
+                    const isSelected = selectedPartnerId === partner.id;
+                    const initials = partner.fullName
+                      .split(" ")
+                      .map((p) => p[0])
+                      .join("")
+                      .slice(0, 2)
+                      .toUpperCase();
+
+                    return (
+                      <div
+                        key={partner.id}
+                        className={`partner-card ${isSelected ? "selected" : ""}`}
+                        onClick={() => setSelectedPartnerId(partner.id)}
+                      >
+                        <div className="partner-card-top">
+                          <div className="partner-user-block">
+                            <div className="partner-avatar">{initials}</div>
+                            <div className="partner-name-row">
+                              <div className="partner-name">
+                                <span>{partner.fullName}</span>
+                                <span className="partner-verified-badge">
+                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                    <polyline points="20 6 9 17 4 12" />
+                                  </svg>
+                                  Verified
+                                </span>
+                              </div>
+                              <div className="partner-institution">
+                                {partner.department ? `${partner.department} · ` : ""}
+                                {partner.university}
+                              </div>
+                            </div>
+                          </div>
+                          <span className="partner-match-pill">{partner.matchType}</span>
+                        </div>
+
+                        <div className="partner-route-row">
+                          <span>{partner.origin.split(",")[0]}</span>
+                          <span className="partner-route-arrow">➔</span>
+                          <b>{partner.destination.split(",")[0]}</b>
+                        </div>
+
+                        {partner.notes && (
+                          <div className="partner-notes-bubble">"{partner.notes}"</div>
+                        )}
+
+                        <div className="partner-card-footer">
+                          <div className="partner-time-info">
+                            <span>Active · Ready to depart</span>
+                          </div>
+                          <button
+                            type="button"
+                            className={`partner-connect-btn ${isConnected ? "connected" : ""}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleConnectPartner(partner.id, partner.fullName);
+                            }}
+                          >
+                            {isConnected ? (
+                              <>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                  <polyline points="20 6 9 17 4 12" />
+                                </svg>
+                                Request Sent
+                              </>
+                            ) : (
+                              <>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                                  <circle cx="9" cy="7" r="4" />
+                                  <line x1="19" y1="8" x2="19" y2="14" />
+                                  <line x1="22" y1="11" x2="16" y2="11" />
+                                </svg>
+                                Connect Partner
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
