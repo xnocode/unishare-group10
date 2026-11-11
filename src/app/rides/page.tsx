@@ -1875,17 +1875,9 @@ export default function RideSharingPage() {
                     const val = e.target.value;
                     setPickup(val);
                     setShowPickupAutocomplete(true);
-                    if (val.trim().length >= 5) {
-                      const matched = resolveLandmarkByName(val);
-                      if (matched) {
-                        const nextPt = { lat: matched.lat, lng: matched.lng };
-                        setPickupCoords(nextPt);
-                        focusRouteOnMap(nextPt, destCoords);
-                      }
-                    }
                   }}
                   onFocus={() => setShowPickupAutocomplete(true)}
-                  onBlur={() => setTimeout(() => setShowPickupAutocomplete(false), 150)}
+                  onBlur={() => setTimeout(() => setShowPickupAutocomplete(false), 250)}
                   aria-label="Pickup location search"
                 />
                 {pickup && (
@@ -1901,66 +1893,67 @@ export default function RideSharingPage() {
                     ✕
                   </button>
                 )}
-              </div>
 
-              {showPickupAutocomplete && !isGoogleMapsReady && (
-                <div className="autocomplete-dropdown" role="listbox" aria-label="Pickup location suggestions">
-                  {/* Quick Action: Use Current GPS Location */}
-                  <div
-                    className="autocomplete-item autocomplete-gps-item"
-                    role="option"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      setShowPickupAutocomplete(false);
-                      handleUseCurrentLocation();
-                    }}
-                  >
-                    <span className="item-icon">📍</span>
-                    <div className="autocomplete-item-text">
-                      <span className="autocomplete-item-title">Use Current Location (GPS)</span>
-                      <span className="autocomplete-item-sub">Accurately detect my live campus GPS location</span>
-                    </div>
-                  </div>
-
-                  <div className="autocomplete-dropdown-header">
-                    {isLoadingPickupPlaces
-                      ? "Searching live locations..."
-                      : pickup.trim()
-                      ? `Matching Places for "${pickup}"`
-                      : "Recommended Campus & Pickup Hubs"}
-                  </div>
-
-                  {pickupPlaces.map((pl) => (
+                {/* Autocomplete Dropdown anchored directly inside input-field-wrapper */}
+                {showPickupAutocomplete && !isGoogleMapsReady && (
+                  <div className="autocomplete-dropdown" role="listbox" aria-label="Pickup location suggestions">
+                    {/* Quick Action: Use Current GPS Location */}
                     <div
-                      key={`pickup-${pl.id}`}
-                      className="autocomplete-item"
+                      className="autocomplete-item autocomplete-gps-item"
                       role="option"
-                      aria-selected={pickup === pl.name}
                       onMouseDown={(e) => {
                         e.preventDefault();
-                        const nextPt = { lat: pl.lat, lng: pl.lng };
-                        setPickup(pl.name);
-                        setPickupCoords(nextPt);
                         setShowPickupAutocomplete(false);
-                        focusRouteOnMap(nextPt, destCoords);
-                        showToast(`📍 Pickup set: ${pl.label}`);
-                        reportRidesPresence(nextPt, pl.name);
+                        handleUseCurrentLocation();
                       }}
                     >
-                      <span className="item-icon">{pl.type === "university" ? "🎓" : "📍"}</span>
+                      <span className="item-icon">📍</span>
                       <div className="autocomplete-item-text">
-                        <span className="autocomplete-item-title">{pl.label}</span>
-                        <span className="autocomplete-item-sub">{pl.name}</span>
+                        <span className="autocomplete-item-title">Use Current Location (GPS)</span>
+                        <span className="autocomplete-item-sub">Accurately detect my live campus GPS location</span>
                       </div>
                     </div>
-                  ))}
-                  {pickupPlaces.length === 0 && !isLoadingPickupPlaces && (
-                    <div className="autocomplete-empty-note">
-                      Type any campus, street or landmark to search live
+
+                    <div className="autocomplete-dropdown-header">
+                      {isLoadingPickupPlaces
+                        ? "Searching live locations..."
+                        : pickup.trim()
+                        ? `Matching Places for "${pickup}"`
+                        : "Recommended Campus & Pickup Hubs"}
                     </div>
-                  )}
-                </div>
-              )}
+
+                    {pickupPlaces.map((pl) => (
+                      <div
+                        key={`pickup-${pl.id}`}
+                        className="autocomplete-item"
+                        role="option"
+                        aria-selected={pickup === pl.name}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          const nextPt = { lat: pl.lat, lng: pl.lng };
+                          setPickup(pl.name);
+                          setPickupCoords(nextPt);
+                          setShowPickupAutocomplete(false);
+                          focusRouteOnMap(nextPt, destCoords);
+                          showToast(`📍 Pickup set: ${pl.label}`);
+                          reportRidesPresence(nextPt, pl.name);
+                        }}
+                      >
+                        <span className="item-icon">{pl.type === "university" ? "🎓" : "📍"}</span>
+                        <div className="autocomplete-item-text">
+                          <span className="autocomplete-item-title">{pl.label}</span>
+                          <span className="autocomplete-item-sub">{pl.name}</span>
+                        </div>
+                      </div>
+                    ))}
+                    {pickupPlaces.length === 0 && !isLoadingPickupPlaces && (
+                      <div className="autocomplete-empty-note">
+                        Type any campus, street or landmark to search live
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* GPS Current Location Button */}
               <button
@@ -1980,7 +1973,7 @@ export default function RideSharingPage() {
             {/* -------------------------------------------------
                 2. DESTINATION LOCATION
                 ------------------------------------------------- */}
-            <div className={`location-input-group ${mapPickMode === "destination" ? "active-picking" : ""}`}>
+            <div className={`location-input-group destination-group ${mapPickMode === "destination" ? "active-picking" : ""}`}>
               <div className="input-label-row">
                 <span className="location-label dest-label">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
@@ -2020,17 +2013,9 @@ export default function RideSharingPage() {
                     const val = e.target.value;
                     setDestination(val);
                     setShowDestAutocomplete(true);
-                    if (val.trim().length >= 4) {
-                      const matched = resolveLandmarkByName(val);
-                      if (matched) {
-                        const nextPt = { lat: matched.lat, lng: matched.lng };
-                        setDestCoords(nextPt);
-                        focusRouteOnMap(pickupCoords, nextPt);
-                      }
-                    }
                   }}
                   onFocus={() => setShowDestAutocomplete(true)}
-                  onBlur={() => setTimeout(() => setShowDestAutocomplete(false), 150)}
+                  onBlur={() => setTimeout(() => setShowDestAutocomplete(false), 250)}
                   aria-label="Destination search"
                 />
                 {destination && (
@@ -2046,48 +2031,49 @@ export default function RideSharingPage() {
                     ✕
                   </button>
                 )}
-              </div>
 
-              {showDestAutocomplete && !isGoogleMapsReady && (
-                <div className="autocomplete-dropdown" role="listbox" aria-label="Destination suggestions">
-                  <div className="autocomplete-dropdown-header">
-                    {isLoadingDestPlaces
-                      ? "Searching destinations..."
-                      : destination.trim()
-                      ? `Matching Destinations for "${destination}"`
-                      : "Recommended Campus Destinations"}
-                  </div>
-                  {destPlaces.map((pl) => (
-                    <div
-                      key={`dest-${pl.id}`}
-                      className="autocomplete-item"
-                      role="option"
-                      aria-selected={destination === pl.name}
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        const nextPt = { lat: pl.lat, lng: pl.lng };
-                        setDestination(pl.name);
-                        setDestCoords(nextPt);
-                        setShowDestAutocomplete(false);
-                        focusRouteOnMap(pickupCoords, nextPt);
-                        showToast(`🎯 Destination set: ${pl.label}`);
-                        reportRidesPresence(pickupCoords, pickup, pl.name);
-                      }}
-                    >
-                      <span className="item-icon">{pl.type === "university" ? "🎓" : "🎯"}</span>
-                      <div className="autocomplete-item-text">
-                        <span className="autocomplete-item-title">{pl.label}</span>
-                        <span className="autocomplete-item-sub">{pl.name}</span>
+                {/* Destination Dropdown anchored directly inside input-field-wrapper */}
+                {showDestAutocomplete && !isGoogleMapsReady && (
+                  <div className="autocomplete-dropdown" role="listbox" aria-label="Destination suggestions">
+                    <div className="autocomplete-dropdown-header">
+                      {isLoadingDestPlaces
+                        ? "Searching destinations..."
+                        : destination.trim()
+                        ? `Matching Destinations for "${destination}"`
+                        : "Recommended Campus Destinations"}
+                    </div>
+                    {destPlaces.map((pl) => (
+                      <div
+                        key={`dest-${pl.id}`}
+                        className="autocomplete-item"
+                        role="option"
+                        aria-selected={destination === pl.name}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          const nextPt = { lat: pl.lat, lng: pl.lng };
+                          setDestination(pl.name);
+                          setDestCoords(nextPt);
+                          setShowDestAutocomplete(false);
+                          focusRouteOnMap(pickupCoords, nextPt);
+                          showToast(`🎯 Destination set: ${pl.label}`);
+                          reportRidesPresence(pickupCoords, pickup, pl.name);
+                        }}
+                      >
+                        <span className="item-icon">{pl.type === "university" ? "🎓" : "🎯"}</span>
+                        <div className="autocomplete-item-text">
+                          <span className="autocomplete-item-title">{pl.label}</span>
+                          <span className="autocomplete-item-sub">{pl.name}</span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                  {destPlaces.length === 0 && !isLoadingDestPlaces && (
-                    <div className="autocomplete-empty-note">
-                      Type any campus or destination to search live
-                    </div>
-                  )}
-                </div>
-              )}
+                    ))}
+                    {destPlaces.length === 0 && !isLoadingDestPlaces && (
+                      <div className="autocomplete-empty-note">
+                        Type any campus or destination to search live
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* Frequent Campus Hubs Shortcuts */}
               <div className="quick-destinations-block">
