@@ -1,1612 +1,1090 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import AppNavbar from "../components/AppNavbar";
-import { useCurrentUser } from "../lib/user-client";
 import "./rides.css";
 
-// -------------------------------------------------------------
-// Comprehensive Bangladesh Locations for Google Maps Search
-// -------------------------------------------------------------
+// Declare global Google Maps object for TypeScript
+declare global {
+  interface Window {
+    google?: any;
+    gm_authFailure?: () => void;
+  }
+}
 
+// -------------------------------------------------------------
+// Comprehensive Bangladesh Locations for Autocomplete
+// -------------------------------------------------------------
 const BANGLADESH_LOCATIONS = [
-  // Dhaka Major Areas & Campus Hubs
   "TSC, University of Dhaka",
   "Curzon Hall, University of Dhaka",
   "Science Library, Dhaka University",
+  "Arts Faculty, University of Dhaka",
+  "Shahbagh, Dhaka",
+  "Science Lab, Dhaka",
   "Dhanmondi 27, Dhaka",
   "Dhanmondi 32, Dhaka",
   "Dhanmondi 15, Dhaka",
+  "Nilkhet Book Market, Dhaka",
+  "Farmgate, Dhaka",
+  "Mohammadpur Town Hall, Dhaka",
+  "Lalmatia, Dhaka",
+  "Panthapath, Dhaka",
+  "Tejgaon Industrial Area, Dhaka",
+  "Mohakhali DOHS, Dhaka",
+  "Banani 11, Dhaka",
   "Gulshan 1, Dhaka",
   "Gulshan 2, Dhaka",
-  "Banani 11, Dhaka",
-  "Uttara Sector 3, Dhaka",
-  "Uttara Sector 7, Dhaka",
-  "Mirpur 1, Dhaka",
-  "Mirpur 10, Dhaka",
-  "Mirpur 2, Dhaka",
-  "Mohammadpur Town Hall, Dhaka",
-  "Farmgate, Dhaka",
-  "Shahbagh, Dhaka",
-  "Motijheel C/A, Dhaka",
-  "Mohakhali DOHS, Dhaka",
-  "Tejgaon Industrial Area, Dhaka",
   "Badda / Merul Badda, Dhaka",
+  "Hatirjheel Promenade, Dhaka",
   "Rampura Bridge, Dhaka",
   "Banasree Block C, Dhaka",
-  "Bashundhara R/A, Dhaka",
-  "Science Lab, Dhaka",
-  "Lalmatia, Dhaka",
-  "Old Dhaka / Sadarghat",
-  "Panthapath, Dhaka",
-  "Khilgaon, Dhaka",
-  "Malibagh, Dhaka",
+  "Bashundhara R/A (Gate 1), Dhaka",
+  "Mirpur 10 Circle, Dhaka",
+  "Mirpur 1, Dhaka",
+  "Mirpur 2, Dhaka",
+  "Uttara Sector 3, Dhaka",
+  "Uttara Sector 7, Dhaka",
   "Savar / Jahangirnagar University",
-  "Gazipur Chowrasta",
-  "Narayanganj City",
-  // Major Divisions & Cities of Bangladesh
-  "Chittagong GEC Circle",
-  "Chittagong Agrabad C/A",
-  "Sylhet Zindabazar",
-  "Sylhet Amberkhana",
-  "Cox's Bazar Sea Beach",
-  "Rajshahi Zero Point",
-  "Khulna Shibbari",
-  "Mymensingh Town Hall",
-  "Comilla Kandirpar",
-  "Barisal Sadar Road",
-  "Bogura Satmatha",
-];
-
-interface CampusRide {
-  id: string;
-  vehicle: "Car" | "Rickshaw";
-  vehicleModel: string;
-  departureTime: string;
-  seatsLeft: number;
-  origin: string;
-  destination: string;
-  preference: string;
-  gender: "female" | "male" | "any";
-  hostName: string;
-  hostInitials: string;
-  hostUniversity: string;
-  hostDept: string;
-  hostVerified: boolean;
-  hostRating: number;
-  totalRides: number;
-}
-
-const INITIAL_CAMPUS_RIDES: CampusRide[] = [
-  {
-    id: "ride-1",
-    vehicle: "Car",
-    vehicleModel: "Toyota Corolla (White) · Dhaka Metro Ga 21-4820",
-    departureTime: "Thu, 15 Oct · 8:30 AM",
-    seatsLeft: 2,
-    origin: "Dhanmondi 27",
-    destination: "TSC, DU",
-    preference: "No gender preference · Same university only",
-    gender: "any",
-    hostName: "Arif Hossain",
-    hostInitials: "AH",
-    hostUniversity: "University of Dhaka",
-    hostDept: "Faculty of Business Studies",
-    hostVerified: true,
-    hostRating: 4.9,
-    totalRides: 28,
-  },
-  {
-    id: "ride-2",
-    vehicle: "Car",
-    vehicleModel: "Honda Civic (Silver) · Dhaka Metro Kha 14-8930",
-    departureTime: "Thu, 15 Oct · 9:00 AM",
-    seatsLeft: 1,
-    origin: "Dhanmondi 32",
-    destination: "Curzon Hall, DU",
-    preference: "Women only · Same university only",
-    gender: "female",
-    hostName: "Nusrat Jahan",
-    hostInitials: "NJ",
-    hostUniversity: "University of Dhaka",
-    hostDept: "Dept of English Literature",
-    hostVerified: true,
-    hostRating: 5.0,
-    totalRides: 34,
-  },
-  {
-    id: "ride-3",
-    vehicle: "Rickshaw",
-    vehicleModel: "Campus Eco Rickshaw #14 · Verified DU Green fleet",
-    departureTime: "Thu, 15 Oct · 9:15 AM",
-    seatsLeft: 1,
-    origin: "Dhanmondi 15",
-    destination: "TSC, DU",
-    preference: "Women only · Same university only",
-    gender: "female",
-    hostName: "Sadia Islam",
-    hostInitials: "SI",
-    hostUniversity: "University of Dhaka",
-    hostDept: "Dept of Economics",
-    hostVerified: true,
-    hostRating: 4.8,
-    totalRides: 22,
-  },
-  {
-    id: "ride-4",
-    vehicle: "Car",
-    vehicleModel: "Nissan Sunny · Dhaka Metro Ga 18-3321",
-    departureTime: "Thu, 15 Oct · 9:30 AM",
-    seatsLeft: 3,
-    origin: "Farmgate",
-    destination: "TSC, DU",
-    preference: "No gender preference · Same university only",
-    gender: "any",
-    hostName: "Tanvir Ahmed",
-    hostInitials: "TA",
-    hostUniversity: "University of Dhaka",
-    hostDept: "Dept of Marketing",
-    hostVerified: true,
-    hostRating: 4.9,
-    totalRides: 19,
-  },
-  {
-    id: "ride-5",
-    vehicle: "Rickshaw",
-    vehicleModel: "Campus Shared Rickshaw #22",
-    departureTime: "Thu, 15 Oct · 9:45 AM",
-    seatsLeft: 1,
-    origin: "Mirpur 10",
-    destination: "Curzon Hall, DU",
-    preference: "No gender preference · Same university only",
-    gender: "any",
-    hostName: "Rafiqul Hasan",
-    hostInitials: "RH",
-    hostUniversity: "University of Dhaka",
-    hostDept: "Faculty of Law",
-    hostVerified: true,
-    hostRating: 4.7,
-    totalRides: 15,
-  },
+  "Old Dhaka / Sadarghat",
+  "Motijheel C/A, Dhaka",
 ];
 
 const QUICK_CAMPUS_DESTINATIONS = [
-  { name: "TSC, DU", fullName: "TSC, University of Dhaka" },
-  { name: "Curzon Hall", fullName: "Curzon Hall, University of Dhaka" },
-  { name: "Dhanmondi 32", fullName: "Dhanmondi 32, Dhaka" },
-  { name: "Farmgate", fullName: "Farmgate, Tejgaon, Dhaka" },
-  { name: "Mirpur 10", fullName: "Mirpur 10 Circle, Dhaka" },
+  { label: "TSC, DU", fullName: "TSC, University of Dhaka", lat: 23.7317, lng: 90.3957 },
+  { label: "Curzon Hall", fullName: "Curzon Hall, University of Dhaka", lat: 23.7275, lng: 90.4025 },
+  { label: "Dhanmondi 32", fullName: "Dhanmondi 32, Dhaka", lat: 23.7510, lng: 90.3770 },
+  { label: "Farmgate", fullName: "Farmgate, Dhaka", lat: 23.7580, lng: 90.3900 },
+  { label: "Mirpur 10", fullName: "Mirpur 10 Circle, Dhaka", lat: 23.8070, lng: 90.3686 },
+  { label: "Science Lab", fullName: "Science Lab, Dhaka", lat: 23.7402, lng: 90.3846 },
 ];
 
-export default function RidesPage() {
-  const router = useRouter();
-  const { resolvedUser: currentUser } = useCurrentUser();
+// Clean light Google Maps theme matching UniShare palette
+const GOOGLE_MAPS_LIGHT_STYLES = [
+  { featureType: "all", elementType: "labels.text.fill", stylers: [{ color: "#475569" }] },
+  { featureType: "all", elementType: "labels.text.stroke", stylers: [{ color: "#ffffff" }, { weight: 2 }] },
+  { featureType: "administrative", elementType: "geometry", stylers: [{ visibility: "off" }] },
+  { featureType: "administrative.country", elementType: "geometry.stroke", stylers: [{ color: "#cbd5e1" }] },
+  { featureType: "landscape", elementType: "geometry", stylers: [{ color: "#f8faf9" }] },
+  { featureType: "poi", elementType: "geometry", stylers: [{ visibility: "simplified" }, { color: "#eef5f3" }] },
+  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#dcefd9" }] },
+  { featureType: "poi.school", elementType: "geometry", stylers: [{ color: "#e3f0ec" }] },
+  { featureType: "road", elementType: "geometry.fill", stylers: [{ color: "#ffffff" }] },
+  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#e2e8f0" }] },
+  { featureType: "road.highway", elementType: "geometry.fill", stylers: [{ color: "#ffffff" }] },
+  { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#cbd5e1" }] },
+  { featureType: "transit", elementType: "geometry", stylers: [{ color: "#eef2f6" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#c5e3ed" }] },
+];
 
-  // Tab State
-  const [activeTab, setActiveTab] = useState<"find" | "requests" | "created">("find");
+// Coordinate landmarks for fallback interactive canvas
+const DHAKA_CANVAS_LANDMARKS = [
+  { name: "TSC, University of Dhaka", x: 490, y: 530, lat: 23.7317, lng: 90.3957 },
+  { name: "Curzon Hall, University of Dhaka", x: 575, y: 550, lat: 23.7275, lng: 90.4025 },
+  { name: "Shahbagh, Dhaka", x: 475, y: 475, lat: 23.7388, lng: 90.3954 },
+  { name: "Science Lab, Dhaka", x: 385, y: 470, lat: 23.7402, lng: 90.3846 },
+  { name: "Dhanmondi 32, Dhaka", x: 325, y: 410, lat: 23.7510, lng: 90.3770 },
+  { name: "Dhanmondi 27, Dhaka", x: 295, y: 360, lat: 23.7550, lng: 90.3720 },
+  { name: "Farmgate, Dhaka", x: 485, y: 375, lat: 23.7580, lng: 90.3900 },
+  { name: "Hatirjheel Promenade, Dhaka", x: 670, y: 350, lat: 23.7660, lng: 90.4120 },
+  { name: "Mohakhali DOHS, Dhaka", x: 570, y: 285, lat: 23.7780, lng: 90.4040 },
+  { name: "Banani 11, Dhaka", x: 630, y: 220, lat: 23.7925, lng: 90.4078 },
+  { name: "Mirpur 10 Circle, Dhaka", x: 290, y: 200, lat: 23.8070, lng: 90.3686 },
+];
 
-  // Search Fields
-  const [leavingFrom, setLeavingFrom] = useState("Dhanmondi, Dhaka");
-  const [goingTo, setGoingTo] = useState("TSC, University of Dhaka");
-  const [isDetectingLocation, setIsDetectingLocation] = useState(false);
+export default function RideSharingPage() {
+  // -----------------------------------------------------------
+  // 1. User & State
+  // -----------------------------------------------------------
+  const [currentUser, setCurrentUser] = useState({
+    name: "Farhana Rahman",
+    email: "farhana@std.du.ac.bd",
+    initials: "FR",
+    university: "University of Dhaka",
+    verified: true,
+  });
 
-  // Bangladesh Google Maps Search Dropdown
-  const [showGoingToDropdown, setShowGoingToDropdown] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const resultsRef = useRef<HTMLElement>(null);
-
-  // Search Row Controls
-  const [genderFilter, setGenderFilter] = useState<"any" | "women_only" | "men_only" | "no_preference">("any");
-  const [vehicleFilter, setVehicleFilter] = useState<"all" | "Car" | "Rickshaw">("all");
-
-  // Pathao-style Find Ride Animation State
-  const [isPathaoSearching, setIsPathaoSearching] = useState(false);
-
-  // Search Results (Find a ride) & My Requests (Separate list)
-  const [searchResults, setSearchResults] = useState<CampusRide[]>([]);
-  const [hasSearched, setHasSearched] = useState(false);
-  const [myRequests, setMyRequests] = useState<CampusRide[]>([]);
-  const [selectedRideForDetails, setSelectedRideForDetails] = useState<CampusRide | null>(null);
-  const [activeRideInProgress, setActiveRideInProgress] = useState<CampusRide | null>(null);
-  const [showRatingModal, setShowRatingModal] = useState(false);
-  const [rideBeingRated, setRideBeingRated] = useState<CampusRide | null>(null);
-  const [ratingScore, setRatingScore] = useState(5);
-  const [hoverRatingScore, setHoverRatingScore] = useState(0);
-  const [selectedFeedbackTags, setSelectedFeedbackTags] = useState<string[]>([
-    "🎯 Punctual & On Time",
-    "🛡️ Felt Very Safe",
-  ]);
-  const [feedbackComment, setFeedbackComment] = useState("");
-
-  // Live Direct Messaging with Campus Companion
-  const [chatPeer, setChatPeer] = useState<CampusRide | null>(null);
-  const [chatMessages, setChatMessages] = useState<{ id: string; sender: "user" | "peer"; text: string; time: string }[]>([]);
-  const [chatInputText, setChatInputText] = useState("");
-
-  // Toast
-  const [toastText, setToastText] = useState("");
-  const [toastVisible, setToastVisible] = useState(false);
-
-  const showToast = (msg: string) => {
-    setToastText(msg);
-    setToastVisible(true);
-    setTimeout(() => setToastVisible(false), 2400);
-  };
-
-  // Close dropdown on outside click
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setShowGoingToDropdown(false);
+    try {
+      const stored = localStorage.getItem("unishare_user");
+      if (stored) {
+        const u = JSON.parse(stored);
+        setCurrentUser({
+          name: u.fullName || u.name || "Farhana Rahman",
+          email: u.email || "farhana@std.du.ac.bd",
+          initials: (u.fullName || u.name || "FR")
+            .split(" ")
+            .map((p: string) => p[0])
+            .join("")
+            .slice(0, 2)
+            .toUpperCase(),
+          university: u.university || "University of Dhaka",
+          verified: u.verified !== undefined ? Boolean(u.verified) : true,
+        });
       }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    } catch {
+      // ignore
+    }
   }, []);
 
-  // Filtered Bangladesh places based on input
-  const placeSuggestions = useMemo(() => {
-    if (!goingTo.trim()) return BANGLADESH_LOCATIONS.slice(0, 8);
-    const q = goingTo.toLowerCase().trim();
-    return BANGLADESH_LOCATIONS.filter((place) => place.toLowerCase().includes(q)).slice(0, 8);
-  }, [goingTo]);
+  // Journey Coordinates & Text
+  const [pickup, setPickup] = useState("Dhanmondi 27, Dhaka");
+  const [destination, setDestination] = useState("TSC, University of Dhaka");
+  const [pickupCoords, setPickupCoords] = useState<{ lat: number; lng: number }>({
+    lat: 23.7550,
+    lng: 90.3720,
+  });
+  const [destCoords, setDestCoords] = useState<{ lat: number; lng: number }>({
+    lat: 23.7317,
+    lng: 90.3957,
+  });
 
-  // Auto-Location System (HTML5 Geolocation)
-  const handleAutoDetectLocation = () => {
-    setIsDetectingLocation(true);
-    showToast("Accessing GPS to detect your location...");
+  // Gender Preference
+  const [genderPreference, setGenderPreference] = useState<"no_preference" | "women_only" | "men_only">("no_preference");
 
-    if (typeof window !== "undefined" && "geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setIsDetectingLocation(false);
-          const { latitude, longitude } = position.coords;
-          let detected = "Dhanmondi, Dhaka";
-          if (latitude > 23.79) {
-            detected = "Mirpur, Dhaka";
-          } else if (latitude > 23.76) {
-            detected = "Mohammadpur, Dhaka";
-          }
-          setLeavingFrom(detected);
-          showToast(`Location set: ${detected}`);
-        },
-        () => {
-          setIsDetectingLocation(false);
-          setLeavingFrom("Dhanmondi, Dhaka");
-          showToast("Auto-located: Dhanmondi, Dhaka");
-        },
-        { timeout: 6000, enableHighAccuracy: true }
-      );
-    } else {
-      setIsDetectingLocation(false);
-      setLeavingFrom("Dhanmondi, Dhaka");
-      showToast("Auto-located: Dhanmondi, Dhaka");
-    }
-  };
+  // Map Picking Mode: "none" | "pickup" | "destination"
+  const [mapPickMode, setMapPickMode] = useState<"none" | "pickup" | "destination">("none");
+  const mapPickModeRef = useRef<"none" | "pickup" | "destination">("none");
+  mapPickModeRef.current = mapPickMode;
 
-  // Dynamic Map Pin & Route Coordinates for Dhaka Google Maps Canvas
-  const getMapCoordinates = (locationStr: string, isOrigin = false) => {
-    const loc = (locationStr || "").toLowerCase();
-    if (loc.includes("curzon")) {
-      return { x: 580, y: 350, left: "58%", top: "83%" };
-    }
-    if (loc.includes("tsc") || loc.includes("dhaka university")) {
-      return { x: 470, y: 330, left: "47%", top: "79%" };
-    }
-    if (loc.includes("mirpur")) {
-      return { x: 260, y: 110, left: "26%", top: "26%" };
-    }
-    if (loc.includes("farmgate") || loc.includes("tejgaon")) {
-      return { x: 460, y: 190, left: "46%", top: "45%" };
-    }
-    if (loc.includes("hatirjheel") || loc.includes("badda") || loc.includes("rampura")) {
-      return { x: 650, y: 170, left: "65%", top: "40%" };
-    }
-    if (loc.includes("uttara")) {
-      return { x: 440, y: 60, left: "44%", top: "14%" };
-    }
-    // Default Dhanmondi / Mohammadpur
-    return isOrigin
-      ? { x: 310, y: 220, left: "31%", top: "52%" }
-      : { x: 320, y: 240, left: "32%", top: "57%" };
-  };
+  // Live GPS Tracking
+  const [isLocatingGps, setIsLocatingGps] = useState(false);
+  const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null);
 
-  const originCoords = useMemo(() => getMapCoordinates(leavingFrom, true), [leavingFrom]);
-  const destCoords = useMemo(() => getMapCoordinates(goingTo, false), [goingTo]);
-  const routeCurvePath = useMemo(() => {
-    const midX = (originCoords.x + destCoords.x) / 2 + 15;
-    const midY = (originCoords.y + destCoords.y) / 2 - 15;
-    return `M${originCoords.x},${originCoords.y} Q${midX},${midY} ${destCoords.x},${destCoords.y}`;
-  }, [originCoords, destCoords]);
+  // Autocomplete UI
+  const [showPickupAutocomplete, setShowPickupAutocomplete] = useState(false);
+  const [showDestAutocomplete, setShowDestAutocomplete] = useState(false);
+  const pickupInputRef = useRef<HTMLInputElement>(null);
+  const destInputRef = useRef<HTMLInputElement>(null);
 
-  // Click on Google Map to select 'Going to'
-  const handleMapCanvasClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width;
-    const y = (e.clientY - rect.top) / rect.height;
+  // Search Submission & Feedback
+  const [isSearching, setIsSearching] = useState(false);
+  const [hasSubmittedSearch, setHasSubmittedSearch] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-    let picked = "TSC, University of Dhaka";
-    if (x < 0.36 && y > 0.42) {
-      picked = "Dhanmondi 32, Dhaka";
-    } else if (x > 0.55 && y < 0.48) {
-      picked = "Hatirjheel / Merul Badda, Dhaka";
-    } else if (y < 0.35) {
-      picked = "Farmgate / Tejgaon, Dhaka";
-    } else if (x > 0.52 && y > 0.65) {
-      picked = "Curzon Hall, University of Dhaka";
-    } else {
-      picked = "TSC, University of Dhaka";
-    }
-    setGoingTo(picked);
-    showToast(`Destination set: ${picked}`);
-  };
+  // Mobile View Toggle ("sidebar" | "map")
+  const [mobileTab, setMobileTab] = useState<"sidebar" | "map">("sidebar");
 
-  // Trigger Find Ride Animation & Switch to My Requests Tab
-  const handleTriggerSearch = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!leavingFrom.trim() || !goingTo.trim()) {
-      showToast("Please enter both pickup and destination locations.");
+  // Route Info State (Distance & Estimated Duration)
+  const [routeInfo, setRouteInfo] = useState<{
+    distanceText: string;
+    durationText: string;
+    summary: string;
+  }>({
+    distanceText: "6.4 km",
+    durationText: "~18 mins",
+    summary: "via Mirpur Rd & Shahbagh",
+  });
+
+  // Google Maps SDK Live Instance References
+  const googleMapDivRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const pickupMarkerRef = useRef<any>(null);
+  const destMarkerRef = useRef<any>(null);
+  const gpsMarkerRef = useRef<any>(null);
+  const directionsRendererRef = useRef<any>(null);
+  const geocoderRef = useRef<any>(null);
+  const [isGoogleMapsReady, setIsGoogleMapsReady] = useState(false);
+  const [zoomScale, setZoomScale] = useState(1);
+
+  // Toast feedback helper
+  const showToast = useCallback((msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3200);
+  }, []);
+
+  // -----------------------------------------------------------
+  // 2. Google Maps JavaScript API Loading
+  // -----------------------------------------------------------
+  useEffect(() => {
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+    // Check if already loaded
+    if (window.google?.maps) {
+      setIsGoogleMapsReady(true);
       return;
     }
 
-    // 1. Open searching animation overlay
-    setIsPathaoSearching(true);
+    if (!apiKey) {
+      // No key configured yet -> will use interactive canvas
+      return;
+    }
 
-    const originShort = leavingFrom.split(",")[0].trim() || "Dhanmondi";
-    const destShort = goingTo.split(",")[0].trim() || "TSC, DU";
+    // Dynamically inject Google Maps SDK script
+    const scriptId = "google-maps-script";
+    if (!document.getElementById(scriptId)) {
+      const script = document.createElement("script");
+      script.id = scriptId;
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geometry&loading=async`;
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
+        setIsGoogleMapsReady(true);
+      };
+      script.onerror = () => {
+        console.warn("Google Maps SDK failed to load. Using fallback map mode.");
+      };
+      document.head.appendChild(script);
+    }
+  }, []);
 
-    setTimeout(() => {
-      // 2. Close searching animation completely
-      setIsPathaoSearching(false);
+  // -----------------------------------------------------------
+  // 3. Initialize Google Maps & Event Listeners
+  // -----------------------------------------------------------
+  useEffect(() => {
+    if (!isGoogleMapsReady || !googleMapDivRef.current || mapInstanceRef.current) return;
 
-      // Filter rides based on user preferences
-      let filtered = INITIAL_CAMPUS_RIDES.filter((ride) => {
-        if (genderFilter === "women_only" && ride.gender !== "female") return false;
-        if (genderFilter === "men_only" && ride.gender === "female") return false;
-        if (vehicleFilter !== "all" && ride.vehicle !== vehicleFilter) return false;
-        return true;
+    try {
+      const centerCoords = { lat: 23.7430, lng: 90.3840 }; // Center of Dhaka Central
+      const map = new window.google.maps.Map(googleMapDivRef.current, {
+        center: centerCoords,
+        zoom: 13,
+        styles: GOOGLE_MAPS_LIGHT_STYLES,
+        disableDefaultUI: true,
+        zoomControl: false,
+        streetViewControl: false,
+        mapTypeControl: false,
+        fullscreenControl: false,
       });
 
-      if (filtered.length > 0) {
-        filtered = filtered.map((r, idx) => ({
-          ...r,
-          origin: idx === 0 ? originShort : r.origin,
-          destination: idx === 0 ? destShort : r.destination,
-        }));
+      mapInstanceRef.current = map;
+      geocoderRef.current = new window.google.maps.Geocoder();
+
+      // Directions Renderer
+      const directionsRenderer = new window.google.maps.DirectionsRenderer({
+        map,
+        suppressMarkers: true,
+        polylineOptions: {
+          strokeColor: "#0d6b63", // UniShare Teal
+          strokeWeight: 5,
+          strokeOpacity: 0.85,
+        },
+      });
+      directionsRendererRef.current = directionsRenderer;
+
+      // Pickup Marker (Green Pin A)
+      pickupMarkerRef.current = new window.google.maps.Marker({
+        position: pickupCoords,
+        map,
+        title: "Pickup Spot",
+        label: { text: "A", color: "#ffffff", fontWeight: "bold" },
+        icon: {
+          path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z",
+          fillColor: "#1e8e3e",
+          fillOpacity: 1,
+          strokeColor: "#ffffff",
+          strokeWeight: 2,
+          scale: 1.6,
+          anchor: new window.google.maps.Point(12, 22),
+          labelOrigin: new window.google.maps.Point(12, 9),
+        },
+        draggable: true,
+      });
+
+      // Destination Marker (Red Pin B)
+      destMarkerRef.current = new window.google.maps.Marker({
+        position: destCoords,
+        map,
+        title: "Destination",
+        label: { text: "B", color: "#ffffff", fontWeight: "bold" },
+        icon: {
+          path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z",
+          fillColor: "#d93025",
+          fillOpacity: 1,
+          strokeColor: "#ffffff",
+          strokeWeight: 2,
+          scale: 1.6,
+          anchor: new window.google.maps.Point(12, 22),
+          labelOrigin: new window.google.maps.Point(12, 9),
+        },
+        draggable: true,
+      });
+
+      // Allow dragging markers to update location
+      pickupMarkerRef.current.addListener("dragend", (e: any) => {
+        const lat = e.latLng.lat();
+        const lng = e.latLng.lng();
+        setPickupCoords({ lat, lng });
+        reverseGeocode({ lat, lng }, true);
+      });
+
+      destMarkerRef.current.addListener("dragend", (e: any) => {
+        const lat = e.latLng.lat();
+        const lng = e.latLng.lng();
+        setDestCoords({ lat, lng });
+        reverseGeocode({ lat, lng }, false);
+      });
+
+      // Click on Map to Select Pickup or Destination
+      map.addListener("click", (e: any) => {
+        const lat = e.latLng.lat();
+        const lng = e.latLng.lng();
+
+        if (mapPickModeRef.current === "pickup") {
+          setPickupCoords({ lat, lng });
+          if (pickupMarkerRef.current) pickupMarkerRef.current.setPosition({ lat, lng });
+          reverseGeocode({ lat, lng }, true);
+          setMapPickMode("none");
+        } else if (mapPickModeRef.current === "destination") {
+          setDestCoords({ lat, lng });
+          if (destMarkerRef.current) destMarkerRef.current.setPosition({ lat, lng });
+          reverseGeocode({ lat, lng }, false);
+          setMapPickMode("none");
+        } else {
+          // Default click sets destination
+          setDestCoords({ lat, lng });
+          if (destMarkerRef.current) destMarkerRef.current.setPosition({ lat, lng });
+          reverseGeocode({ lat, lng }, false);
+        }
+      });
+
+      // Bind Google Places Autocomplete on destination input
+      if (window.google?.maps?.places?.Autocomplete && destInputRef.current) {
+        const destAuto = new window.google.maps.places.Autocomplete(destInputRef.current, {
+          componentRestrictions: { country: "bd" },
+          fields: ["formatted_address", "geometry", "name"],
+        });
+
+        destAuto.addListener("place_changed", () => {
+          const place = destAuto.getPlace();
+          if (place.geometry?.location) {
+            const lat = place.geometry.location.lat();
+            const lng = place.geometry.location.lng();
+            const name = place.name || place.formatted_address || "Selected Destination";
+            setDestination(name);
+            setDestCoords({ lat, lng });
+            if (destMarkerRef.current) destMarkerRef.current.setPosition({ lat, lng });
+            map.panTo({ lat, lng });
+            showToast(`🎯 Destination set: ${name}`);
+          }
+        });
       }
 
-      const matchedRides = filtered.slice(0, 4);
-      setSearchResults(matchedRides);
-      setHasSearched(true);
-      showToast(`Found ${matchedRides.length} available campus rides below!`);
+      // Bind Google Places Autocomplete on pickup input
+      if (window.google?.maps?.places?.Autocomplete && pickupInputRef.current) {
+        const pickupAuto = new window.google.maps.places.Autocomplete(pickupInputRef.current, {
+          componentRestrictions: { country: "bd" },
+          fields: ["formatted_address", "geometry", "name"],
+        });
 
-      // Gentle smooth scroll to search results transition
-      setTimeout(() => {
-        resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 120);
-    }, 1800);
-  };
+        pickupAuto.addListener("place_changed", () => {
+          const place = pickupAuto.getPlace();
+          if (place.geometry?.location) {
+            const lat = place.geometry.location.lat();
+            const lng = place.geometry.location.lng();
+            const name = place.name || place.formatted_address || "Selected Pickup";
+            setPickup(name);
+            setPickupCoords({ lat, lng });
+            if (pickupMarkerRef.current) pickupMarkerRef.current.setPosition({ lat, lng });
+            map.panTo({ lat, lng });
+            showToast(`📍 Pickup set: ${name}`);
+          }
+        });
+      }
+    } catch (err) {
+      console.error("Google Maps initialization error:", err);
+    }
+  }, [isGoogleMapsReady, showToast]);
 
-  // Send Ride Request (Adds to My Requests)
-  const handleSendRequest = (ride: CampusRide) => {
-    if (myRequests.some((r) => r.id === ride.id)) {
-      showToast(`Request already sent to ${ride.hostName}. Check "My requests" tab.`);
+  // Reverse Geocode Helper
+  const reverseGeocode = (coords: { lat: number; lng: number }, isPickup: boolean) => {
+    if (!geocoderRef.current) {
+      // Canvas fallback
+      const nearest = DHAKA_CANVAS_LANDMARKS.reduce((prev, curr) => {
+        const d1 = Math.hypot(prev.lat - coords.lat, prev.lng - coords.lng);
+        const d2 = Math.hypot(curr.lat - coords.lat, curr.lng - coords.lng);
+        return d1 < d2 ? prev : curr;
+      });
+      if (isPickup) {
+        setPickup(nearest.name);
+        showToast(`📍 Pickup set: ${nearest.name}`);
+      } else {
+        setDestination(nearest.name);
+        showToast(`🎯 Destination set: ${nearest.name}`);
+      }
       return;
     }
-    setMyRequests((prev) => [ride, ...prev]);
-    showToast(`Ride request sent to ${ride.hostName}! Check "My requests" to chat and connect.`);
+
+    geocoderRef.current.geocode({ location: coords }, (results: any, status: any) => {
+      let resolved = `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`;
+      if (status === "OK" && results?.[0]) {
+        resolved = results[0].formatted_address.replace(", Bangladesh", "");
+      }
+      if (isPickup) {
+        setPickup(resolved);
+        showToast(`📍 Pickup set: ${resolved.split(",")[0]}`);
+      } else {
+        setDestination(resolved);
+        showToast(`🎯 Destination set: ${resolved.split(",")[0]}`);
+      }
+    });
   };
 
-  // Cancel Request
-  const handleCancelRequest = (rideId: string) => {
-    setMyRequests((prev) => prev.filter((r) => r.id !== rideId));
-    showToast("Ride request cancelled.");
-  };
+  // -----------------------------------------------------------
+  // 4. Draw Route via Google Routes / DirectionsService
+  // -----------------------------------------------------------
+  useEffect(() => {
+    if (!pickupCoords || !destCoords) return;
 
-  // Open Companion Direct Chat
-  const handleOpenChat = (ride: CampusRide) => {
-    setChatPeer(ride);
-    setChatMessages([
-      {
-        id: "msg-1",
-        sender: "peer",
-        text: `Hey! I'm leaving from ${ride.origin} soon. Are you ready to share the ride to ${ride.destination}?`,
-        time: "Just now",
-      },
-    ]);
-    setChatInputText("");
-  };
+    // Update marker positions
+    if (pickupMarkerRef.current) pickupMarkerRef.current.setPosition(pickupCoords);
+    if (destMarkerRef.current) destMarkerRef.current.setPosition(destCoords);
 
-  // Send Direct Message to Companion
-  const handleSendMessage = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!chatInputText.trim() || !chatPeer) return;
-    const userMsg = {
-      id: `msg-${Date.now()}`,
-      sender: "user" as const,
-      text: chatInputText.trim(),
-      time: "Just now",
-    };
-    setChatMessages((prev) => [...prev, userMsg]);
-    setChatInputText("");
-
-    setTimeout(() => {
-      setChatMessages((prev) => [
-        ...prev,
+    // Call Google Routes API
+    if (isGoogleMapsReady && window.google?.maps?.DirectionsService && directionsRendererRef.current) {
+      const directionsService = new window.google.maps.DirectionsService();
+      directionsService.route(
         {
-          id: `msg-${Date.now() + 1}`,
-          sender: "peer",
-          text: `Great! See you at the pickup point in 5 minutes 👍`,
-          time: "Just now",
+          origin: pickupCoords,
+          destination: destCoords,
+          travelMode: window.google.maps.TravelMode.DRIVING,
         },
-      ]);
-    }, 1200);
-  };
-
-  // Cancel Search
-  const handleCancelSearch = () => {
-    setIsPathaoSearching(false);
-    showToast("Ride search cancelled.");
-  };
-
-  // View Ride Details Modal
-  const handleViewDetails = (ride: CampusRide) => {
-    setSelectedRideForDetails(ride);
-  };
-
-  // Start Ride
-  const handleStartRide = (ride: CampusRide) => {
-    setSelectedRideForDetails(null);
-    setActiveRideInProgress(ride);
-    showToast(`Ride in progress with ${ride.hostName}! Direct connection active.`);
-  };
-
-  // Finish Ride & Open Rating Modal
-  const handleFinishRide = () => {
-    if (activeRideInProgress) {
-      setRideBeingRated(activeRideInProgress);
-      setActiveRideInProgress(null);
-      setShowRatingModal(true);
-      setRatingScore(5);
-      setSelectedFeedbackTags(["🎯 Punctual & On Time", "🛡️ Felt Very Safe"]);
-      setFeedbackComment("");
+        (result: any, status: any) => {
+          if (status === "OK" && result?.routes?.[0]?.legs?.[0]) {
+            directionsRendererRef.current.setDirections(result);
+            const leg = result.routes[0].legs[0];
+            setRouteInfo({
+              distanceText: leg.distance?.text || "6.4 km",
+              durationText: leg.duration?.text ? `~${leg.duration.text}` : "~18 mins",
+              summary: result.routes[0].summary ? `via ${result.routes[0].summary}` : "via Mirpur Rd",
+            });
+          }
+        }
+      );
+    } else {
+      // Calculate realistic Dhaka route estimate mathematically
+      const km = (
+        Math.hypot(destCoords.lat - pickupCoords.lat, destCoords.lng - pickupCoords.lng) * 111
+      ).toFixed(1);
+      const estMins = Math.round(Number(km) * 2.8 + 5);
+      setRouteInfo({
+        distanceText: `${km} km`,
+        durationText: `~${estMins} mins`,
+        summary: "via Mirpur Rd & Shahbagh",
+      });
     }
-  };
+  }, [pickupCoords, destCoords, isGoogleMapsReady]);
 
-  // Submit Rating
-  const handleSubmitRating = () => {
-    if (rideBeingRated) {
-      showToast(`Thank you! Your ${ratingScore}-star rating for ${rideBeingRated.hostName} was submitted.`);
+  // -----------------------------------------------------------
+  // 5. GPS Current Location Detector
+  // -----------------------------------------------------------
+  const handleUseCurrentLocation = () => {
+    if (typeof window === "undefined" || !("geolocation" in navigator)) {
+      showToast("⚠️ Geolocation is not supported in this browser.");
+      return;
     }
-    setShowRatingModal(false);
-    setRideBeingRated(null);
-  };
 
-  // Toggle Feedback Tag
-  const toggleFeedbackTag = (tag: string) => {
-    setSelectedFeedbackTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    setIsLocatingGps(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setIsLocatingGps(false);
+        const { latitude, longitude, accuracy } = pos.coords;
+        const currentCoord = { lat: latitude, lng: longitude };
+
+        setGpsCoords({ lat: latitude, lng: longitude, accuracy });
+        setPickupCoords(currentCoord);
+
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.panTo(currentCoord);
+          mapInstanceRef.current.setZoom(15);
+
+          // Add or update GPS Blue Marker
+          if (!gpsMarkerRef.current) {
+            gpsMarkerRef.current = new window.google.maps.Marker({
+              position: currentCoord,
+              map: mapInstanceRef.current,
+              title: "Your GPS Location",
+              icon: {
+                path: window.google.maps.SymbolPath.CIRCLE,
+                scale: 8,
+                fillColor: "#1a73e8",
+                fillOpacity: 1,
+                strokeColor: "#ffffff",
+                strokeWeight: 2.5,
+              },
+            });
+          } else {
+            gpsMarkerRef.current.setPosition(currentCoord);
+          }
+        }
+
+        reverseGeocode(currentCoord, true);
+        showToast("📍 Real-time GPS location detected!");
+      },
+      (err) => {
+        setIsLocatingGps(false);
+        console.warn("GPS error:", err);
+        showToast("📍 Using saved campus hub (GPS permission unavailable).");
+      },
+      { enableHighAccuracy: true, timeout: 6000 }
     );
   };
 
+  // Zoom controls for both Google Maps & Fallback Canvas
+  const handleZoom = (delta: number) => {
+    if (mapInstanceRef.current) {
+      const currentZoom = mapInstanceRef.current.getZoom() || 13;
+      mapInstanceRef.current.setZoom(currentZoom + delta);
+    } else {
+      setZoomScale((prev) => Math.max(0.7, Math.min(prev + delta * 0.15, 1.6)));
+    }
+  };
+
+  // -----------------------------------------------------------
+  // 6. Find Travel Partners Action
+  // -----------------------------------------------------------
+  const handleFindPartners = () => {
+    if (!pickup.trim()) {
+      showToast("⚠️ Please select a pickup location.");
+      pickupInputRef.current?.focus();
+      return;
+    }
+    if (!destination.trim()) {
+      showToast("⚠️ Please select your destination.");
+      destInputRef.current?.focus();
+      return;
+    }
+
+    setIsSearching(true);
+    setTimeout(() => {
+      setIsSearching(false);
+      setHasSubmittedSearch(true);
+      showToast("🎯 Route indexed! Ready to match with campus peers.");
+    }, 450);
+  };
+
   return (
-    <div className="unishare-rides-page">
-      <AppNavbar
-        activeNav="rides"
-        user={currentUser}
-        onSos={() =>
-          showToast(
-            "Emergency SOS: Dhaka University Proctorial Team contacted."
-          )
-        }
-      />
+    <div className="unishare-rides-container">
+      {/* Top Application Navbar */}
+      <AppNavbar activeNav="rides" />
 
-      {/* Main Container */}
-      <main className="wrap">
-        <div className="crumb">Home / Rides</div>
+      {/* Mobile Screen Tab Toggle */}
+      <div className="mobile-view-toggle-bar">
+        <button
+          type="button"
+          className={`mobile-toggle-btn ${mobileTab === "sidebar" ? "active" : ""}`}
+          onClick={() => setMobileTab("sidebar")}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+            <line x1="4" y1="6" x2="20" y2="6" />
+            <line x1="4" y1="12" x2="20" y2="12" />
+            <line x1="4" y1="18" x2="20" y2="18" />
+          </svg>
+          Journey Setup
+        </button>
+        <button
+          type="button"
+          className={`mobile-toggle-btn ${mobileTab === "map" ? "active" : ""}`}
+          onClick={() => setMobileTab("map")}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+            <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" />
+            <line x1="8" y1="2" x2="8" y2="18" />
+            <line x1="16" y1="6" x2="16" y2="22" />
+          </svg>
+          Google Map
+        </button>
+      </div>
 
-        {/* Heading & Offer a Ride */}
-        <div className="head">
-          <div>
-            <div className="eyebrow">YOUR CAMPUS, SAME DIRECTION</div>
-            <h1>Same way? Share the ride.</h1>
-            <div className="sub">Car or rickshaw, find your way to campus with a fellow {currentUser.university} student.</div>
-          </div>
-          <button
-            className="btn"
-            onClick={() => showToast(`Offer a ride: verified ${currentUser.university} driver portal opening soon.`)}
-          >
-            <svg viewBox="0 0 24 24">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            Offer a ride
-          </button>
-        </div>
-
-        {/* Notice Banner */}
-        <div className="notice">
-          <div style={{ display: "flex", gap: "14px", alignItems: "center" }}>
-            <svg className="i" viewBox="0 0 24 24">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-              <path d="m9 12 2 2 4-4" />
-            </svg>
+      {/* Main Two-Column Google Maps Split Layout */}
+      <div className="rides-split-layout">
+        {/* =====================================================
+            LEFT SIDEBAR: CONTROLS & JOURNEY PREFERENCES
+            ===================================================== */}
+        <aside className={`rides-sidebar ${mobileTab === "map" ? "hide-mobile" : ""}`}>
+          <div className="rides-sidebar-scroll">
+            {/* Header / Eyebrow */}
             <div>
-              <div className="t">{currentUser.university}</div>
-              <div className="d">Only your university. Every ride here is from a verified {currentUser.university} student.</div>
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: "18px", alignItems: "center" }}>
-            <span className="badge">✓ Verified student</span>
-            <svg className="i" viewBox="0 0 24 24">
-              <rect x="4" y="11" width="16" height="10" rx="2" />
-              <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-            </svg>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="tabs">
-          <button
-            className={activeTab === "find" ? "on" : ""}
-            onClick={() => setActiveTab("find")}
-          >
-            Find a ride
-          </button>
-          <button
-            className={activeTab === "requests" ? "on" : ""}
-            onClick={() => setActiveTab("requests")}
-          >
-            My requests
-            {myRequests.length > 0 && (
-              <span style={{ marginLeft: "7px", fontSize: "11px", background: "var(--teal)", color: "#ffffff", padding: "1px 7px", borderRadius: "999px", fontWeight: "600" }}>
-                {myRequests.length}
-              </span>
-            )}
-          </button>
-          <button
-            className={activeTab === "created" ? "on" : ""}
-            onClick={() => {
-              setActiveTab("created");
-              showToast("My created rides: 0 active rides posted.");
-            }}
-          >
-            My created rides
-          </button>
-        </div>
-
-        {/* =========================================================
-           FIND A RIDE TAB (Google Maps & Search Form)
-           ========================================================= */}
-        {activeTab === "find" && (
-          <>
-            <div className="google-map-wrapper">
-              <div className="map-top-bar">
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--teal)", fontWeight: 700 }}>
-                    <span className="radar-pulse-dot" />
-                    <span>Google Maps Dhaka Corridor</span>
-                  </div>
-                  <div className="map-quick-dest-group">
-                    <span style={{ fontSize: "11px", color: "var(--mute)", marginRight: "2px" }}>Quick Destination:</span>
-                    {QUICK_CAMPUS_DESTINATIONS.map((dest) => (
-                      <button
-                        key={dest.name}
-                        type="button"
-                        className={`map-quick-dest-pill ${goingTo.includes(dest.name.split(",")[0]) ? "active" : ""}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setGoingTo(dest.fullName);
-                          showToast(`Destination set: ${dest.name}`);
-                        }}
-                      >
-                        {dest.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div style={{ fontSize: "12px", color: "var(--mute)" }}>
-                  Route: <strong style={{ color: "var(--teal)" }}>{leavingFrom.split(",")[0]}</strong> ➔{" "}
-                  <strong style={{ color: "#ea4335" }}>{goingTo.split(",")[0]}</strong> · ~12 mins (4.2 km)
-                </div>
-              </div>
-
-              <div className="google-map-canvas" onClick={handleMapCanvasClick} title="Click anywhere on the map to set destination">
-                {/* Realistic Dhaka Google Maps Vector Graphic */}
-                <svg className="gmap-svg" viewBox="0 0 1000 420" preserveAspectRatio="none">
-                  <rect width="1000" height="420" fill="#f4f3f0" />
-
-                  {/* Water Bodies (Dhanmondi Lake & Hatirjheel) */}
-                  <path className="gmap-water" d="M290,140 Q310,210 330,260 T350,320 T330,380 Q310,340 300,260 Z" />
-                  <path className="gmap-water" d="M510,140 Q570,120 640,150 T730,170 Q690,195 620,185 T520,170 Z" />
-
-                  {/* Greenery / Campus Parks (Suhrawardy Udyan, Ramna Park, Chandrima) */}
-                  <rect x="420" y="260" width="100" height="85" rx="12" className="gmap-park" />
-                  <rect x="450" y="170" width="85" height="55" rx="10" className="gmap-park" />
-                  <rect x="270" y="270" width="40" height="60" rx="8" className="gmap-park" />
-
-                  {/* Secondary Street Grid (White Streets across Dhaka) */}
-                  <g stroke="#ffffff" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M180,90 L380,90 L580,100 L780,100" />
-                    <path d="M150,150 L340,150 L520,160 L800,160" />
-                    <path d="M160,210 L310,210 L450,220 L760,220" />
-                    <path d="M200,270 L340,270 L500,280 L790,280" />
-                    <path d="M170,330 L360,330 L550,340 L820,340" />
-                    <path d="M230,40 L230,380" />
-                    <path d="M370,50 L370,390" />
-                    <path d="M440,60 L440,400" />
-                    <path d="M520,50 L520,390" />
-                    <path d="M600,40 L600,380" />
-                    <path d="M720,50 L720,390" />
-                  </g>
-
-                  {/* Yellow Highways (Mirpur Road & Kazi Nazrul Islam Ave) */}
-                  <path className="gmap-highway-border" d="M240,30 L270,130 L300,230 L340,340 L370,410" />
-                  <path className="gmap-highway" d="M240,30 L270,130 L300,230 L340,340 L370,410" />
-                  <path className="gmap-highway-border" d="M470,410 L455,300 L485,210 L535,130 L590,30" />
-                  <path className="gmap-highway" d="M470,410 L455,300 L485,210 L535,130 L590,30" />
-
-                  {/* Blue Arterial Corridors (Tejgaon / Shahbagh Link) */}
-                  <path d="M270,130 L455,130 L640,150 L730,170" stroke="#93c5fd" strokeWidth="6" strokeLinecap="round" fill="none" />
-                  <path d="M300,230 L470,230 L580,240 L760,240" stroke="#93c5fd" strokeWidth="6" strokeLinecap="round" fill="none" />
-
-                  {/* Dynamic Route Line from Pickup to Destination */}
-                  <path d={routeCurvePath} className="gmap-route-line" stroke="#1a73e8" strokeWidth="6" fill="none" strokeLinecap="round" />
-                  <path d={routeCurvePath} className="gmap-route-dash" stroke="#ffffff" strokeWidth="2.5" fill="none" strokeLinecap="round" />
-
-                  {/* Google Maps Landmark Icons */}
-                  {/* BSMMU / PG Hospital */}
-                  <circle cx="445" cy="305" r="9" fill="#ea4335" />
-                  <text x="445" y="309" fill="#ffffff" fontSize="9" fontWeight="bold" textAnchor="middle">H</text>
-                  <text x="460" y="308" fill="#5f6368" fontSize="10" fontWeight="600">PG Hospital</text>
-
-                  {/* IBN Sina Hospital */}
-                  <circle cx="280" cy="180" r="9" fill="#ea4335" />
-                  <text x="280" y="184" fill="#ffffff" fontSize="9" fontWeight="bold" textAnchor="middle">H</text>
-                  <text x="294" y="183" fill="#5f6368" fontSize="10" fontWeight="600">IBN Sina</text>
-
-                  {/* East West University */}
-                  <text x="735" y="145" fill="#1a73e8" fontSize="10" fontWeight="600">🎓 East West Univ</text>
-
-                  {/* Area Labels */}
-                  <text x="190" y="150" fill="#70757a" fontSize="11" fontWeight="600">Mohammadpur</text>
-                  <text x="490" y="155" fill="#70757a" fontSize="11" fontWeight="600">Tejgaon</text>
-                  <text x="420" y="260" fill="#70757a" fontSize="11" fontWeight="600">Farmgate</text>
-                  <text x="430" y="325" fill="#70757a" fontSize="11" fontWeight="600">Shahbagh</text>
-                  <text x="560" y="155" fill="#188038" fontSize="11" fontWeight="700">Hatirjheel</text>
-                  <text x="730" y="200" fill="#70757a" fontSize="11" fontWeight="600">Rampura</text>
-
-                  {/* Live Student Rides (Uber-style tiny vehicle icons on the roads) */}
-                  <g transform="translate(360, 130) rotate(-15)">
-                    <rect x="-8" y="-4" width="16" height="8" rx="2" fill="#ffffff" stroke="#374151" strokeWidth="1" />
-                    <rect x="-4" y="-3" width="8" height="6" rx="1" fill="#1f2937" />
-                  </g>
-                  <g transform="translate(480, 210) rotate(70)">
-                    <rect x="-8" y="-4" width="16" height="8" rx="2" fill="#ffffff" stroke="#374151" strokeWidth="1" />
-                    <rect x="-4" y="-3" width="8" height="6" rx="1" fill="#1f2937" />
-                  </g>
-                  <g transform="translate(310, 270) rotate(-45)">
-                    <rect x="-8" y="-4" width="16" height="8" rx="2" fill="#ffffff" stroke="#374151" strokeWidth="1" />
-                    <rect x="-4" y="-3" width="8" height="6" rx="1" fill="#1f2937" />
-                  </g>
-                  <g transform="translate(530, 280) rotate(10)">
-                    <rect x="-8" y="-4" width="16" height="8" rx="2" fill="#ffffff" stroke="#374151" strokeWidth="1" />
-                    <rect x="-4" y="-3" width="8" height="6" rx="1" fill="#1f2937" />
-                  </g>
-                </svg>
-
-                {/* Main Destination Marker (Red Pin with Drop-off Name - Clean & Uncluttered) */}
-                <div
-                  style={{
-                    position: "absolute",
-                    left: destCoords.left,
-                    top: destCoords.top,
-                    transform: "translate(-50%, -100%)",
-                    zIndex: 25,
-                    pointerEvents: "none",
-                    transition: "all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)",
-                  }}
-                >
-                  <div
-                    style={{
-                      background: "#ea4335",
-                      color: "#ffffff",
-                      fontSize: "11px",
-                      fontWeight: "700",
-                      padding: "4px 8px",
-                      borderRadius: "6px",
-                      boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
-                      whiteSpace: "nowrap",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "4px",
-                    }}
-                  >
-                    <span>🏁</span>
-                    <span>Drop-off: {goingTo.split(",")[0]}</span>
-                  </div>
-                </div>
-
-                {/* Main Pickup Marker (Black Pill with Car & Pulse Ring - Clean & Uncluttered) */}
-                <div
-                  style={{
-                    position: "absolute",
-                    left: originCoords.left,
-                    top: originCoords.top,
-                    transform: "translate(-50%, -100%)",
-                    zIndex: 24,
-                    pointerEvents: "none",
-                    transition: "all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)",
-                  }}
-                >
-                  <div
-                    style={{
-                      background: "#1d2b2a",
-                      color: "#ffffff",
-                      fontSize: "11px",
-                      fontWeight: "700",
-                      padding: "4px 8px",
-                      borderRadius: "6px",
-                      boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
-                      whiteSpace: "nowrap",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "4px",
-                    }}
-                  >
-                    <span>🚗</span>
-                    <span>Pickup: {leavingFrom.split(",")[0]}</span>
-                  </div>
-                </div>
-
-                {/* Google Attribution & Control Buttons */}
-                <div className="gmap-google-logo">Google</div>
-                <div className="gmap-attribution">Map Data ©2026 Google</div>
-
-                <div className="gmap-zoom-controls">
-                  <button
-                    type="button"
-                    className="gmap-recenter-btn"
-                    title="Recenter to my current location"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleAutoDetectLocation();
-                    }}
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="12" r="3" />
-                      <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
-                      <circle cx="12" cy="12" r="8" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    className="gmap-zoom-btn"
-                    title="Zoom in"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      showToast("Zoom in (+)");
-                    }}
-                  >
-                    +
-                  </button>
-                  <button
-                    type="button"
-                    className="gmap-zoom-btn"
-                    title="Zoom out"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      showToast("Zoom out (−)");
-                    }}
-                  >
-                    −
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Search Console (Below Map) */}
-            <section className="search">
-              <form className="row" onSubmit={handleTriggerSearch}>
-                {/* 1. Leaving From (Auto-Location GPS detect) */}
-                <div>
-                  <label className="l">Leaving from</label>
-                  <div className="field">
-                    <input
-                      value={leavingFrom}
-                      onChange={(e) => setLeavingFrom(e.target.value)}
-                      placeholder="e.g. Dhanmondi, Mirpur"
-                    />
-                    <button
-                      type="button"
-                      className="icon-action-btn"
-                      title="Auto-detect my current GPS location"
-                      onClick={handleAutoDetectLocation}
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: isDetectingLocation ? "#10b981" : "var(--teal)" }}>
-                        <circle cx="12" cy="12" r="3" />
-                        <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
-                        <circle cx="12" cy="12" r="8" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-
-                {/* 2. Going To (Search any location in Bangladesh from Google Maps) */}
-                <div ref={dropdownRef} style={{ position: "relative" }}>
-                  <label className="l">Going to</label>
-                  <div className="field">
-                    <input
-                      value={goingTo}
-                      onChange={(e) => {
-                        setGoingTo(e.target.value);
-                        setShowGoingToDropdown(true);
-                      }}
-                      onFocus={() => setShowGoingToDropdown(true)}
-                      placeholder="Search any place in Bangladesh..."
-                    />
-                    <button
-                      type="button"
-                      className="icon-action-btn"
-                      title="Search location in Bangladesh"
-                      onClick={() => setShowGoingToDropdown(!showGoingToDropdown)}
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <circle cx="11" cy="11" r="7" />
-                        <path d="m20 20-4-4" />
-                      </svg>
-                    </button>
-                  </div>
-
-                  {/* Bangladesh Google Maps Autocomplete Dropdown */}
-                  {showGoingToDropdown && (
-                    <div className="places-autocomplete-dropdown">
-                      <div style={{ padding: "8px 14px", fontSize: "11px", fontWeight: "700", color: "var(--mute)", background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-                        GOOGLE MAPS BANGLADESH LOCATIONS
-                      </div>
-                      {placeSuggestions.map((place) => (
-                        <div
-                          key={place}
-                          className="place-suggestion-item"
-                          onClick={() => {
-                            setGoingTo(place);
-                            setShowGoingToDropdown(false);
-                            showToast(`Destination set: ${place}`);
-                          }}
-                        >
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: "var(--teal)", flexShrink: 0 }}>
-                            <path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z" />
-                            <circle cx="12" cy="10" r="2.5" />
-                          </svg>
-                          <span>{place}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* 3. Gender Preference */}
-                <div>
-                  <label className="l">Gender preference</label>
-                  <div className="field select-field">
-                    <select
-                      value={genderFilter}
-                      onChange={(e) =>
-                        setGenderFilter(
-                          e.target.value as
-                            | "any"
-                            | "women_only"
-                            | "men_only"
-                            | "no_preference"
-                        )
-                      }
-                    >
-                      <option value="any">Any preference</option>
-                      <option value="women_only">Women only</option>
-                      <option value="men_only">Men only</option>
-                      <option value="no_preference">No preference</option>
-                    </select>
-                    <svg className="select-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                      <path d="m6 9 6 6 6-6" />
-                    </svg>
-                  </div>
-                </div>
-
-                {/* 4. Vehicle Type */}
-                <div>
-                  <label className="l">Vehicle type</label>
-                  <div className="field select-field">
-                    <select
-                      value={vehicleFilter}
-                      onChange={(e) =>
-                        setVehicleFilter(
-                          e.target.value as "all" | "Car" | "Rickshaw"
-                        )
-                      }
-                    >
-                      <option value="all">All vehicles</option>
-                      <option value="Car">Car</option>
-                      <option value="Rickshaw">Rickshaw</option>
-                    </select>
-                    <svg className="select-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                      <path d="m6 9 6 6 6-6" />
-                    </svg>
-                  </div>
-                </div>
-
-                {/* 5. Search Rides Button */}
-                <button type="submit" className="btn lg">
-                  <svg viewBox="0 0 24 24">
-                    <circle cx="11" cy="11" r="7" />
-                    <path d="m20 20-4-4" />
+              <div className="rides-header-eyebrow">
+                <span className="rides-badge-pill">Campus Ride Sharing</span>
+                <span className="verified-indicator">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                   </svg>
-                  Search rides
-                </button>
-              </form>
-
-              <div className="hint">
-                <span>Search any neighborhood in Dhaka or Bangladesh, or click directly on the Google Map above to set destination.</span>
-                <span style={{ color: "var(--teal)", fontWeight: 600 }}>
-                  🗺️ Google Maps Live Navigation
+                  Verified Students Only
                 </span>
               </div>
-            </section>
-
-            {/* Found Search Results (Available Rides) */}
-            {hasSearched && (
-              <section ref={resultsRef} className="found-rides-section results-entrance-anim" style={{ marginTop: "28px" }}>
-                <div className="found-rides-header">
-                  <div>
-                    <h2>Available Campus Rides ({searchResults.length})</h2>
-                    <p>Verified {currentUser.university} students heading your way. Click &quot;Request Ride&quot; to connect.</p>
-                  </div>
-                  <div style={{ fontSize: "12.5px", color: "var(--teal)", fontWeight: "600" }}>
-                    ✓ 2×2 Grid · Verified Campus Only
-                  </div>
-                </div>
-
-                {searchResults.length === 0 ? (
-                  <div style={{ padding: "40px 20px", textAlign: "center", background: "#f8faf9", borderRadius: "12px", border: "1px dashed var(--line)" }}>
-                    <p style={{ color: "var(--mute)", fontSize: "14.5px" }}>No matching rides found for this route filter.</p>
-                  </div>
-                ) : (
-                  <div className="found-rides-list">
-                    {searchResults.map((ride, idx) => {
-                      const isRequested = myRequests.some((r) => r.id === ride.id);
-                      return (
-                        <div key={ride.id} className={`found-ride-card found-ride-card-anim card-stagger-${idx}`}>
-                          {/* Route: Stops & Companion Preference */}
-                          <div className="card-route-body">
-                            <div className="card-stops-col">
-                              <div className="card-stop-row">
-                                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                                  <circle cx="12" cy="12" r="9" />
-                                  <circle cx="12" cy="12" r="3.5" fill="currentColor" />
-                                </svg>
-                                <span>{ride.origin}</span>
-                              </div>
-                              <div className="card-stop-row">
-                                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z" />
-                                  <circle cx="12" cy="10" r="2.5" />
-                                </svg>
-                                <span>{ride.destination}</span>
-                              </div>
-                              <div className="card-pref-text">
-                                {ride.preference}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Divider */}
-                          <div className="card-divider" />
-
-                          {/* Bottom: Verified Host Details + Actions */}
-                          <div className="card-bottom-bar">
-                            <div className="card-host-wrap">
-                              <div className="card-host-av">{ride.hostInitials}</div>
-                              <div>
-                                <div className="card-host-name">
-                                  {ride.hostName}
-                                  <span className="check-icon">✓</span>
-                                </div>
-                                <div className="card-host-sub">
-                                  Verified · {ride.hostUniversity} · {ride.vehicle}
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="card-actions-group">
-                              <button
-                                type="button"
-                                className="card-view-btn"
-                                onClick={() => handleViewDetails(ride)}
-                              >
-                                View details →
-                              </button>
-                              <button
-                                type="button"
-                                className={`card-request-btn ${isRequested ? "requested" : ""}`}
-                                onClick={() => handleSendRequest(ride)}
-                              >
-                                {isRequested ? "✓ Requested" : "Request Ride ➔"}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </section>
-            )}
-          </>
-        )}
-
-        {/* =========================================================
-       MY REQUESTS TAB (User's Requested Rides & Companion Messaging)
-       ========================================================= */}
-        {activeTab === "requests" && (
-          <div style={{ marginTop: "24px" }}>
-            {/* Active Ride In-Progress Banner */}
-            {activeRideInProgress && (
-              <div className="active-ride-banner">
-                <div className="active-ride-info">
-                  <div className="active-ride-pulse" />
-                  <div>
-                    <div style={{ fontSize: "15px", fontWeight: "700", color: "var(--ink)", display: "flex", alignItems: "center", gap: "6px" }}>
-                      Ride in Progress with {activeRideInProgress.hostName}
-                      <span style={{ fontSize: "12px", background: "var(--mint)", color: "var(--teal)", padding: "2px 8px", borderRadius: "999px" }}>
-                        {activeRideInProgress.vehicle}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: "13px", color: "var(--mute)", marginTop: "2px" }}>
-                      En route: {activeRideInProgress.origin} ➔ {activeRideInProgress.destination}
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                  <button
-                    type="button"
-                    className="card-chat-btn"
-                    onClick={() => handleOpenChat(activeRideInProgress)}
-                  >
-                    💬 Chat
-                  </button>
-                  <button
-                    type="button"
-                    className="finish-ride-btn"
-                    onClick={handleFinishRide}
-                  >
-                    Complete Ride & Leave Rating ⭐
-                  </button>
-                </div>
+              <div className="rides-title-block">
+                <h1>Destination Live Matching</h1>
+                <p>Find and travel with verified campus peers heading to the same destination.</p>
               </div>
-            )}
+            </div>
 
-            {myRequests.length === 0 ? (
-              <div className="empty-requests-box">
-                <div style={{ fontSize: "40px", marginBottom: "12px" }}>📭</div>
-                <h3 style={{ fontSize: "19px", fontWeight: "700", color: "var(--ink)", marginBottom: "6px" }}>
-                  No Active Ride Requests
-                </h3>
-                <p style={{ color: "var(--mute)", fontSize: "14px", maxWidth: "440px", margin: "0 auto 20px" }}>
-                  You have not requested any campus rides yet. Search for your route in &quot;Find a ride&quot; to connect with companions.
-                </p>
+            {/* -------------------------------------------------
+                1. PICKUP LOCATION
+                ------------------------------------------------- */}
+            <div className={`location-input-group ${mapPickMode === "pickup" ? "active-picking" : ""}`}>
+              <div className="input-label-row">
+                <span className="location-label pickup-label">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="12" cy="12" r="6" />
+                  </svg>
+                  Pickup Location
+                </span>
                 <button
                   type="button"
-                  className="btn"
-                  onClick={() => setActiveTab("find")}
+                  className={`map-pick-btn ${mapPickMode === "pickup" ? "active" : ""}`}
+                  onClick={() => setMapPickMode(mapPickMode === "pickup" ? "none" : "pickup")}
+                  title="Click to select pickup directly by clicking on the map"
                 >
-                  Find a Ride
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="16" />
+                    <line x1="8" y1="12" x2="16" y2="12" />
+                  </svg>
+                  {mapPickMode === "pickup" ? "Click map to set..." : "Pin on Map"}
                 </button>
               </div>
-            ) : (
-              <section className="found-rides-section" style={{ marginTop: "16px" }}>
-                <div className="found-rides-header">
-                  <div>
-                    <h2>My Ride Requests ({myRequests.length})</h2>
-                    <p>Your requested campus rides with verified {currentUser.university} companions. Chat directly or start your ride.</p>
-                  </div>
-                  <div style={{ fontSize: "12.5px", color: "var(--teal)", fontWeight: "600" }}>
-                    💬 Direct Messaging Active
-                  </div>
-                </div>
 
-                <div className="found-rides-list">
-                  {myRequests.map((ride) => (
-                    <div key={ride.id} className="found-ride-card">
-                      {/* Request Status Bar */}
-                      <div className="request-status-bar">
-                        <span className="request-status-pill accepted">
-                          ✓ Request Accepted · Ready to Travel
-                        </span>
-                        <button
-                          type="button"
-                          className="card-cancel-req-btn"
-                          onClick={() => handleCancelRequest(ride.id)}
-                          title="Cancel this request"
-                        >
-                          Cancel
-                        </button>
-                      </div>
+              <div className="input-field-wrapper">
+                <span className="input-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                </span>
+                <input
+                  ref={pickupInputRef}
+                  type="text"
+                  className="location-text-input"
+                  placeholder="Enter pickup point (or click Pin on Map)"
+                  value={pickup}
+                  onChange={(e) => {
+                    setPickup(e.target.value);
+                    setShowPickupAutocomplete(true);
+                  }}
+                  onFocus={() => setShowPickupAutocomplete(true)}
+                  aria-label="Pickup location search"
+                />
+                {pickup && (
+                  <button
+                    type="button"
+                    className="location-clear-btn"
+                    onClick={() => {
+                      setPickup("");
+                      pickupInputRef.current?.focus();
+                    }}
+                    aria-label="Clear pickup"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
 
-                      {/* Route: Stops & Companion Preference */}
-                      <div className="card-route-body">
-                        <div className="card-stops-col">
-                          <div className="card-stop-row">
-                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                              <circle cx="12" cy="12" r="9" />
-                              <circle cx="12" cy="12" r="3.5" fill="currentColor" />
-                            </svg>
-                            <span>{ride.origin}</span>
-                          </div>
-                          <div className="card-stop-row">
-                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z" />
-                              <circle cx="12" cy="10" r="2.5" />
-                            </svg>
-                            <span>{ride.destination}</span>
-                          </div>
-                          <div className="card-pref-text">
-                            {ride.preference}
-                          </div>
-                        </div>
-                      </div>
+              {/* GPS Current Location Button */}
+              <button
+                type="button"
+                className={`use-gps-btn ${isLocatingGps ? "locating" : ""}`}
+                onClick={handleUseCurrentLocation}
+                disabled={isLocatingGps}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M12 2v3m0 14v3M2 12h3m14 0h3" />
+                </svg>
+                {isLocatingGps ? "Acquiring GPS location..." : "Use Current Location using GPS"}
+              </button>
+            </div>
 
-                      {/* Divider */}
-                      <div className="card-divider" />
+            {/* -------------------------------------------------
+                2. DESTINATION LOCATION
+                ------------------------------------------------- */}
+            <div className={`location-input-group ${mapPickMode === "destination" ? "active-picking" : ""}`}>
+              <div className="input-label-row">
+                <span className="location-label dest-label">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z" />
+                  </svg>
+                  Destination
+                </span>
+                <button
+                  type="button"
+                  className={`map-pick-btn ${mapPickMode === "destination" ? "active" : ""}`}
+                  onClick={() => setMapPickMode(mapPickMode === "destination" ? "none" : "destination")}
+                  title="Click to select destination directly by clicking on the map"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="16" />
+                    <line x1="8" y1="12" x2="16" y2="12" />
+                  </svg>
+                  {mapPickMode === "destination" ? "Click map to set..." : "Pin on Map"}
+                </button>
+              </div>
 
-                      {/* Bottom: Verified Host Details + Chat & Start Actions */}
-                      <div className="card-bottom-bar">
-                        <div className="card-host-wrap">
-                          <div className="card-host-av">{ride.hostInitials}</div>
-                          <div>
-                            <div className="card-host-name">
-                              {ride.hostName}
-                              <span className="check-icon">✓</span>
-                            </div>
-                            <div className="card-host-sub">
-                              Verified · {ride.hostUniversity} · {ride.vehicle}
-                            </div>
-                          </div>
-                        </div>
+              <div className="input-field-wrapper">
+                <span className="input-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                </span>
+                <input
+                  ref={destInputRef}
+                  type="text"
+                  className="location-text-input"
+                  placeholder="Search destination (e.g. TSC, DU, Farmgate)"
+                  value={destination}
+                  onChange={(e) => {
+                    setDestination(e.target.value);
+                    setShowDestAutocomplete(true);
+                  }}
+                  onFocus={() => setShowDestAutocomplete(true)}
+                  aria-label="Destination search"
+                />
+                {destination && (
+                  <button
+                    type="button"
+                    className="location-clear-btn"
+                    onClick={() => {
+                      setDestination("");
+                      destInputRef.current?.focus();
+                    }}
+                    aria-label="Clear destination"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
 
-                        <div className="card-actions-group">
-                          <button
-                            type="button"
-                            className="card-chat-btn"
-                            onClick={() => handleOpenChat(ride)}
-                            title="Chat with companion"
-                          >
-                            💬 Chat
-                          </button>
-                          <button
-                            type="button"
-                            className="btn sm"
-                            style={{ padding: "7px 14px", fontSize: "13px" }}
-                            onClick={() => handleStartRide(ride)}
-                          >
-                            Start Ride
-                          </button>
-                        </div>
-                      </div>
-                    </div>
+              {/* Frequent Campus Hubs Shortcuts */}
+              <div className="quick-destinations-block">
+                <div className="quick-dest-label">Frequent Campus Hubs:</div>
+                <div className="quick-dest-chips">
+                  {QUICK_CAMPUS_DESTINATIONS.map((chip) => (
+                    <button
+                      key={chip.label}
+                      type="button"
+                      className={`dest-chip ${destination === chip.fullName ? "active" : ""}`}
+                      onClick={() => {
+                        setDestination(chip.fullName);
+                        setDestCoords({ lat: chip.lat, lng: chip.lng });
+                        if (mapInstanceRef.current) {
+                          mapInstanceRef.current.panTo({ lat: chip.lat, lng: chip.lng });
+                        }
+                        showToast(`🎯 Destination: ${chip.label}`);
+                      }}
+                    >
+                      {chip.label}
+                    </button>
                   ))}
                 </div>
-              </section>
-            )}
-          </div>
-        )}
+              </div>
+            </div>
 
-        {/* =========================================================
-       MY CREATED RIDES TAB
-       ========================================================= */}
-        {activeTab === "created" && (
-          <div style={{ padding: "60px 20px", textAlign: "center", background: "#f8faf9", borderRadius: "14px", border: "1px dashed var(--line)", marginTop: "24px" }}>
-            <div style={{ fontSize: "36px", marginBottom: "10px" }}>🚗</div>
-            <h3 style={{ fontSize: "18px", fontWeight: "700", color: "var(--ink)", marginBottom: "6px" }}>
-              My Created Rides (0)
-            </h3>
-            <p style={{ color: "var(--mute)", fontSize: "14px", maxWidth: "460px", margin: "0 auto 18px" }}>
-              You have not posted any rides yet. Verified {currentUser.university} driver portal is opening soon.
-            </p>
+            {/* -------------------------------------------------
+                3. GENDER PREFERENCE (Safety Filter)
+                ------------------------------------------------- */}
+            <div className="gender-preference-group">
+              <div className="gender-control-label">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+                Gender Preference
+              </div>
+
+              <div className="gender-segmented-control" role="radiogroup" aria-label="Gender Preference Selection">
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={genderPreference === "no_preference"}
+                  className={`gender-option-btn ${genderPreference === "no_preference" ? "selected" : ""}`}
+                  onClick={() => setGenderPreference("no_preference")}
+                >
+                  <span className="gender-icon">👥</span>
+                  <span>No Preference</span>
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={genderPreference === "women_only"}
+                  className={`gender-option-btn ${genderPreference === "women_only" ? "selected" : ""}`}
+                  onClick={() => setGenderPreference("women_only")}
+                >
+                  <span className="gender-icon">👩</span>
+                  <span>Women Only</span>
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={genderPreference === "men_only"}
+                  className={`gender-option-btn ${genderPreference === "men_only" ? "selected" : ""}`}
+                  onClick={() => setGenderPreference("men_only")}
+                >
+                  <span className="gender-icon">👨</span>
+                  <span>Men Only</span>
+                </button>
+              </div>
+
+              <div className="gender-safety-note">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="16" x2="12" y2="12" />
+                  <line x1="12" y1="8" x2="12.01" y2="8" />
+                </svg>
+                <span>
+                  Safety enforcement: Matching is restricted strictly to verified university students with approved academic emails.
+                </span>
+              </div>
+            </div>
+
+            {/* -------------------------------------------------
+                4. FIND TRAVEL PARTNERS ACTION BUTTON
+                ------------------------------------------------- */}
             <button
               type="button"
-              className="btn"
-              onClick={() => showToast(`Offer a ride: verified ${currentUser.university} driver portal opening soon.`)}
+              className="find-partners-btn"
+              onClick={handleFindPartners}
+              disabled={isSearching}
             >
-              Offer a Ride
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              {isSearching ? "Searching Corridor..." : "Find Travel Partners"}
+            </button>
+
+            {/* Honest Status Banner */}
+            {hasSubmittedSearch && (
+              <div className="search-status-banner">
+                <div className="search-status-header">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  Matching Parameters Ready
+                </div>
+                <div className="search-status-details">
+                  Selected corridor: <b>{pickup.split(",")[0]}</b> ➔ <b>{destination.split(",")[0]}</b> ({routeInfo.distanceText}, {routeInfo.durationText}).
+                  Filter: <b>{genderPreference === "no_preference" ? "All Verified Students" : genderPreference === "women_only" ? "Women Only" : "Men Only"}</b>.
+                </div>
+                <div className="search-status-footer">
+                  <span>🟢 Connected to live corridor network · Awaiting companion peer discovery</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </aside>
+
+        {/* =====================================================
+            MAP AREA: GOOGLE MAPS JAVASCRIPT SDK & INTERACTIVE CANVAS
+            ===================================================== */}
+        <main className={`rides-map-area ${mobileTab === "sidebar" ? "hide-mobile" : ""}`}>
+          {/* Active Picking Mode Instruction Banner */}
+          {mapPickMode !== "none" && (
+            <div className="map-mode-indicator-pill">
+              <span>
+                {mapPickMode === "pickup"
+                  ? "🎯 Click anywhere on the map to set PICKUP LOCATION"
+                  : "🎯 Click anywhere on the map to set DESTINATION"}
+              </span>
+              <button
+                type="button"
+                className="cancel-pick-btn"
+                onClick={() => setMapPickMode("none")}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+
+          {/* Map Provider Live Status Badge */}
+          <div className={`map-provider-status-badge ${isGoogleMapsReady ? "active" : "simulation"}`}>
+            <span className="dot" />
+            <span>
+              {isGoogleMapsReady ? "Google Maps JS SDK Active" : "Google Maps Campus Mode"}
+            </span>
+          </div>
+
+          {/* Floating Map Zoom & Recenter Controls */}
+          <div className="map-floating-controls">
+            <div className="map-control-group">
+              <button
+                type="button"
+                className="map-control-btn"
+                onClick={() => handleZoom(1)}
+                title="Zoom in"
+                aria-label="Zoom in"
+              >
+                +
+              </button>
+              <button
+                type="button"
+                className="map-control-btn"
+                onClick={() => handleZoom(-1)}
+                title="Zoom out"
+                aria-label="Zoom out"
+              >
+                −
+              </button>
+            </div>
+
+            <button
+              type="button"
+              className="map-control-btn"
+              onClick={handleUseCurrentLocation}
+              title="Recenter to My Current Location"
+              aria-label="Recenter to current GPS location"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M12 2v3m0 14v3M2 12h3m14 0h3" />
+              </svg>
+            </button>
+
+            <button
+              type="button"
+              className="map-control-btn"
+              onClick={() => {
+                if (mapInstanceRef.current) {
+                  const bounds = new window.google.maps.LatLngBounds();
+                  bounds.extend(pickupCoords);
+                  bounds.extend(destCoords);
+                  mapInstanceRef.current.fitBounds(bounds, 80);
+                } else {
+                  setZoomScale(1);
+                }
+                showToast("📍 Map centered to full travel route.");
+              }}
+              title="Fit Full Route"
+              aria-label="Fit entire travel corridor"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+              </svg>
             </button>
           </div>
-        )}
 
-        {/* Safety Box */}
-        <div className="safe" style={{ marginTop: "32px" }}>
-          <div className="t">
-            <svg className="i" viewBox="0 0 24 24">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-              <path d="m9 12 2 2 4-4" />
-            </svg>
-            A little safer, together
-          </div>
-          <p>
-            Meet at the agreed public pickup point, verify your host, and use SOS from the top navigation if you need help. Travel is strictly limited to verified university network members.
-          </p>
-        </div>
-      </main>
+          {/* 1. Live Google Maps JavaScript API Container */}
+          <div
+            ref={googleMapDivRef}
+            className={`google-map-element ${mapPickMode !== "none" ? "picking-cursor" : ""}`}
+            style={{ display: isGoogleMapsReady ? "block" : "none" }}
+          />
 
-      {/* Footer */}
-      <footer>
-        <div className="wrap">
-          <div>UniShare. Made for university students in Bangladesh.</div>
-          <div className="lk">
-            <Link href="#">Privacy</Link>
-            <Link href="#">Terms</Link>
-            <Link href="#" onClick={(e) => { e.preventDefault(); showToast("Support: support@unishare.online"); }}>
-              Get help
-            </Link>
-            <Link href="/login">Log out</Link>
-          </div>
-        </div>
-      </footer>
+          {/* 2. Interactive Dhaka Canvas Fallback (Active when API key is pending or loading) */}
+          {!isGoogleMapsReady && (
+            <svg
+              className={`interactive-map-canvas ${mapPickMode !== "none" ? "picking-cursor" : ""}`}
+              viewBox="0 0 1000 700"
+              preserveAspectRatio="xMidYMid meet"
+              onClick={(e) => {
+                const svgRect = e.currentTarget.getBoundingClientRect();
+                const clickX = ((e.clientX - svgRect.left) / svgRect.width) * 1000;
+                const clickY = ((e.clientY - svgRect.top) / svgRect.height) * 700;
 
-      {/* =========================================================
-         SEARCHING ANIMATION (Radar Pulse Scanning Overlay)
-         ========================================================= */}
-      {isPathaoSearching && (
-        <div className="pathao-search-overlay" onClick={handleCancelSearch}>
-          <div className="pathao-search-card" onClick={(e) => e.stopPropagation()}>
-            <div className="pathao-radar-ring-container">
-              <div className="pathao-ripple-1" />
-              <div className="pathao-ripple-2" />
-              <div className="pathao-ripple-3" />
-              <div className="pathao-center-veh-icon">
-                {vehicleFilter === "Rickshaw" ? (
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="5.5" cy="17.5" r="3.5" />
-                    <circle cx="18.5" cy="17.5" r="3.5" />
-                    <path d="M15 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm-3 11.5V14l-3-3 4-3 2 3h3" />
-                  </svg>
-                ) : (
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9C2.1 11.2 2 11.6 2 12v4c0 .6.4 1 1 1h2" />
-                    <circle cx="7" cy="17" r="2" />
-                    <path d="M9 17h6" />
-                    <circle cx="17" cy="17" r="2" />
-                  </svg>
-                )}
-              </div>
-            </div>
+                const nearest = DHAKA_CANVAS_LANDMARKS.reduce((prev, curr) => {
+                  const d1 = Math.hypot(prev.x - clickX, prev.y - clickY);
+                  const d2 = Math.hypot(curr.x - clickX, curr.y - clickY);
+                  return d1 < d2 ? prev : curr;
+                });
 
-            <div className="pathao-headline">Scanning Dhaka Corridor...</div>
-            <div className="pathao-subtext">
-              Looking for verified {currentUser.university} student rides heading from {leavingFrom.split(",")[0]} to {goingTo.split(",")[0]}
-            </div>
+                if (mapPickMode === "pickup") {
+                  setPickup(nearest.name);
+                  setPickupCoords({ lat: nearest.lat, lng: nearest.lng });
+                  setMapPickMode("none");
+                  showToast(`📍 Pickup set: ${nearest.name}`);
+                } else {
+                  setDestination(nearest.name);
+                  setDestCoords({ lat: nearest.lat, lng: nearest.lng });
+                  setMapPickMode("none");
+                  showToast(`🎯 Destination set: ${nearest.name}`);
+                }
+              }}
+              style={{ transform: `scale(${zoomScale})`, transformOrigin: "center center", transition: "transform 0.2s ease" }}
+              aria-label="Interactive Google Maps Canvas of Dhaka Campus Network"
+            >
+              <defs>
+                <filter id="mapShadow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feDropShadow dx="0" dy="3" stdDeviation="4" floodColor="#000000" floodOpacity="0.12" />
+                </filter>
+              </defs>
 
-            {/* Animated Indeterminate Progress Bar */}
-            <div className="pathao-progress-bar">
-              <div className="pathao-progress-fill" />
-            </div>
+              <rect x="0" y="0" width="1000" height="700" fill="#f4f3f0" />
 
-            {/* Route Summary */}
-            <div className="pathao-route-summary">
-              <div>
-                <span style={{ fontSize: "11px", color: "var(--mute)", display: "block" }}>Pickup</span>
-                <strong>{leavingFrom.split(",")[0]}</strong>
-              </div>
-              <span style={{ color: "var(--teal)", fontWeight: "bold" }}>➔</span>
-              <div>
-                <span style={{ fontSize: "11px", color: "var(--mute)", display: "block" }}>Destination</span>
-                <strong>{goingTo.split(",")[0]}</strong>
-              </div>
-            </div>
+              {/* Water bodies */}
+              <path className="svg-water-body" d="M 50 680 C 200 660, 400 670, 600 640 C 750 610, 850 630, 950 650 L 1000 700 L 0 700 Z" />
+              <path className="svg-water-body" d="M 280 340 C 310 370, 320 420, 310 460 C 295 440, 275 390, 280 340 Z" />
+              <path className="svg-water-body" d="M 610 320 C 660 300, 720 330, 780 320 C 820 310, 790 350, 740 370 C 680 390, 630 360, 610 320 Z" />
 
-            <button type="button" className="pathao-cancel-btn" onClick={handleCancelSearch}>
-              Cancel Request
-            </button>
-          </div>
-        </div>
-      )}
+              {/* Campus green zones */}
+              <path className="svg-green-space" d="M 450 490 C 500 480, 560 510, 560 570 C 520 590, 460 580, 440 540 Z" />
+              <rect x="490" y="440" width="70" height="45" rx="12" className="svg-green-space" />
+              <circle cx="330" cy="400" r="22" className="svg-green-space" />
 
-      {/* =========================================================
-         RIDE DETAILS MODAL
-         ========================================================= */}
-      {selectedRideForDetails && (
-        <div className="ride-modal-overlay" onClick={() => setSelectedRideForDetails(null)}>
-          <div className="ride-modal-card" onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "18px" }}>
-              <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-                <div className="card-host-av" style={{ width: "46px", height: "46px", fontSize: "15px" }}>
-                  {selectedRideForDetails.hostInitials}
-                </div>
-                <div>
-                  <div style={{ fontSize: "17px", fontWeight: "700", color: "var(--ink)", display: "flex", alignItems: "center", gap: "6px" }}>
-                    {selectedRideForDetails.hostName}
-                    <span style={{ color: "var(--teal)", fontWeight: "bold" }}>✓</span>
-                  </div>
-                  <div style={{ fontSize: "13px", color: "var(--mute)" }}>
-                    {selectedRideForDetails.hostDept} · {selectedRideForDetails.hostUniversity}
-                  </div>
-                  <div style={{ fontSize: "12.5px", color: "#f59e0b", fontWeight: "600", marginTop: "2px" }}>
-                    ★ {selectedRideForDetails.hostRating} ({selectedRideForDetails.totalRides} campus rides)
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedRideForDetails(null)}
-                style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer", color: "var(--mute)" }}
-              >
-                ✕
-              </button>
-            </div>
+              {/* Major Roads */}
+              <path d="M 260 590 L 330 460 L 320 360 L 290 200 L 310 110" className="svg-primary-highway" />
+              <path d="M 480 570 L 475 470 L 485 365 L 570 280 L 630 210 L 510 90" className="svg-primary-highway" />
+              <path d="M 320 460 L 475 470" className="svg-secondary-road" />
+              <path d="M 330 360 L 485 365" className="svg-secondary-road" />
+              <path d="M 485 365 L 670 350 L 780 320" className="svg-secondary-road" />
 
-            <div style={{ background: "#f8faf9", borderRadius: "12px", padding: "16px", marginBottom: "18px", border: "1px solid #e2ece9" }}>
-              <div style={{ fontSize: "12px", textTransform: "uppercase", fontWeight: "700", color: "var(--teal)", letterSpacing: "0.4px", marginBottom: "8px" }}>
-                Ride Details & Route
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "14.5px", fontWeight: "600", color: "var(--ink)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ color: "var(--teal)" }}>⊙ Pickup:</span> {selectedRideForDetails.origin}
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ color: "#ea4335" }}>📍 Drop-off:</span> {selectedRideForDetails.destination}
-                </div>
-              </div>
-              <div style={{ borderTop: "1px solid #e2ece9", marginTop: "12px", paddingTop: "12px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", fontSize: "13px" }}>
-                <div>
-                  <span style={{ color: "var(--mute)", display: "block", fontSize: "11.5px" }}>Vehicle</span>
-                  <strong>{selectedRideForDetails.vehicleModel}</strong>
-                </div>
-                <div>
-                  <span style={{ color: "var(--mute)", display: "block", fontSize: "11.5px" }}>Departure</span>
-                  <strong>{selectedRideForDetails.departureTime}</strong>
-                </div>
-                <div>
-                  <span style={{ color: "var(--mute)", display: "block", fontSize: "11.5px" }}>Seats Available</span>
-                  <strong>{selectedRideForDetails.seatsLeft} {selectedRideForDetails.seatsLeft === 1 ? "seat left" : "seats left"}</strong>
-                </div>
-                <div>
-                  <span style={{ color: "var(--mute)", display: "block", fontSize: "11.5px" }}>Companion Policy</span>
-                  <strong>{selectedRideForDetails.preference}</strong>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-              <button
-                type="button"
-                className="card-chat-btn"
-                style={{ padding: "9px 16px", fontSize: "13.5px" }}
-                onClick={() => {
-                  const p = selectedRideForDetails;
-                  setSelectedRideForDetails(null);
-                  handleOpenChat(p);
-                }}
-              >
-                💬 Chat with Companion
-              </button>
-              {myRequests.some((r) => r.id === selectedRideForDetails.id) ? (
-                <button
-                  type="button"
-                  className="btn"
-                  style={{ flex: 1, justifyContent: "center" }}
-                  onClick={() => {
-                    setSelectedRideForDetails(null);
-                    setActiveTab("requests");
-                  }}
-                >
-                  ✓ View in My Requests ➔
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="btn"
-                  style={{ flex: 1, justifyContent: "center" }}
-                  onClick={() => {
-                    handleSendRequest(selectedRideForDetails);
-                    setSelectedRideForDetails(null);
-                  }}
-                >
-                  Send Request to Join ➔
-                </button>
-              )}
-              <button
-                type="button"
-                className="pathao-cancel-btn"
-                style={{ width: "auto" }}
-                onClick={() => setSelectedRideForDetails(null)}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* =========================================================
-         DIRECT CHAT MODAL (Live Companion Messaging)
-         ========================================================= */}
-      {chatPeer && (
-        <div className="ride-modal-overlay" onClick={() => setChatPeer(null)}>
-          <div className="chat-modal-card" onClick={(e) => e.stopPropagation()}>
-            {/* Chat Header */}
-            <div className="chat-modal-header">
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <div className="card-host-av" style={{ width: "38px", height: "38px", fontSize: "13px" }}>
-                  {chatPeer.hostInitials}
-                </div>
-                <div>
-                  <div style={{ fontSize: "14.5px", fontWeight: "700", color: "var(--ink)", display: "flex", alignItems: "center", gap: "5px" }}>
-                    {chatPeer.hostName}
-                    <span style={{ color: "var(--teal)", fontSize: "12px", fontWeight: "bold" }}>✓</span>
-                  </div>
-                  <div style={{ fontSize: "11.5px", color: "var(--mute)" }}>
-                    {chatPeer.hostDept} · {chatPeer.vehicle}
-                  </div>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setChatPeer(null)}
-                style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer", color: "var(--mute)", padding: "4px" }}
-                title="Close chat"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Chat Message Thread */}
-            <div className="chat-messages-body">
-              {chatMessages.map((msg) => (
-                <div key={msg.id} className={`chat-bubble ${msg.sender === "user" ? "outgoing" : "incoming"}`}>
-                  <div>{msg.text}</div>
-                  <div style={{ fontSize: "10px", marginTop: "4px", opacity: 0.75, textAlign: msg.sender === "user" ? "right" : "left" }}>
-                    {msg.time}
-                  </div>
-                </div>
+              {/* Campus Landmark Nodes */}
+              {DHAKA_CANVAS_LANDMARKS.map((lm) => (
+                <g key={lm.name} className="landmark-interactive-node">
+                  <circle cx={lm.x} cy={lm.y} r="5" fill="#64748b" />
+                  <circle cx={lm.x} cy={lm.y} r="2.5" fill="#ffffff" />
+                  <text x={lm.x + 8} y={lm.y + 4} fontSize="10" fontWeight="600" fill="#475569" fontFamily="system-ui">
+                    {lm.name.split(",")[0]}
+                  </text>
+                </g>
               ))}
-            </div>
 
-            {/* Chat Input Form */}
-            <form className="chat-input-bar" onSubmit={handleSendMessage}>
-              <input
-                type="text"
-                className="chat-input"
-                placeholder={`Message ${chatPeer.hostName}...`}
-                value={chatInputText}
-                onChange={(e) => setChatInputText(e.target.value)}
-                autoFocus
-              />
-              <button type="submit" className="chat-send-btn" title="Send message">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                  <line x1="22" y1="2" x2="11" y2="13" />
-                  <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                </svg>
-              </button>
-            </form>
+              {/* Route line */}
+              <path d="M 295 360 Q 400 440 490 530" className="svg-active-route-casing" />
+              <path d="M 295 360 Q 400 440 490 530" className="svg-active-route-line" />
+
+              {/* Green Pin A */}
+              <g transform="translate(295, 360)" filter="url(#mapShadow)">
+                <ellipse cx="0" cy="0" rx="6" ry="3" fill="rgba(0,0,0,0.2)" />
+                <path d="M 0 -36 C -12 -36, -18 -26, -18 -16 C -18 -4, 0 0, 0 0 C 0 0, 18 -4, 18 -16 C 18 -26, 12 -36, 0 -36 Z" fill="#1e8e3e" stroke="#ffffff" strokeWidth="1.5" />
+                <circle cx="0" cy="-20" r="7" fill="#ffffff" />
+                <text x="0" y="-17" textAnchor="middle" fontSize="9.5" fontWeight="800" fill="#1e8e3e" fontFamily="system-ui">A</text>
+              </g>
+
+              {/* Red Pin B */}
+              <g transform="translate(490, 530)" filter="url(#mapShadow)">
+                <ellipse cx="0" cy="0" rx="6" ry="3" fill="rgba(0,0,0,0.2)" />
+                <path d="M 0 -36 C -12 -36, -18 -26, -18 -16 C -18 -4, 0 0, 0 0 C 0 0, 18 -4, 18 -16 C 18 -26, 12 -36, 0 -36 Z" fill="#d93025" stroke="#ffffff" strokeWidth="1.5" />
+                <circle cx="0" cy="-20" r="7" fill="#ffffff" />
+                <text x="0" y="-17" textAnchor="middle" fontSize="9.5" fontWeight="800" fill="#d93025" fontFamily="system-ui">B</text>
+              </g>
+            </svg>
+          )}
+
+          {/* Route Distance & Estimated Time Floating Pill */}
+          <div className="map-route-summary-pill">
+            <span className="route-badge-item">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <polygon points="12 2 19 21 12 17 5 21 12 2" />
+              </svg>
+              {routeInfo.distanceText}
+            </span>
+            <span className="route-badge-separator" />
+            <span className="route-badge-item route-duration">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+              {routeInfo.durationText}
+            </span>
+            <span className="route-badge-separator" />
+            <span style={{ fontSize: "12px", color: "var(--muted)" }}>
+              {routeInfo.summary}
+            </span>
           </div>
-        </div>
-      )}
 
-      {/* =========================================================
-         RIDE RATING MODAL (Post-Ride Rating System)
-         ========================================================= */}
-      {showRatingModal && rideBeingRated && (
-        <div className="ride-modal-overlay" onClick={() => setShowRatingModal(false)}>
-          <div className="ride-modal-card" onClick={(e) => e.stopPropagation()}>
-            <div style={{ textAlign: "center", marginBottom: "16px" }}>
-              <div className="card-host-av" style={{ width: "52px", height: "52px", fontSize: "18px", margin: "0 auto 12px" }}>
-                {rideBeingRated.hostInitials}
-              </div>
-              <h3 style={{ fontSize: "20px", fontWeight: "700", color: "var(--ink)" }}>
-                Rate your ride with {rideBeingRated.hostName}
-              </h3>
-              <p style={{ fontSize: "13.5px", color: "var(--mute)", marginTop: "4px" }}>
-                You arrived safely at {rideBeingRated.destination}! How was your companion experience?
-              </p>
-            </div>
-
-            {/* 5-Star Interactive Rating */}
-            <div className="star-rating-row">
-              {[1, 2, 3, 4, 5].map((star) => {
-                const isFilled = (hoverRatingScore || ratingScore) >= star;
-                return (
-                  <button
-                    key={star}
-                    type="button"
-                    className={`star-btn ${isFilled ? "active" : ""}`}
-                    onClick={() => setRatingScore(star)}
-                    onMouseEnter={() => setHoverRatingScore(star)}
-                    onMouseLeave={() => setHoverRatingScore(0)}
-                    title={`${star} Star`}
-                  >
-                    ★
-                  </button>
-                );
-              })}
-            </div>
-            <div style={{ textAlign: "center", fontSize: "13.5px", fontWeight: "600", color: "var(--teal)", marginBottom: "14px" }}>
-              {ratingScore === 5 && "⭐ 5.0 - Excellent campus experience!"}
-              {ratingScore === 4 && "⭐ 4.0 - Very good ride"}
-              {ratingScore === 3 && "⭐ 3.0 - Good ride"}
-              {ratingScore === 2 && "⭐ 2.0 - Fair"}
-              {ratingScore === 1 && "⭐ 1.0 - Needs improvement"}
-            </div>
-
-            {/* Quick Compliment Tags */}
-            <div style={{ fontSize: "12px", color: "var(--mute)", textAlign: "center" }}>
-              Select compliments (optional):
-            </div>
-            <div className="rating-tags-group">
-              {[
-                "🎯 Punctual & On Time",
-                "🚗 Safe Driving",
-                "💬 Friendly & Polite",
-                "🛡️ Felt Very Safe",
-                "✨ Clean Vehicle",
-              ].map((tag) => {
-                const isSelected = selectedFeedbackTags.includes(tag);
-                return (
-                  <button
-                    key={tag}
-                    type="button"
-                    className={`rating-tag-chip ${isSelected ? "selected" : ""}`}
-                    onClick={() => toggleFeedbackTag(tag)}
-                  >
-                    {tag}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Comment Area */}
-            <div style={{ marginBottom: "18px" }}>
-              <textarea
-                className="rating-textarea"
-                placeholder={`Leave a note or compliment for ${rideBeingRated.hostName} (optional)...`}
-                value={feedbackComment}
-                onChange={(e) => setFeedbackComment(e.target.value)}
-              />
-            </div>
-
-            {/* Actions */}
-            <div style={{ display: "flex", gap: "10px" }}>
-              <button
-                type="button"
-                className="btn"
-                style={{ flex: 1, justifyContent: "center" }}
-                onClick={handleSubmitRating}
-              >
-                Submit Rating
-              </button>
-              <button
-                type="button"
-                className="pathao-cancel-btn"
-                style={{ width: "auto" }}
-                onClick={() => setShowRatingModal(false)}
-              >
-                Skip
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* UniShare Floating Toast Notification */}
-      <div className={`toast-notification ${toastVisible ? "show" : ""}`} role="status">
-        <div className="toast-icon-wrap">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
-        </div>
-        <span className="toast-text">{toastText}</span>
+          {/* Watermark & Attributions */}
+          <div className="map-watermark-google">Google</div>
+          <div className="map-attribution-text">Map Data ©2026 UniShare Campus Transit Network</div>
+        </main>
       </div>
+
+      {/* Floating Toast Notification */}
+      {toastMessage && (
+        <div className="rides-toast-container" role="status" aria-live="polite">
+          {toastMessage}
+        </div>
+      )}
     </div>
   );
 }
