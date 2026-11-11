@@ -358,19 +358,59 @@ export default function RideSharingPage() {
   const reverseGeocode = useCallback(
     (coords: { lat: number; lng: number }, isPickup: boolean) => {
       if (!geocoderRef.current) {
-        // Canvas fallback
-        const nearest = DHAKA_CANVAS_LANDMARKS.reduce((prev, curr) => {
-          const d1 = Math.hypot(prev.lat - coords.lat, prev.lng - coords.lng);
-          const d2 = Math.hypot(curr.lat - coords.lat, curr.lng - coords.lng);
-          return d1 < d2 ? prev : curr;
-        });
-        if (isPickup) {
-          setPickup(nearest.name);
-          showToast(`📍 Pickup set: ${nearest.name}`);
-        } else {
-          setDestination(nearest.name);
-          showToast(`🎯 Destination set: ${nearest.name}`);
-        }
+        // Canvas fallback: use Nominatim OSM reverse geocoding (free, no key needed)
+        const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${coords.lat}&lon=${coords.lng}&zoom=16&addressdetails=1`;
+        fetch(nominatimUrl, { headers: { "Accept-Language": "en" } })
+          .then((res) => res.json())
+          .then((data) => {
+            let resolved = "";
+            if (data && data.address) {
+              const a = data.address;
+              // Build a readable address: road/neighbourhood + city
+              const parts: string[] = [];
+              const street = a.road || a.pedestrian || a.footway || "";
+              const sub = a.suburb || a.neighbourhood || a.city_district || a.quarter || "";
+              const city = a.city || a.town || a.village || "";
+              if (street) parts.push(street);
+              else if (sub) parts.push(sub);
+              if (city && city !== street && city !== sub) parts.push(city);
+              resolved = parts.join(", ");
+            }
+            if (!resolved) {
+              resolved = data?.display_name?.split(",").slice(0, 2).join(",").trim() || "";
+            }
+            // If still empty, fall back to nearest landmark
+            if (!resolved) {
+              const nearest = DHAKA_CANVAS_LANDMARKS.reduce((prev, curr) => {
+                const d1 = Math.hypot(prev.lat - coords.lat, prev.lng - coords.lng);
+                const d2 = Math.hypot(curr.lat - coords.lat, curr.lng - coords.lng);
+                return d1 < d2 ? prev : curr;
+              });
+              resolved = nearest.name;
+            }
+            if (isPickup) {
+              setPickup(resolved);
+              showToast(`📍 Pickup set: ${resolved.split(",")[0]}`);
+            } else {
+              setDestination(resolved);
+              showToast(`🎯 Destination set: ${resolved.split(",")[0]}`);
+            }
+          })
+          .catch(() => {
+            // Network error – fall back to nearest campus landmark
+            const nearest = DHAKA_CANVAS_LANDMARKS.reduce((prev, curr) => {
+              const d1 = Math.hypot(prev.lat - coords.lat, prev.lng - coords.lng);
+              const d2 = Math.hypot(curr.lat - coords.lat, curr.lng - coords.lng);
+              return d1 < d2 ? prev : curr;
+            });
+            if (isPickup) {
+              setPickup(nearest.name);
+              showToast(`📍 Pickup set: ${nearest.name}`);
+            } else {
+              setDestination(nearest.name);
+              showToast(`🎯 Destination set: ${nearest.name}`);
+            }
+          });
         return;
       }
 
