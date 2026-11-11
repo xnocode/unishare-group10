@@ -237,6 +237,43 @@ export default function RideSharingPage() {
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
+  // Consent-Based Live GPS Tracking State
+  const [trackingSession, setTrackingSession] = useState<{
+    id: string;
+    conversationId: string;
+    journeyStatus: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
+    myConsent: boolean;
+    partnerConsent: boolean;
+    bothConsented: boolean;
+    mySharing: boolean;
+    partnerSharing: boolean;
+    partner: { id: string; fullName: string; badge: string };
+    partnerLocation: {
+      lat: number;
+      lng: number;
+      accuracy?: number;
+      heading?: number;
+      speed?: number;
+      updatedAt: string;
+      freshnessSeconds: number | null;
+      isStale: boolean;
+    } | null;
+    connectionStatus: "NOT_STARTED" | "AWAITING_CONSENT" | "LIVE" | "STALE" | "PAUSED" | "COMPLETED";
+    browserLimitationNotice: string;
+  } | null>(null);
+
+  const [isUpdatingConsent, setIsUpdatingConsent] = useState(false);
+  const [isUpdatingTrackingAction, setIsUpdatingTrackingAction] = useState(false);
+  const [partnerDistanceMeters, setPartnerDistanceMeters] = useState<number | null>(null);
+  const [myLiveCoords, setMyLiveCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [showConsentModal, setShowConsentModal] = useState(false);
+
+  // References for Live Tracking Watcher & Markers
+  const trackingWatchIdRef = useRef<number | null>(null);
+  const partnerLiveMarkerRef = useRef<GoogleMarkerInstance | null>(null);
+  const myLiveTrackingMarkerRef = useRef<GoogleMarkerInstance | null>(null);
+  const trackingEventSourceRef = useRef<EventSource | null>(null);
+
   // Mobile View Toggle ("sidebar" | "map")
   const [mobileTab, setMobileTab] = useState<"sidebar" | "map">("sidebar");
 
@@ -945,6 +982,277 @@ export default function RideSharingPage() {
     }
   };
 
+  // Helper to compute distance between coordinates in km
+  const computeDistanceBetweenKm = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  // Clean up browser geolocation watcher and live map markers
+  const stopBrowserGeolocation = useCallback(() => {
+    if (trackingWatchIdRef.current !== null && typeof navigator !== "undefined" && "geolocation" in navigator) {
+      navigator.geolocation.clearWatch(trackingWatchIdRef.current);
+      trackingWatchIdRef.current = null;
+    }
+    if (trackingEventSourceRef.current) {
+      trackingEventSourceRef.current.close();
+      trackingEventSourceRef.current = null;
+    }
+    if (partnerLiveMarkerRef.current) {
+      partnerLiveMarkerRef.current.setMap(null);
+      partnerLiveMarkerRef.current = null;
+    }
+    if (myLiveTrackingMarkerRef.current) {
+      myLiveTrackingMarkerRef.current.setMap(null);
+      myLiveTrackingMarkerRef.current = null;
+    }
+  }, []);
+
+  // Update live markers on Google Maps
+  const updateLiveTrackingMarkersOnMap = useCallback(
+    (
+      partnerLoc: { lat: number; lng: number } | null,
+      partnerName: string,
+      myLoc: { lat: number; lng: number } | null
+    ) => {
+      const map = mapInstanceRef.current;
+      const gmaps = window.google?.maps;
+      if (!map || !gmaps) return;
+
+      if (partnerLoc) {
+        const initials = partnerName
+          ? partnerName.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
+          : "LP";
+        if (!partnerLiveMarkerRef.current) {
+          partnerLiveMarkerRef.current = new gmaps.Marker({
+            position: partnerLoc,
+            map,
+            title: `${partnerName} (Live GPS)`,
+            label: { text: initials, color: "#ffffff", fontWeight: "bold" },
+            icon: {
+              path: gmaps.SymbolPath.CIRCLE,
+              scale: 16,
+              fillColor: "#0d6b63",
+              fillOpacity: 1,
+              strokeColor: "#ffffff",
+              strokeWeight: 3,
+            },
+            zIndex: 999,
+          });
+        } else {
+          partnerLiveMarkerRef.current.setPosition(partnerLoc);
+        }
+      } else if (partnerLiveMarkerRef.current) {
+        partnerLiveMarkerRef.current.setMap(null);
+        partnerLiveMarkerRef.current = null;
+      }
+
+      if (myLoc) {
+        if (!myLiveTrackingMarkerRef.current) {
+          myLiveTrackingMarkerRef.current = new gmaps.Marker({
+            position: myLoc,
+            map,
+            title: "You (Live GPS Sharing)",
+            label: { text: "ME", color: "#ffffff", fontWeight: "bold" },
+            icon: {
+              path: gmaps.SymbolPath.CIRCLE,
+              scale: 14,
+              fillColor: "#2563eb",
+              fillOpacity: 1,
+              strokeColor: "#ffffff",
+              strokeWeight: 2.5,
+            },
+            zIndex: 998,
+          });
+        } else {
+          myLiveTrackingMarkerRef.current.setPosition(myLoc);
+        }
+      }
+    },
+    []
+  );
+
+  // Start browser Geolocation API watchPosition
+  const startBrowserGeolocation = useCallback(
+    (conversationId: string) => {
+      if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
+        showToast("⚠️ Geolocation is not supported by your browser.");
+        return;
+      }
+      if (trackingWatchIdRef.current !== null) return;
+
+      const watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          const { latitude, longitude, accuracy, heading, speed } = pos.coords;
+          const coords = { lat: latitude, lng: longitude };
+          setMyLiveCoords(coords);
+
+          if (mapInstanceRef.current && window.google?.maps) {
+            updateLiveTrackingMarkersOnMap(
+              trackingSession?.partnerLocation ? { lat: trackingSession.partnerLocation.lat, lng: trackingSession.partnerLocation.lng } : null,
+              trackingSession?.partner?.fullName || "Travel Partner",
+              coords
+            );
+          }
+
+          fetch(`/api/rides/conversations/${conversationId}/tracking/location`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              lat: latitude,
+              lng: longitude,
+              accuracy: accuracy || undefined,
+              heading: heading || undefined,
+              speed: speed || undefined,
+            }),
+          }).catch(() => {});
+        },
+        (err) => {
+          console.warn("Geolocation watchPosition notice:", err.message);
+        },
+        {
+          enableHighAccuracy: true,
+          maximumAge: 2000,
+          timeout: 10000,
+        }
+      );
+
+      trackingWatchIdRef.current = watchId;
+    },
+    [showToast, trackingSession, updateLiveTrackingMarkersOnMap]
+  );
+
+  // Fetch current tracking state
+  const fetchTrackingState = useCallback(
+    async (conversationId: string) => {
+      try {
+        const res = await fetch(`/api/rides/conversations/${conversationId}/tracking`);
+        const data = await res.json();
+        if (data.success && data.tracking) {
+          setTrackingSession(data.tracking);
+
+          if (data.tracking.partnerLocation) {
+            const pLoc = data.tracking.partnerLocation;
+            const refCoords = myLiveCoords || pickupCoords;
+            const dist = computeDistanceBetweenKm(refCoords.lat, refCoords.lng, pLoc.lat, pLoc.lng);
+            setPartnerDistanceMeters(Math.round(dist * 1000));
+
+            updateLiveTrackingMarkersOnMap(
+              { lat: pLoc.lat, lng: pLoc.lng },
+              data.tracking.partner?.fullName || "Travel Partner",
+              myLiveCoords
+            );
+          } else {
+            setPartnerDistanceMeters(null);
+            if (partnerLiveMarkerRef.current) {
+              partnerLiveMarkerRef.current.setMap(null);
+              partnerLiveMarkerRef.current = null;
+            }
+          }
+
+          if (data.tracking.journeyStatus === "COMPLETED") {
+            stopBrowserGeolocation();
+          }
+        }
+      } catch (err) {
+        console.error("fetchTrackingState error:", err);
+      }
+    },
+    [myLiveCoords, pickupCoords, stopBrowserGeolocation, updateLiveTrackingMarkersOnMap]
+  );
+
+  // Handle explicit consent grant or revocation
+  const handleToggleConsent = async (consent: boolean) => {
+    if (!activeConversationId) return;
+    setIsUpdatingConsent(true);
+    try {
+      const res = await fetch(`/api/rides/conversations/${activeConversationId}/tracking/consent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ consent }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(
+          consent
+            ? "🛰️ GPS consent granted! Live tracking enabled."
+            : "🛑 Location sharing consent revoked."
+        );
+        setShowConsentModal(false);
+        if (consent) {
+          startBrowserGeolocation(activeConversationId);
+        } else {
+          stopBrowserGeolocation();
+        }
+        await fetchTrackingState(activeConversationId);
+        const msgRes = await fetch(`/api/rides/conversations/${activeConversationId}/messages`);
+        const msgData = await msgRes.json();
+        if (msgData.success && Array.isArray(msgData.messages)) {
+          setChatMessages(msgData.messages);
+        }
+      } else {
+        showToast(`⚠️ ${data.error || "Failed to update consent"}`);
+      }
+    } catch (err) {
+      console.error("handleToggleConsent error:", err);
+      showToast("⚠️ Network error updating consent.");
+    } finally {
+      setIsUpdatingConsent(false);
+    }
+  };
+
+  // Handle tracking action (pause, resume, end journey)
+  const handleTrackingAction = async (action: "STOP_SHARING" | "RESUME_SHARING" | "END_JOURNEY") => {
+    if (!activeConversationId) return;
+    setIsUpdatingTrackingAction(true);
+    try {
+      const res = await fetch(`/api/rides/conversations/${activeConversationId}/tracking/stop`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message || "Tracking updated.");
+        if (action === "STOP_SHARING" || action === "END_JOURNEY") {
+          stopBrowserGeolocation();
+        } else if (action === "RESUME_SHARING") {
+          startBrowserGeolocation(activeConversationId);
+        }
+        await fetchTrackingState(activeConversationId);
+        const msgRes = await fetch(`/api/rides/conversations/${activeConversationId}/messages`);
+        const msgData = await msgRes.json();
+        if (msgData.success && Array.isArray(msgData.messages)) {
+          setChatMessages(msgData.messages);
+        }
+      } else {
+        showToast(`⚠️ ${data.error || "Action failed"}`);
+      }
+    } catch (err) {
+      console.error("handleTrackingAction error:", err);
+      showToast("⚠️ Network error.");
+    } finally {
+      setIsUpdatingTrackingAction(false);
+    }
+  };
+
+  const focusPartnerOnMap = () => {
+    if (!mapInstanceRef.current || !trackingSession?.partnerLocation) return;
+    const { lat, lng } = trackingSession.partnerLocation;
+    mapInstanceRef.current.panTo({ lat, lng });
+    mapInstanceRef.current.setZoom(16);
+    showToast(`🎯 Centered on ${trackingSession.partner?.fullName || "Travel Partner"}`);
+  };
+
   const openConversation = async (conversationId: string) => {
     setActiveConversationId(conversationId);
     try {
@@ -954,6 +1262,7 @@ export default function RideSharingPage() {
         setActiveConversation(data.conversation);
         setChatMessages(data.conversation.messages || []);
       }
+      fetchTrackingState(conversationId);
     } catch (err) {
       console.error("Failed to load conversation:", err);
     }
@@ -1036,6 +1345,26 @@ export default function RideSharingPage() {
     }, 2500);
     return () => clearInterval(interval);
   }, [activeConversationId]);
+
+  // Periodic tracking refresh and live cleanup
+  useEffect(() => {
+    if (!activeConversationId) {
+      stopBrowserGeolocation();
+      setTrackingSession(null);
+      setPartnerDistanceMeters(null);
+      return;
+    }
+
+    fetchTrackingState(activeConversationId);
+    const trackingInterval = setInterval(() => {
+      fetchTrackingState(activeConversationId);
+    }, 3000);
+
+    return () => {
+      clearInterval(trackingInterval);
+      stopBrowserGeolocation();
+    };
+  }, [activeConversationId, fetchTrackingState, stopBrowserGeolocation]);
 
   return (
     <div className="unishare-rides-container">
@@ -1869,6 +2198,26 @@ export default function RideSharingPage() {
             </span>
           </div>
 
+          {/* Floating Live Commute Telemetry Pill on Google Maps */}
+          {trackingSession?.bothConsented && trackingSession?.journeyStatus === "IN_PROGRESS" && (
+            <button
+              type="button"
+              className="floating-map-tracking-pill"
+              onClick={focusPartnerOnMap}
+              title="Click to focus on travel companion"
+            >
+              <span className="floating-pill-dot" />
+              <span>
+                Live Commute: {trackingSession.partner.fullName} is{" "}
+                {partnerDistanceMeters !== null
+                  ? partnerDistanceMeters < 1000
+                    ? `${partnerDistanceMeters}m away`
+                    : `${(partnerDistanceMeters / 1000).toFixed(1)}km`
+                  : "sharing GPS"}
+              </span>
+            </button>
+          )}
+
           {/* ===================================================
               3. PRIVATE TRAVEL COORDINATION CHAT DRAWER
               =================================================== */}
@@ -1903,6 +2252,147 @@ export default function RideSharingPage() {
                 >
                   ✕
                 </button>
+              </div>
+
+              {/* Consent-Based Live GPS Tracking Panel */}
+              <div className={`live-tracking-panel ${trackingSession?.journeyStatus === "IN_PROGRESS" ? "in-progress" : ""}`}>
+                <div className="tracking-header-row">
+                  <div className="tracking-title">
+                    <span>🛰️</span>
+                    <span>Live Journey GPS Tracking</span>
+                  </div>
+                  {trackingSession && (
+                    <span className={`tracking-status-pill ${
+                      trackingSession.connectionStatus === "LIVE" ? "live" :
+                      trackingSession.connectionStatus === "STALE" ? "stale" :
+                      trackingSession.connectionStatus === "PAUSED" ? "paused" :
+                      trackingSession.connectionStatus === "COMPLETED" ? "completed" : "awaiting"
+                    }`}>
+                      <span className="tracking-status-dot" />
+                      {trackingSession.connectionStatus === "LIVE" ? "Live GPS" :
+                       trackingSession.connectionStatus === "STALE" ? "Signal Weak" :
+                       trackingSession.connectionStatus === "PAUSED" ? "Paused" :
+                       trackingSession.connectionStatus === "COMPLETED" ? "Journey Ended" : "Awaiting Agreement"}
+                    </span>
+                  )}
+                </div>
+
+                {/* Awaiting Consent */}
+                {!trackingSession?.bothConsented && trackingSession?.journeyStatus !== "COMPLETED" && (
+                  <div className="tracking-consent-box">
+                    <div>
+                      <b>Consent-Based Commute Tracking</b>
+                      <div className="tracking-consent-desc">
+                        Both you and {activeConversation?.partnerName} must explicitly agree to share GPS coordinates during this journey. You can pause or stop sharing at any time.
+                      </div>
+                    </div>
+                    {!trackingSession?.myConsent ? (
+                      <button
+                        type="button"
+                        className="tracking-btn-primary"
+                        onClick={() => setShowConsentModal(true)}
+                        disabled={isUpdatingConsent}
+                      >
+                        <span>🛡️</span> Agree &amp; Start GPS Tracking
+                      </button>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                        <div style={{ fontSize: "11px", color: "#0284c7", fontWeight: 700 }}>
+                          ✓ You consented. Waiting for {activeConversation?.partnerName}&apos;s agreement...
+                        </div>
+                        <button
+                          type="button"
+                          className="tracking-btn-revoke"
+                          onClick={() => handleToggleConsent(false)}
+                          disabled={isUpdatingConsent}
+                        >
+                          Revoke My Consent
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* In Progress Telemetry */}
+                {trackingSession?.bothConsented && trackingSession?.journeyStatus === "IN_PROGRESS" && (
+                  <>
+                    <div className="tracking-telemetry-grid">
+                      <div className="tracking-telemetry-card">
+                        <span className="tracking-telemetry-label">Partner Distance</span>
+                        <span className="tracking-telemetry-val">
+                          {partnerDistanceMeters !== null
+                            ? partnerDistanceMeters < 1000
+                              ? `${partnerDistanceMeters}m away`
+                              : `${(partnerDistanceMeters / 1000).toFixed(1)}km away`
+                            : "Calculating..."}
+                        </span>
+                      </div>
+                      <div className="tracking-telemetry-card">
+                        <span className="tracking-telemetry-label">Freshness</span>
+                        <span className="tracking-telemetry-val">
+                          {trackingSession.partnerLocation?.freshnessSeconds !== undefined && trackingSession.partnerLocation?.freshnessSeconds !== null
+                            ? trackingSession.partnerLocation.freshnessSeconds <= 5
+                              ? "Just now"
+                              : `${trackingSession.partnerLocation.freshnessSeconds}s ago`
+                            : "Awaiting signal"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="tracking-browser-notice">
+                      <span>ℹ️</span>
+                      <span>{trackingSession.browserLimitationNotice}</span>
+                    </div>
+
+                    <div className="tracking-controls-row">
+                      <button
+                        type="button"
+                        className="tracking-ctrl-btn focus"
+                        onClick={focusPartnerOnMap}
+                        title="Pan Google Map to partner's location"
+                      >
+                        🎯 Focus Map
+                      </button>
+                      {trackingSession.mySharing ? (
+                        <button
+                          type="button"
+                          className="tracking-ctrl-btn"
+                          onClick={() => handleTrackingAction("STOP_SHARING")}
+                          disabled={isUpdatingTrackingAction}
+                          title="Pause sharing my GPS location"
+                        >
+                          ⏸️ Pause
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="tracking-ctrl-btn"
+                          onClick={() => handleTrackingAction("RESUME_SHARING")}
+                          disabled={isUpdatingTrackingAction}
+                          title="Resume sharing my GPS location"
+                        >
+                          ▶️ Resume
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="tracking-ctrl-btn danger"
+                        onClick={() => handleTrackingAction("END_JOURNEY")}
+                        disabled={isUpdatingTrackingAction}
+                        title="Complete journey and stop tracking for all"
+                      >
+                        🏁 End
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {/* Journey Completed State */}
+                {trackingSession?.journeyStatus === "COMPLETED" && (
+                  <div style={{ textAlign: "center", padding: "8px", fontSize: "11.5px", color: "#475569", fontWeight: 600 }}>
+                    🏁 Journey completed! Live GPS tracking has ended and coordinates are cleared.
+                  </div>
+                )}
               </div>
 
               {/* Meeting Point Banner */}
@@ -2220,6 +2710,66 @@ export default function RideSharingPage() {
                   )}
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =======================================================
+          5. EXPLICIT LIVE GPS TRACKING CONSENT MODAL
+          ======================================================= */}
+      {showConsentModal && (
+        <div className="consent-modal-overlay" onClick={() => setShowConsentModal(false)}>
+          <div className="consent-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="consent-modal-header">
+              <h3>🛡️ Explicit GPS Tracking Consent</h3>
+              <button
+                type="button"
+                onClick={() => setShowConsentModal(false)}
+                style={{ background: "none", border: "none", color: "#ffffff", fontSize: "16px", cursor: "pointer" }}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="consent-modal-body">
+              <p>
+                You are about to start live GPS location sharing for your journey with{" "}
+                <b>{activeConversation?.partnerName}</b> ({activeConversation?.partnerBadge}).
+              </p>
+              <ul className="consent-notice-list" style={{ listStyle: "none", padding: 0 }}>
+                <li>
+                  <span>🔒</span>
+                  <span><b>Authorized Participants Only:</b> Your GPS coordinates will only be accessible by {activeConversation?.partnerName}.</span>
+                </li>
+                <li>
+                  <span>⏱️</span>
+                  <span><b>Strict Freshness &amp; Lifecycle:</b> Tracking stops immediately when you pause, revoke consent, or when either student ends the journey.</span>
+                </li>
+                <li>
+                  <span>🌐</span>
+                  <span><b>Browser Foreground Notice:</b> Standard mobile and desktop browsers pause web GPS execution when the tab is switched or minimized.</span>
+                </li>
+              </ul>
+              <p style={{ fontSize: "11.5px", color: "#64748b" }}>
+                By clicking &ldquo;I Agree &amp; Share GPS&rdquo;, you explicitly grant UniShare permission to access your browser Geolocation API and stream coordinates to your verified companion.
+              </p>
+            </div>
+            <div className="consent-modal-actions">
+              <button
+                type="button"
+                className="consent-btn-cancel"
+                onClick={() => setShowConsentModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="consent-btn-confirm"
+                onClick={() => handleToggleConsent(true)}
+                disabled={isUpdatingConsent}
+              >
+                I Agree &amp; Share GPS
+              </button>
             </div>
           </div>
         </div>

@@ -133,3 +133,4 @@ export async function GET(req: NextRequest, context: RouteContext) {
     return NextResponse.json({ success: false, error: "Internal server error." }, { status: 500 });
   }
 }
+

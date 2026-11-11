@@ -391,6 +391,239 @@ async function runTests() {
     assert(cancelRes.json.status === "CANCELLED", "Test 22.2: Status updated to CANCELLED");
   }
 
+  // ===========================================================
+  // STEP 6 TESTS: CONSENT-BASED LIVE GPS TRACKING FOR AGREED JOURNEY
+  // ===========================================================
+
+  // -----------------------------------------------------------
+  // Test 23: Initial Tracking State Requires Explicit Mutual Consent
+  // (GET /api/rides/conversations/[id]/tracking)
+  // -----------------------------------------------------------
+  {
+    const { status, json } = await api(`/api/rides/conversations/${activeConversationId}/tracking`, {
+      userEmail: "farhana@std.du.ac.bd",
+    });
+    assert(status === 200, "Test 23.1: Farhana retrieves tracking session with 200 OK");
+    assert(json.success === true, "Test 23.2: Tracking session returns success: true");
+    assert(json.tracking?.bothConsented === false, "Test 23.3: bothConsented is false before explicit agreement");
+    assert(json.tracking?.partnerLocation === null, "Test 23.4: partnerLocation is null before consent");
+    assert(json.tracking?.connectionStatus === "AWAITING_CONSENT", "Test 23.5: connectionStatus is AWAITING_CONSENT");
+    assert(typeof json.tracking?.browserLimitationNotice === "string", "Test 23.6: Browser foreground limitation disclosure is present");
+  }
+
+  // -----------------------------------------------------------
+  // Test 24: Premature GPS Coordinates Rejected Without Mutual Consent
+  // (POST /api/rides/conversations/[id]/tracking/location)
+  // -----------------------------------------------------------
+  {
+    const { status, json } = await api(`/api/rides/conversations/${activeConversationId}/tracking/location`, {
+      userEmail: "farhana@std.du.ac.bd",
+      method: "POST",
+      body: { lat: 23.7317, lng: 90.3957, accuracy: 10 },
+    });
+    assert(status === 403, "Test 24.1: Submitting GPS without consent rejected with 403 Forbidden");
+    assert(json.error && json.error.includes("Consent required"), "Test 24.2: Error explains explicit consent requirement");
+  }
+
+  // -----------------------------------------------------------
+  // Test 25: Granting Explicit Consent One-by-One
+  // (POST /api/rides/conversations/[id]/tracking/consent)
+  // -----------------------------------------------------------
+  {
+    // 25a: Farhana grants consent
+    const farhanaRes = await api(`/api/rides/conversations/${activeConversationId}/tracking/consent`, {
+      userEmail: "farhana@std.du.ac.bd",
+      method: "POST",
+      body: { consent: true },
+    });
+    assert(farhanaRes.status === 200, "Test 25.1: Farhana grants consent with 200 OK");
+    assert(farhanaRes.json.bothConsented === false, "Test 25.2: bothConsented remains false awaiting partner");
+
+    // Sadia checks tracking state: sees partner consented, but both not complete
+    const sadiaCheck = await api(`/api/rides/conversations/${activeConversationId}/tracking`, {
+      userEmail: "sadia@std.du.ac.bd",
+    });
+    assert(sadiaCheck.json.tracking?.partnerConsent === true, "Test 25.3: Sadia sees Farhana has consented");
+    assert(sadiaCheck.json.tracking?.myConsent === false, "Test 25.4: Sadia has not yet consented");
+    assert(sadiaCheck.json.tracking?.partnerLocation === null, "Test 25.5: Location is still hidden");
+
+    // 25b: Sadia grants consent
+    const sadiaRes = await api(`/api/rides/conversations/${activeConversationId}/tracking/consent`, {
+      userEmail: "sadia@std.du.ac.bd",
+      method: "POST",
+      body: { consent: true },
+    });
+    assert(sadiaRes.status === 200, "Test 25.6: Sadia grants consent with 200 OK");
+    assert(sadiaRes.json.bothConsented === true, "Test 25.7: bothConsented is now TRUE!");
+    assert(sadiaRes.json.journeyStatus === "IN_PROGRESS", "Test 25.8: journeyStatus transitioned to IN_PROGRESS");
+  }
+
+  // -----------------------------------------------------------
+  // Test 26: Push Live Browser GPS Telemetry & Freshness Calculation
+  // -----------------------------------------------------------
+  {
+    // Sadia sends live coordinates (near Dhaka University Curzon Hall)
+    const sadiaGpsRes = await api(`/api/rides/conversations/${activeConversationId}/tracking/location`, {
+      userEmail: "sadia@std.du.ac.bd",
+      method: "POST",
+      body: {
+        lat: 23.7265,
+        lng: 90.4012,
+        accuracy: 6.5,
+        heading: 45.0,
+        speed: 1.5,
+      },
+    });
+    assert(sadiaGpsRes.status === 200, "Test 26.1: Sadia uploads GPS telemetry with 200 OK");
+    assert(sadiaGpsRes.json.lat === 23.7265, "Test 26.2: Coordinates verified");
+
+    // Farhana sends live coordinates (near TSC)
+    const farhanaGpsRes = await api(`/api/rides/conversations/${activeConversationId}/tracking/location`, {
+      userEmail: "farhana@std.du.ac.bd",
+      method: "POST",
+      body: {
+        lat: 23.7317,
+        lng: 90.3957,
+        accuracy: 8.0,
+      },
+    });
+    assert(farhanaGpsRes.status === 200, "Test 26.3: Farhana uploads GPS telemetry with 200 OK");
+
+    // Farhana reads Sadia's live coordinates
+    const farhanaView = await api(`/api/rides/conversations/${activeConversationId}/tracking`, {
+      userEmail: "farhana@std.du.ac.bd",
+    });
+    assert(farhanaView.status === 200, "Test 26.4: Farhana retrieves partner tracking data (200 OK)");
+    assert(farhanaView.json.tracking?.partnerLocation !== null, "Test 26.5: Sadia's live location is visible to authorized partner Farhana");
+    assert(farhanaView.json.tracking?.partnerLocation?.lat === 23.7265, "Test 26.6: Partner latitude matches");
+    assert(farhanaView.json.tracking?.partnerLocation?.lng === 90.4012, "Test 26.7: Partner longitude matches");
+    assert(typeof farhanaView.json.tracking?.partnerLocation?.freshnessSeconds === "number", `Test 26.8: Freshness seconds calculated (${farhanaView.json.tracking?.partnerLocation?.freshnessSeconds}s)`);
+    assert(farhanaView.json.tracking?.partnerLocation?.isStale === false, "Test 26.9: Location is fresh (isStale: false)");
+    assert(farhanaView.json.tracking?.connectionStatus === "LIVE", "Test 26.10: Connection status is LIVE");
+  }
+
+  // -----------------------------------------------------------
+  // Test 27: Participant Pauses and Resumes Location Sharing
+  // (POST /api/rides/conversations/[id]/tracking/stop)
+  // -----------------------------------------------------------
+  {
+    // Sadia temporarily stops sharing
+    const pauseRes = await api(`/api/rides/conversations/${activeConversationId}/tracking/stop`, {
+      userEmail: "sadia@std.du.ac.bd",
+      method: "POST",
+      body: { action: "STOP_SHARING" },
+    });
+    assert(pauseRes.status === 200, "Test 27.1: Sadia pauses location sharing with 200 OK");
+
+    // Farhana checks tracking: Sadia's coordinates are masked/null while paused
+    const farhanaCheckPaused = await api(`/api/rides/conversations/${activeConversationId}/tracking`, {
+      userEmail: "farhana@std.du.ac.bd",
+    });
+    assert(farhanaCheckPaused.json.tracking?.partnerLocation === null, "Test 27.2: Partner location masked while paused");
+    assert(farhanaCheckPaused.json.tracking?.connectionStatus === "PAUSED", "Test 27.3: Connection status is PAUSED");
+
+    // Sadia resumes sharing
+    const resumeRes = await api(`/api/rides/conversations/${activeConversationId}/tracking/stop`, {
+      userEmail: "sadia@std.du.ac.bd",
+      method: "POST",
+      body: { action: "RESUME_SHARING" },
+    });
+    assert(resumeRes.status === 200, "Test 27.4: Sadia resumes location sharing with 200 OK");
+
+    // Send updated location after resume
+    await api(`/api/rides/conversations/${activeConversationId}/tracking/location`, {
+      userEmail: "sadia@std.du.ac.bd",
+      method: "POST",
+      body: { lat: 23.7270, lng: 90.4005, accuracy: 5.0 },
+    });
+
+    const farhanaCheckResumed = await api(`/api/rides/conversations/${activeConversationId}/tracking`, {
+      userEmail: "farhana@std.du.ac.bd",
+    });
+    assert(farhanaCheckResumed.json.tracking?.partnerLocation?.lat === 23.7270, "Test 27.5: Updated live location visible after resume");
+    assert(farhanaCheckResumed.json.tracking?.connectionStatus === "LIVE", "Test 27.6: Connection status returns to LIVE");
+  }
+
+  // -----------------------------------------------------------
+  // Test 28: Strict Authorization & Privacy Security Guard
+  // Third-party student (Tanvir) cannot access or inject live GPS tracking
+  // -----------------------------------------------------------
+  {
+    // Tanvir attempts to read Farhana/Sadia's live coordinates
+    const { status: readStatus } = await api(`/api/rides/conversations/${activeConversationId}/tracking`, {
+      userEmail: "tanvir@std.du.ac.bd",
+    });
+    assert(readStatus === 403, "Test 28.1: Unauthorized student blocked from reading live GPS (403 Forbidden)");
+
+    // Tanvir attempts to send GPS coordinates into this journey
+    const { status: postStatus } = await api(`/api/rides/conversations/${activeConversationId}/tracking/location`, {
+      userEmail: "tanvir@std.du.ac.bd",
+      method: "POST",
+      body: { lat: 23.7500, lng: 90.3800 },
+    });
+    assert(postStatus === 403, "Test 28.2: Unauthorized student blocked from pushing GPS into journey (403 Forbidden)");
+
+    // Unauthenticated request
+    const { status: unauthStatus } = await api(`/api/rides/conversations/${activeConversationId}/tracking`, {
+      userEmail: null,
+    });
+    assert(unauthStatus === 401, "Test 28.3: Unauthenticated tracking request rejected with 401");
+  }
+
+  // -----------------------------------------------------------
+  // Test 29: Revoking Consent Immediately Stops Tracking & Clears Coordinates
+  // -----------------------------------------------------------
+  {
+    const revokeRes = await api(`/api/rides/conversations/${activeConversationId}/tracking/consent`, {
+      userEmail: "sadia@std.du.ac.bd",
+      method: "POST",
+      body: { consent: false },
+    });
+    assert(revokeRes.status === 200, "Test 29.1: Consent successfully revoked (200 OK)");
+
+    const farhanaCheckRevoked = await api(`/api/rides/conversations/${activeConversationId}/tracking`, {
+      userEmail: "farhana@std.du.ac.bd",
+    });
+    assert(farhanaCheckRevoked.json.tracking?.bothConsented === false, "Test 29.2: bothConsented is false after revocation");
+    assert(farhanaCheckRevoked.json.tracking?.partnerLocation === null, "Test 29.3: Partner location immediately wiped and hidden");
+
+    // Re-grant consent for final completion test
+    await api(`/api/rides/conversations/${activeConversationId}/tracking/consent`, {
+      userEmail: "sadia@std.du.ac.bd",
+      method: "POST",
+      body: { consent: true },
+    });
+  }
+
+  // -----------------------------------------------------------
+  // Test 30: End Journey Closes Tracking Session
+  // -----------------------------------------------------------
+  {
+    const endRes = await api(`/api/rides/conversations/${activeConversationId}/tracking/stop`, {
+      userEmail: "farhana@std.du.ac.bd",
+      method: "POST",
+      body: { action: "END_JOURNEY" },
+    });
+    assert(endRes.status === 200, "Test 30.1: Journey ended successfully with 200 OK");
+    assert(endRes.json.action === "END_JOURNEY", "Test 30.2: Action confirmed as END_JOURNEY");
+
+    // Verify journey status is COMPLETED
+    const finalCheck = await api(`/api/rides/conversations/${activeConversationId}/tracking`, {
+      userEmail: "sadia@std.du.ac.bd",
+    });
+    assert(finalCheck.json.tracking?.journeyStatus === "COMPLETED", "Test 30.3: journeyStatus is COMPLETED");
+    assert(finalCheck.json.tracking?.connectionStatus === "COMPLETED", "Test 30.4: connectionStatus is COMPLETED");
+    assert(finalCheck.json.tracking?.partnerLocation === null, "Test 30.5: All location coordinates wiped upon journey completion");
+
+    // Trying to post location after journey ended returns 400 Bad Request
+    const postAfterEnd = await api(`/api/rides/conversations/${activeConversationId}/tracking/location`, {
+      userEmail: "sadia@std.du.ac.bd",
+      method: "POST",
+      body: { lat: 23.7317, lng: 90.3957 },
+    });
+    assert(postAfterEnd.status === 400, "Test 30.6: Location upload rejected after journey ended (400 Bad Request)");
+  }
+
   console.log("==================================================");
   console.log(`FINAL RESULTS: ${passed} PASSED, ${failed} FAILED`);
   console.log("==================================================");

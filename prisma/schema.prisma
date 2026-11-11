@@ -211,10 +211,53 @@ model TravelConversation {
   updatedAt        DateTime                 @updatedAt
 
   messages         TravelMessage[]
+  tracking         TravelLiveTracking?
 
   @@index([participant1Id])
   @@index([participant2Id])
   @@index([status])
+}
+
+// Consent-Based Live Journey GPS Tracking Session
+model TravelLiveTracking {
+  id                  String             @id @default(cuid())
+  conversationId      String             @unique
+  conversation        TravelConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  // Explicit Participant Consents (both must consent before tracking begins)
+  participant1Consent Boolean            @default(false)
+  participant2Consent Boolean            @default(false)
+
+  // Active Sharing States (participants can pause/stop sharing independently)
+  participant1Sharing Boolean            @default(false)
+  participant2Sharing Boolean            @default(false)
+
+  // Participant 1 Live Telemetry
+  p1Lat               Float?
+  p1Lng               Float?
+  p1Accuracy          Float?
+  p1Heading           Float?
+  p1Speed             Float?
+  p1UpdatedAt         DateTime?
+
+  // Participant 2 Live Telemetry
+  p2Lat               Float?
+  p2Lng               Float?
+  p2Accuracy          Float?
+  p2Heading           Float?
+  p2Speed             Float?
+  p2UpdatedAt         DateTime?
+
+  // Journey Lifecycle
+  journeyStatus       String             @default("NOT_STARTED") // "NOT_STARTED", "IN_PROGRESS", "COMPLETED", "CANCELLED"
+  startedAt           DateTime?
+  completedAt         DateTime?
+
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  @@index([conversationId])
+  @@index([journeyStatus])
 }
 
 // Travel Partner Private Messages & Meeting Spot Updates
