@@ -17,14 +17,19 @@ export interface LatLngPoint {
   lng: number;
 }
 
+export type RideTransportMode = "cng" | "car" | "rickshaw";
+
 export interface FareEstimate {
+  mode: RideTransportMode;
   distanceKm: number;
   durationMins: number;
   soloFareBdt: number;
   sharedFareBdt: number;
   savingsBdt: number;
   savingsPercent: number;
+  monthlySavingsBdt: number;
   corridorLabel: string;
+  mrtHint: string | null;
 }
 
 /** Major University of Dhaka & Dhaka commuter landmarks with accurate GPS coordinates. */
@@ -183,24 +188,59 @@ export function findNearestLandmark(pt: LatLngPoint): CampusLandmark {
   return nearest;
 }
 
+const MRT_LINE_6_STATIONS: Array<{ name: string; lat: number; lng: number }> = [
+  { name: "Uttara", lat: 23.8682, lng: 90.4004 },
+  { name: "Mirpur 10", lat: 23.8070, lng: 90.3686 },
+  { name: "Agargaon", lat: 23.7784, lng: 90.3797 },
+  { name: "Farmgate", lat: 23.7580, lng: 90.3900 },
+  { name: "Karwan Bazar", lat: 23.7516, lng: 90.3932 },
+  { name: "Shahbagh", lat: 23.7388, lng: 90.3954 },
+  { name: "Dhaka University", lat: 23.7317, lng: 90.3957 },
+  { name: "Motijheel", lat: 23.7330, lng: 90.4172 },
+];
+
+function findNearbyMrtStation(pt: LatLngPoint): string | null {
+  let best: string | null = null;
+  let bestKm = 2.0;
+  for (const st of MRT_LINE_6_STATIONS) {
+    const km = computeDistanceKm(pt, st);
+    if (km <= bestKm) {
+      bestKm = km;
+      best = st.name;
+    }
+  }
+  return best;
+}
+
 /** Suggest a realistic corridor label + travel fare split in BDT for shared Dhaka commutes. */
 export function estimateSharedCommute(
   pickup: LatLngPoint,
   destination: LatLngPoint,
-  totalRiders = 2
+  totalRiders = 2,
+  mode: RideTransportMode = "cng"
 ): FareEstimate {
   // Multiply straight-line distance by ~1.32 Dhaka road detour factor
   const straightKm = computeDistanceKm(pickup, destination);
   const roadKm = Math.max(0.6, Math.round(straightKm * 1.32 * 10) / 10);
-  const durationMins = Math.max(5, Math.round(roadKm * 3.1 + 4));
+  const speedFactor = mode === "rickshaw" ? 4.8 : mode === "car" ? 2.9 : 3.1;
+  const durationMins = Math.max(5, Math.round(roadKm * speedFactor + 4));
 
-  const riderCount = Math.max(2, Math.min(totalRiders, 4));
-  // Dhaka CNG / ride-share baseline (~35 BDT base + 22 BDT/km, rounded to nearest 5)
-  const rawSolo = 35 + roadKm * 22;
-  const soloFareBdt = Math.max(50, Math.round(rawSolo / 5) * 5);
-  const sharedFareBdt = Math.max(20, Math.round(soloFareBdt / riderCount / 5) * 5);
+  const maxSeats = mode === "rickshaw" ? 2 : mode === "cng" ? 3 : 4;
+  const riderCount = Math.max(2, Math.min(totalRiders, maxSeats));
+
+  // Mode-specific realistic Dhaka base & per-km rates (rounded cleanly to nearest 5 BDT)
+  const rawSolo =
+    mode === "car"
+      ? 55 + roadKm * 30
+      : mode === "rickshaw"
+      ? 20 + roadKm * 18
+      : 35 + roadKm * 22;
+  const minSolo = mode === "rickshaw" ? 30 : mode === "car" ? 80 : 50;
+  const soloFareBdt = Math.max(minSolo, Math.round(rawSolo / 5) * 5);
+  const sharedFareBdt = Math.max(15, Math.round(soloFareBdt / riderCount / 5) * 5);
   const savingsBdt = Math.max(0, soloFareBdt - sharedFareBdt);
   const savingsPercent = Math.round((savingsBdt / soloFareBdt) * 100);
+  const monthlySavingsBdt = savingsBdt * 40; // ~20 round-trip campus commutes/month
 
   // Pick a concise corridor summary from road alignment
   const avgLat = (pickup.lat + destination.lat) / 2;
@@ -214,14 +254,24 @@ export function estimateSharedCommute(
     corridorLabel = "via Kazi Nazrul Islam Ave";
   }
 
+  const nearStartMrt = findNearbyMrtStation(pickup);
+  const nearEndMrt = findNearbyMrtStation(destination);
+  const mrtHint =
+    nearStartMrt && nearEndMrt && nearStartMrt !== nearEndMrt && roadKm >= 2.2
+      ? `Metro Line-6 (${nearStartMrt} → ${nearEndMrt}) is also ~৳20–30 solo`
+      : null;
+
   return {
+    mode,
     distanceKm: roadKm,
     durationMins,
     soloFareBdt,
     sharedFareBdt,
     savingsBdt,
     savingsPercent,
+    monthlySavingsBdt,
     corridorLabel,
+    mrtHint,
   };
 }
 

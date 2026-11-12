@@ -5,6 +5,7 @@ import Link from "next/link";
 import AppNavbar from "../components/AppNavbar";
 import {
   getUserScopedKey,
+  saveClientUser,
   useCurrentUser,
   useRequireAuth,
 } from "../lib/user-client";
@@ -16,6 +17,8 @@ import {
   findNearestLandmark,
   LatLngPoint,
   QUICK_CAMPUS_DESTINATIONS,
+  resolveLandmarkByName,
+  type RideTransportMode,
 } from "./rides-geo";
 import "./rides.css";
 
@@ -175,6 +178,8 @@ const GOOGLE_MAPS_LIGHT_STYLES = [
 interface RideMatchRequestItem {
   id: string;
   status: string;
+  receiverId?: string;
+  senderId?: string;
   message?: string | null;
   conversationId?: string | null;
   senderAvatarInitials?: string;
@@ -183,6 +188,17 @@ interface RideMatchRequestItem {
   receiverAvatarInitials?: string;
   receiverName?: string;
   verificationBadge?: string;
+}
+
+interface RideActiveConversationSummary {
+  id: string;
+  partnerId: string;
+  partnerName: string;
+  partnerAvatarInitials: string;
+  partnerBadge: string;
+  meetingLocation?: string | null;
+  meetingConfirmed?: boolean;
+  lastMessage?: { text: string; createdAt: string } | null;
 }
 
 interface RideConversationMessage {
@@ -282,15 +298,23 @@ export default function RideSharingPage() {
 
   // Connection Requests & Private Coordination Chat State
   const [showRequestsModal, setShowRequestsModal] = useState(false);
-  const [requestsTab, setRequestsTab] = useState<"incoming" | "outgoing">("incoming");
+  const [requestsTab, setRequestsTab] = useState<"incoming" | "outgoing" | "chats">("incoming");
   const [incomingRequests, setIncomingRequests] = useState<RideMatchRequestItem[]>([]);
   const [outgoingRequests, setOutgoingRequests] = useState<RideMatchRequestItem[]>([]);
+  const [activeConversations, setActiveConversations] = useState<RideActiveConversationSummary[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [activeConversation, setActiveConversation] = useState<RideConversationDetail | null>(null);
   const [chatMessages, setChatMessages] = useState<RideConversationMessage[]>([]);
   const [newMessageText, setNewMessageText] = useState("");
   const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [showSplitFareBar, setShowSplitFareBar] = useState(false);
+  const [splitFareAmount, setSplitFareAmount] = useState<string>("70");
+  const [isPayingSplitFare, setIsPayingSplitFare] = useState(false);
   const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  // Cost-saving optimizer controls (transport mode + split group count)
+  const [transportMode, setTransportMode] = useState<RideTransportMode>("cng");
+  const [riderGroupSize, setRiderGroupSize] = useState<2 | 3 | 4>(2);
 
   // Consent-Based Live GPS Tracking State
   const [rawTrackingSession, setTrackingSession] = useState<{
@@ -393,10 +417,30 @@ export default function RideSharingPage() {
   const [mapViewport, setMapViewport] = useState<{ width: number; height: number }>({ width: 840, height: 640 });
   const [inspectedPartnerId, setInspectedPartnerId] = useState<string | null>(null);
 
+  const effectiveRiderCount =
+    selectedPartnerIds.length >= 1
+      ? Math.min(4, 1 + selectedPartnerIds.length)
+      : riderGroupSize;
+
   const fareEstimate = useMemo(
-    () => estimateSharedCommute(pickupCoords, destCoords, 1 + Math.max(1, selectedPartnerIds.length)),
-    [pickupCoords, destCoords, selectedPartnerIds.length]
+    () => estimateSharedCommute(pickupCoords, destCoords, effectiveRiderCount, transportMode),
+    [pickupCoords, destCoords, effectiveRiderCount, transportMode]
   );
+
+  const hydratedConnectedPartnerIds = useMemo(() => {
+    const ids = new Set<string>(connectedPartnerIds);
+    const activeReceiverUserIds = new Set(
+      outgoingRequests
+        .filter((r) => (r.status === "PENDING" || r.status === "ACCEPTED") && r.receiverId)
+        .map((r) => r.receiverId as string)
+    );
+    for (const peer of [...activeCampusRiders, ...searchResults]) {
+      if (activeReceiverUserIds.has(peer.userId)) {
+        ids.add(peer.id);
+      }
+    }
+    return Array.from(ids);
+  }, [connectedPartnerIds, outgoingRequests, activeCampusRiders, searchResults]);
 
   const mapPeers = useMemo(() => {
     if (hasSubmittedSearch && searchResults.length > 0) {
@@ -943,9 +987,46 @@ export default function RideSharingPage() {
     };
   }, [fetchActiveCampusRiders]);
 
+  // Resolve typed pickup/destination text to exact coordinates before searching or going live
+  const resolveTypedPoint = useCallback(
+    async (
+      queryText: string,
+      cachedList: PlaceSuggestion[],
+      currentPoint: { lat: number; lng: number }
+    ): Promise<{ lat: number; lng: number }> => {
+      const q = queryText.trim().toLowerCase();
+      if (!q) return currentPoint;
+
+      const exactCached = cachedList.find(
+        (p) => p.name.toLowerCase() === q || p.label.toLowerCase() === q
+      );
+      if (exactCached) return { lat: exactCached.lat, lng: exactCached.lng };
+
+      const landmarkMatch = resolveLandmarkByName(queryText);
+      if (landmarkMatch) return { lat: landmarkMatch.lat, lng: landmarkMatch.lng };
+
+      try {
+        const res = await fetch(`/api/rides/places?q=${encodeURIComponent(queryText.trim())}`);
+        const data = await res.json().catch(() => null);
+        if (data?.success && Array.isArray(data.places) && data.places.length > 0) {
+          return { lat: data.places[0].lat, lng: data.places[0].lng };
+        }
+      } catch {
+        // Fallback cleanly to currentPoint
+      }
+      return currentPoint;
+    },
+    []
+  );
+
   // Publish or update the user's active live route so peers see them on the map
   const publishLiveRoute = useCallback(
-    async (options?: { silent?: boolean; overrideGender?: "no_preference" | "women_only" | "men_only" }) => {
+    async (options?: {
+      silent?: boolean;
+      overrideGender?: "no_preference" | "women_only" | "men_only";
+      resolvedOriginCoords?: { lat: number; lng: number };
+      resolvedDestCoords?: { lat: number; lng: number };
+    }) => {
       const originText = pickup.trim();
       const destText = destination.trim();
       const activePref = options?.overrideGender || genderPreference;
@@ -962,6 +1043,16 @@ export default function RideSharingPage() {
 
       if (!options?.silent) setIsRegisteringRoute(true);
       try {
+        const effectiveOrigin =
+          options?.resolvedOriginCoords ||
+          (await resolveTypedPoint(originText, pickupPlaces, pickupCoords));
+        const effectiveDest =
+          options?.resolvedDestCoords ||
+          (await resolveTypedPoint(destText, destPlaces, destCoords));
+
+        if (!options?.resolvedOriginCoords) setPickupCoords(effectiveOrigin);
+        if (!options?.resolvedDestCoords) setDestCoords(effectiveDest);
+
         const res = await fetch("/api/rides", {
           method: "POST",
           headers: {
@@ -971,12 +1062,12 @@ export default function RideSharingPage() {
           body: JSON.stringify({
             origin: originText,
             destination: destText,
-            originLat: pickupCoords.lat,
-            originLng: pickupCoords.lng,
-            destinationLat: destCoords.lat,
-            destinationLng: destCoords.lng,
+            originLat: effectiveOrigin.lat,
+            originLng: effectiveOrigin.lng,
+            destinationLat: effectiveDest.lat,
+            destinationLng: effectiveDest.lng,
             genderPreference: activePref,
-            notes: `Heading from ${originText.split(",")[0]} towards ${destText.split(",")[0]}. Looking for peer companion.`,
+            notes: `Heading from ${originText.split(",")[0]} towards ${destText.split(",")[0]}. Split fare ~৳${fareEstimate.sharedFareBdt}/person.`,
           }),
         });
 
@@ -1016,7 +1107,7 @@ export default function RideSharingPage() {
         if (!options?.silent) setIsRegisteringRoute(false);
       }
     },
-    [pickup, destination, genderPreference, pickupCoords, destCoords, getRideAuthHeaders, fetchActiveCampusRiders, showToast]
+    [pickup, destination, genderPreference, pickupCoords, destCoords, pickupPlaces, destPlaces, fareEstimate.sharedFareBdt, resolveTypedPoint, getRideAuthHeaders, fetchActiveCampusRiders, showToast]
   );
 
   const handlePauseLiveRoute = async () => {
@@ -1068,18 +1159,31 @@ export default function RideSharingPage() {
     setHasSubmittedSearch(true);
     setRouteRegisteredSuccess(false);
 
+    const [resolvedOrigin, resolvedDest] = await Promise.all([
+      resolveTypedPoint(pickup, pickupPlaces, pickupCoords),
+      resolveTypedPoint(destination, destPlaces, destCoords),
+    ]);
+    setPickupCoords(resolvedOrigin);
+    setDestCoords(resolvedDest);
+    focusRouteOnMap(resolvedOrigin, resolvedDest);
+
     // Automatically broadcast current verified user's live route so friends from other locations see them too
-    void publishLiveRoute({ silent: true, overrideGender: activePref });
+    void publishLiveRoute({
+      silent: true,
+      overrideGender: activePref,
+      resolvedOriginCoords: resolvedOrigin,
+      resolvedDestCoords: resolvedDest,
+    });
 
     try {
       const queryParams = new URLSearchParams({
         destination: destination.trim(),
         origin: pickup.trim(),
         genderPreference: activePref,
-        destLat: String(destCoords.lat),
-        destLng: String(destCoords.lng),
-        originLat: String(pickupCoords.lat),
-        originLng: String(pickupCoords.lng),
+        destLat: String(resolvedDest.lat),
+        destLng: String(resolvedDest.lng),
+        originLat: String(resolvedOrigin.lat),
+        originLng: String(resolvedOrigin.lng),
       });
 
       const res = await fetch(`/api/rides?${queryParams.toString()}`, {
@@ -1163,7 +1267,7 @@ export default function RideSharingPage() {
 
   // Connect with a single Travel Partner via persistent /api/rides/match invitation
   const handleConnectPartner = async (partner: Pick<MatchedPartner, "id" | "userId" | "fullName" | "destination">) => {
-    if (connectedPartnerIds.includes(partner.id)) {
+    if (hydratedConnectedPartnerIds.includes(partner.id)) {
       showToast(`✓ Invitation already sent to ${partner.fullName}. Check Requests to message.`);
       return;
     }
@@ -1333,13 +1437,19 @@ export default function RideSharingPage() {
   // -----------------------------------------------------------
   const fetchConnectionRequests = useCallback(async () => {
     try {
-      const res = await fetch("/api/rides/match", {
-        headers: getRideAuthHeaders(),
-      });
-      const data = await res.json();
-      if (data.success) {
+      const headers = getRideAuthHeaders();
+      const [matchRes, convRes] = await Promise.all([
+        fetch("/api/rides/match", { headers }),
+        fetch("/api/rides/conversations", { headers }),
+      ]);
+      const data = await matchRes.json().catch(() => null);
+      if (data?.success) {
         setIncomingRequests(data.incoming || []);
         setOutgoingRequests(data.outgoing || []);
+      }
+      const convData = await convRes.json().catch(() => null);
+      if (convData?.success && Array.isArray(convData.conversations)) {
+        setActiveConversations(convData.conversations);
       }
     } catch (err) {
       console.error("Failed to fetch connection requests:", err);
@@ -1814,6 +1924,8 @@ export default function RideSharingPage() {
   const openConversation = async (conversationId: string) => {
     setActiveConversationId(conversationId);
     setMobileTab("map");
+    setShowSplitFareBar(false);
+    setSplitFareAmount(String(fareEstimate.sharedFareBdt));
     try {
       const res = await fetch(`/api/rides/conversations/${conversationId}`, {
         headers: getRideAuthHeaders(),
@@ -1903,6 +2015,46 @@ export default function RideSharingPage() {
       }
     } catch (err) {
       console.error("Confirm meeting spot error:", err);
+    }
+  };
+
+  // Settle fair share directly in UniShare Wallet Tokens (1 Token = ৳1 BDT)
+  const handleSettleSplitFare = async () => {
+    if (!activeConversationId) return;
+    const amount = Math.round(Number(splitFareAmount));
+    if (!Number.isFinite(amount) || amount < 1 || amount > 2000) {
+      showToast("⚠️ Enter a valid fair-share amount between 1 and 2000 BDT.");
+      return;
+    }
+
+    setIsPayingSplitFare(true);
+    try {
+      const res = await fetch(`/api/rides/conversations/${activeConversationId}/split-fare`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getRideAuthHeaders() },
+        body: JSON.stringify({
+          amount,
+          note: `${pickup.split(",")[0]} → ${destination.split(",")[0]}`,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        showToast(`⚠️ ${data?.error || "Could not complete wallet split payment."}`);
+        return;
+      }
+
+      if (data.user) {
+        saveClientUser(data.user);
+      }
+      if (data.message) {
+        setChatMessages((prev) => [...prev, data.message]);
+      }
+      setShowSplitFareBar(false);
+      showToast(`💸 Settled ৳${amount} (${amount} tokens) with ${data.recipientName || "partner"}!`);
+    } catch {
+      showToast("⚠️ Network error settling ride fare.");
+    } finally {
+      setIsPayingSplitFare(false);
     }
   };
 
@@ -2360,6 +2512,75 @@ export default function RideSharingPage() {
             </div>
 
             {/* -------------------------------------------------
+                3B. SMART COST SPLIT & SAVINGS OPTIMIZER
+                ------------------------------------------------- */}
+            <div className="rides-savings-card" aria-label="Commute fare split optimizer">
+              <div className="rides-savings-header">
+                <span className="rides-savings-title">💸 Commute Savings Estimator</span>
+                <span className="rides-savings-badge">
+                  Save ৳{fareEstimate.savingsBdt}/trip ({fareEstimate.savingsPercent}%)
+                </span>
+              </div>
+
+              <div className="rides-savings-controls">
+                <div className="rides-mode-pills" role="group" aria-label="Transport mode">
+                  {(
+                    [
+                      { id: "cng", label: "🛺 CNG" },
+                      { id: "car", label: "🚗 Car" },
+                      { id: "rickshaw", label: "🚲 Rickshaw" },
+                    ] as const
+                  ).map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      className={`rides-mini-pill ${transportMode === m.id ? "active" : ""}`}
+                      onClick={() => {
+                        setTransportMode(m.id);
+                        if (m.id === "rickshaw" && riderGroupSize > 2) setRiderGroupSize(2);
+                        if (m.id === "cng" && riderGroupSize > 3) setRiderGroupSize(3);
+                      }}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="rides-riders-pills" role="group" aria-label="Split group size">
+                  {([2, 3, 4] as const)
+                    .filter((count) => (transportMode === "rickshaw" ? count <= 2 : transportMode === "cng" ? count <= 3 : true))
+                    .map((count) => (
+                      <button
+                        key={count}
+                        type="button"
+                        className={`rides-mini-pill ${effectiveRiderCount === count ? "active" : ""}`}
+                        onClick={() => setRiderGroupSize(count)}
+                        title={`Split fare across ${count} verified students`}
+                      >
+                        {count}p
+                      </button>
+                    ))}
+                </div>
+              </div>
+
+              <div className="rides-savings-breakdown">
+                <div className="rides-savings-price">
+                  <span className="rides-savings-solo">৳{fareEstimate.soloFareBdt}</span>
+                  <span>~৳{fareEstimate.sharedFareBdt}/person</span>
+                </div>
+                <div className="rides-savings-monthly">
+                  ~৳{fareEstimate.monthlySavingsBdt.toLocaleString()}/mo saved
+                </div>
+              </div>
+
+              {fareEstimate.mrtHint && (
+                <div className="rides-mrt-hint">
+                  🚇 Budget alternative: {fareEstimate.mrtHint}
+                </div>
+              )}
+            </div>
+
+            {/* -------------------------------------------------
                 4. LIVE ROUTE BROADCAST & FIND TRAVEL PARTNERS
                 ------------------------------------------------- */}
             {dbUserVerified === false ? (
@@ -2476,8 +2697,8 @@ export default function RideSharingPage() {
                     {activeCampusRiders.map((peer) => {
                       const peerOrigin = resolvePeerPoint(peer.originCoords, peer.origin, pickupCoords, 1);
                       const peerDest = resolvePeerPoint(peer.destCoords, peer.destination, destCoords, 2);
-                      const est = estimateSharedCommute(peerOrigin, peerDest, 2);
-                      const isConnected = connectedPartnerIds.includes(peer.id);
+                      const est = estimateSharedCommute(peerOrigin, peerDest, effectiveRiderCount, transportMode);
+                      const isConnected = hydratedConnectedPartnerIds.includes(peer.id);
 
                       return (
                         <div
@@ -2684,11 +2905,11 @@ export default function RideSharingPage() {
 
                 <div className="partner-cards-list">
                   {searchResults.map((partner) => {
-                    const isConnected = connectedPartnerIds.includes(partner.id);
+                    const isConnected = hydratedConnectedPartnerIds.includes(partner.id);
                     const isSelected = selectedPartnerIds.includes(partner.id);
                     const peerOrigin = resolvePeerPoint(partner.originCoords, partner.origin, pickupCoords, 1);
                     const peerDest = resolvePeerPoint(partner.destCoords, partner.destination, destCoords, 2);
-                    const partnerFare = estimateSharedCommute(peerOrigin, peerDest, 2);
+                    const partnerFare = estimateSharedCommute(peerOrigin, peerDest, effectiveRiderCount, transportMode);
                     const initials = partner.avatarInitials || partner.fullName
                       .split(" ")
                       .map((p) => p[0])
@@ -2941,7 +3162,7 @@ export default function RideSharingPage() {
               zoom={mapZoom}
               peers={mapPeers as MapPeerItem[]}
               selectedPartnerIds={selectedPartnerIds}
-              connectedPartnerIds={connectedPartnerIds}
+              connectedPartnerIds={hydratedConnectedPartnerIds}
               inspectedPartnerId={inspectedPartnerId}
               onCenterChange={setMapCenter}
               onZoomChange={setMapZoom}
@@ -2959,11 +3180,13 @@ export default function RideSharingPage() {
                   setPickupCoords(coord);
                   focusRouteOnMap(coord, destCoords);
                   showToast(`📍 Pickup pinned: ${resolvedLabel.split("(")[0].trim()}`);
+                  reportRidesPresence(coord, resolvedLabel);
                 } else {
                   setDestination(resolvedLabel);
                   setDestCoords(coord);
                   focusRouteOnMap(pickupCoords, coord);
                   showToast(`🎯 Destination pinned: ${resolvedLabel.split("(")[0].trim()}`);
+                  reportRidesPresence(pickupCoords, pickup, resolvedLabel);
                 }
                 setMapPickMode("none");
               }}
@@ -3360,6 +3583,63 @@ export default function RideSharingPage() {
                 ))}
               </div>
 
+              {/* In-Chat Shared Fair-Share Fare Settlement */}
+              <div className="chat-split-fare-bar">
+                <div className="chat-split-fare-row">
+                  <span style={{ fontSize: "11px", color: "#475569", fontWeight: 700 }}>
+                    Est. Split: ~৳{fareEstimate.sharedFareBdt}/person (Save {fareEstimate.savingsPercent}%)
+                  </span>
+                  <button
+                    type="button"
+                    className="chat-split-fare-trigger"
+                    onClick={() => {
+                      if (!showSplitFareBar) {
+                        setSplitFareAmount(String(fareEstimate.sharedFareBdt));
+                      }
+                      setShowSplitFareBar((prev) => !prev);
+                    }}
+                  >
+                    💸 {showSplitFareBar ? "Hide Split" : "Pay Fair Share"}
+                  </button>
+                </div>
+
+                {showSplitFareBar && (
+                  <div className="chat-split-fare-form">
+                    <input
+                      type="number"
+                      min={1}
+                      max={2000}
+                      className="chat-split-fare-input"
+                      aria-label="Fair share amount in BDT tokens"
+                      value={splitFareAmount}
+                      onChange={(e) => setSplitFareAmount(e.target.value)}
+                    />
+                    <span style={{ fontSize: "11px", color: "#64748b", fontWeight: 600 }}>৳/tokens</span>
+                    <button
+                      type="button"
+                      className="chat-split-pay-btn"
+                      onClick={handleSettleSplitFare}
+                      disabled={isPayingSplitFare}
+                    >
+                      {isPayingSplitFare ? "Paying..." : "Pay via Wallet"}
+                    </button>
+                    <button
+                      type="button"
+                      className="quick-spot-chip"
+                      onClick={() => {
+                        void handleSendMessage(
+                          `💸 Proposed fare split: ৳${splitFareAmount || fareEstimate.sharedFareBdt} each for ${pickup.split(",")[0]} → ${destination.split(",")[0]}.`,
+                          "TEXT"
+                        );
+                        setShowSplitFareBar(false);
+                      }}
+                    >
+                      Propose
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {/* Chat Thread Messages List */}
               <div className="chat-messages-container">
                 {chatMessages.length === 0 && (
@@ -3479,18 +3759,67 @@ export default function RideSharingPage() {
                 className={`requests-tab-btn ${requestsTab === "incoming" ? "active" : ""}`}
                 onClick={() => setRequestsTab("incoming")}
               >
-                Incoming Requests ({incomingRequests.length})
+                Incoming ({incomingRequests.length})
               </button>
               <button
                 type="button"
                 className={`requests-tab-btn ${requestsTab === "outgoing" ? "active" : ""}`}
                 onClick={() => setRequestsTab("outgoing")}
               >
-                Sent by Me ({outgoingRequests.length})
+                Sent ({outgoingRequests.length})
+              </button>
+              <button
+                type="button"
+                className={`requests-tab-btn ${requestsTab === "chats" ? "active" : ""}`}
+                onClick={() => setRequestsTab("chats")}
+              >
+                Chats ({activeConversations.length})
               </button>
             </div>
 
             <div className="requests-list-body">
+              {requestsTab === "chats" && (
+                <>
+                  {activeConversations.length === 0 ? (
+                    <div style={{ textAlign: "center", color: "#64748b", fontSize: "13px", padding: "30px 10px" }}>
+                      No active ride chats yet. Connect with a partner to start coordinating.
+                    </div>
+                  ) : (
+                    activeConversations.map((conv) => (
+                      <div key={conv.id} className="request-item-card accepted">
+                        <div className="request-item-top">
+                          <div className="request-user-info">
+                            <div className="request-user-avatar">{conv.partnerAvatarInitials}</div>
+                            <div>
+                              <div className="request-user-name">{conv.partnerName}</div>
+                              <div style={{ fontSize: "11px", color: "#64748b" }}>
+                                {conv.partnerBadge}
+                                {conv.meetingLocation ? ` · Meet: ${conv.meetingLocation}` : ""}
+                              </div>
+                            </div>
+                          </div>
+                          <span style={{ fontSize: "11px", fontWeight: 700, color: "#16a34a" }}>ACTIVE</span>
+                        </div>
+                        {conv.lastMessage?.text && (
+                          <div className="request-message-quote">&quot;{conv.lastMessage.text}&quot;</div>
+                        )}
+                        <div className="request-action-row">
+                          <button
+                            type="button"
+                            className="request-chat-btn"
+                            onClick={() => {
+                              setShowRequestsModal(false);
+                              openConversation(conv.id);
+                            }}
+                          >
+                            💬 Reopen Ride Chat
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </>
+              )}
               {requestsTab === "incoming" && (
                 <>
                   {incomingRequests.length === 0 ? (

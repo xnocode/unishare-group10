@@ -3614,6 +3614,187 @@
 }
 
 /* -------------------------------------------------------------
+   FARE SPLIT & SAVINGS OPTIMIZER + IN-CHAT WALLET SETTLEMENT
+   ------------------------------------------------------------- */
+.rides-savings-card {
+  border: 1.5px solid #cde5df;
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  background: linear-gradient(180deg, #f5fbf9 0%, #ffffff 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.rides-savings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rides-savings-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--teal-dark);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.rides-savings-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #166534;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.rides-savings-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.rides-mode-pills,
+.rides-riders-pills {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #f1f5f4;
+  padding: 3px;
+  border-radius: 8px;
+}
+
+.rides-mini-pill {
+  border: none;
+  background: transparent;
+  color: #4b5553;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.14s ease;
+  white-space: nowrap;
+}
+
+.rides-mini-pill.active {
+  background: #ffffff;
+  color: var(--teal);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.rides-savings-breakdown {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rides-savings-price {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.rides-savings-solo {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-decoration: line-through;
+}
+
+.rides-savings-monthly {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--teal);
+}
+
+.rides-mrt-hint {
+  font-size: 11px;
+  color: #0369a1;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-weight: 600;
+}
+
+.chat-split-fare-bar {
+  background: #f8faf9;
+  border-bottom: 1px solid var(--hair);
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.chat-split-fare-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.chat-split-fare-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 6px;
+  border: 1px solid #b7dfd9;
+  background: var(--mint);
+  color: var(--teal);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chat-split-fare-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.chat-split-fare-input {
+  width: 78px;
+  padding: 5px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.chat-split-pay-btn {
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: none;
+  background: var(--teal);
+  color: #ffffff;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chat-split-pay-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* -------------------------------------------------------------
    RESPONSIVE DESIGN (Tablets & Mobile)
    ------------------------------------------------------------- */
 
