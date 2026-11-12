@@ -13,6 +13,40 @@ export const RESEND_COOLDOWN_MS = 30 * 1000;
 
 export type OtpPurpose = "EMAIL_VERIFY" | "PASSWORD_RESET";
 
+export interface UserPreferences {
+  emailRentalAlerts: boolean;
+  emailRideAlerts: boolean;
+  safetyAlerts: boolean;
+  defaultRidePreference: "no_preference" | "women_only" | "men_only";
+}
+
+export const DEFAULT_USER_PREFERENCES: UserPreferences = {
+  emailRentalAlerts: true,
+  emailRideAlerts: true,
+  safetyAlerts: true,
+  defaultRidePreference: "no_preference",
+};
+
+export function parseUserPreferences(raw?: string | null): UserPreferences {
+  if (!raw) return { ...DEFAULT_USER_PREFERENCES };
+  try {
+    const parsed = JSON.parse(raw) as Partial<UserPreferences>;
+    const pref =
+      parsed.defaultRidePreference === "women_only" ||
+      parsed.defaultRidePreference === "men_only"
+        ? parsed.defaultRidePreference
+        : "no_preference";
+    return {
+      emailRentalAlerts: parsed.emailRentalAlerts !== false,
+      emailRideAlerts: parsed.emailRideAlerts !== false,
+      safetyAlerts: parsed.safetyAlerts !== false,
+      defaultRidePreference: pref,
+    };
+  } catch {
+    return { ...DEFAULT_USER_PREFERENCES };
+  }
+}
+
 export interface PublicUser {
   id: string;
   email: string;
@@ -27,6 +61,7 @@ export interface PublicUser {
   programme: string | null;
   academicSession: string | null;
   gender?: string | null;
+  preferences?: UserPreferences;
   createdAt: string | null;
   verified: boolean;
   emailVerified: boolean;
@@ -292,6 +327,7 @@ export function toPublicUser(user: {
   programme?: string | null;
   academicSession?: string | null;
   gender?: string | null;
+  preferencesJson?: string | null;
   createdAt?: Date | string | null;
   verified: boolean;
   emailVerified?: boolean;
@@ -320,6 +356,7 @@ export function toPublicUser(user: {
     programme: user.programme ?? null,
     academicSession: user.academicSession ?? null,
     gender: user.gender ?? null,
+    preferences: parseUserPreferences(user.preferencesJson),
     createdAt: createdAtIso,
     verified: Boolean(user.verified),
     emailVerified: Boolean(user.emailVerified ?? user.verified),
@@ -423,13 +460,31 @@ export function setVerifiedAccountCookieFromUser(
 }
 
 export function clearSessionCookies(res: NextResponse) {
+  const secure = process.env.NODE_ENV === "production";
+  const httpOnlyCookies = new Set([
+    SESSION_COOKIE,
+    VERIFIED_ACCOUNT_COOKIE,
+    KNOWN_ACCOUNTS_COOKIE,
+    PENDING_VERIFY_COOKIE,
+    PENDING_RESET_COOKIE,
+  ]);
   for (const name of [
     SESSION_COOKIE,
+    VERIFIED_ACCOUNT_COOKIE,
+    KNOWN_ACCOUNTS_COOKIE,
+    PENDING_VERIFY_COOKIE,
+    PENDING_RESET_COOKIE,
     "unishare_logged_in",
     "unishare_user",
     "unishare_token",
   ]) {
-    res.cookies.set(name, "", { path: "/", maxAge: 0 });
+    res.cookies.set(name, "", {
+      path: "/",
+      maxAge: 0,
+      httpOnly: httpOnlyCookies.has(name),
+      sameSite: "lax",
+      secure,
+    });
   }
 }
 

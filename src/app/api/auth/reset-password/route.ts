@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/app/lib/db";
 import {
   canonicalizeEmail,
-  deriveNameFromEmail,
   hashPassword,
   isValidEmail,
   normalizeEmail,
@@ -109,29 +108,29 @@ export async function POST(req: NextRequest) {
       req.cookies.get(VERIFIED_ACCOUNT_COOKIE)?.value
     );
 
+    if (!savedUser && (!signedAcc || canonicalizeEmail(signedAcc.email) !== canonicalizeEmail(email))) {
+      return NextResponse.json(
+        { error: "No matching registered account found for password reset." },
+        { status: 404 }
+      );
+    }
+
     const res = NextResponse.json({ ok: true });
-    res.cookies.set(PENDING_RESET_COOKIE, "", { path: "/", maxAge: 0 });
+    res.cookies.set(PENDING_RESET_COOKIE, "", {
+      path: "/",
+      maxAge: 0,
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    });
 
     if (savedUser) {
       setVerifiedAccountCookieFromUser(res, toPublicUser(savedUser), newHash);
-    } else if (signedAcc && signedAcc.email === email) {
+    } else if (signedAcc) {
       setVerifiedAccountCookie(res, {
         ...signedAcc,
         passwordHash: newHash,
         emailVerified: true,
-      });
-    } else {
-      setVerifiedAccountCookie(res, {
-        email,
-        fullName: deriveNameFromEmail(email),
-        university: "University of Dhaka",
-        universityId: "du",
-        isCustomUniversity: false,
-        studentId: null,
-        passwordHash: newHash,
-        emailVerified: true,
-        verified: false,
-        tokenBalance: 50,
       });
     }
 

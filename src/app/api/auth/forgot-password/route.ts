@@ -27,6 +27,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (email === DEMO_EMAIL) {
+      return NextResponse.json(
+        { error: "The shared demo account password cannot be reset." },
+        { status: 400 }
+      );
+    }
+
     let university: string | undefined;
     let found = false;
 

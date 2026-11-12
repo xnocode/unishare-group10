@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/app/lib/db";
 import {
   applySessionCookies,
-  DEMO_EMAIL,
+  parseUserPreferences,
   recordKnownAccountCookie,
   SESSION_COOKIE,
   SessionPayload,
   setVerifiedAccountCookieFromUser,
   toPublicUser,
+  UserPreferences,
   VERIFIED_ACCOUNT_COOKIE,
   VerifiedAccountPayload,
   verifySignedPayload,
@@ -85,7 +86,12 @@ export async function PATCH(req: NextRequest) {
       programme?: string | null;
       academicSession?: string | null;
       gender?: string | null;
+      preferencesJson?: string;
     } = {};
+
+    const existing = await db.user
+      .findUnique({ where: { email: session.email } })
+      .catch(() => null);
 
     if ("fullName" in body) {
       const check = validateFullName(typeof body.fullName === "string" ? body.fullName : "");
@@ -101,6 +107,12 @@ export async function PATCH(req: NextRequest) {
     if ("department" in body) {
       const rawDept = typeof body.department === "string" ? body.department.trim() : "";
       if (!rawDept) {
+        if (existing?.verified || session.verified) {
+          return NextResponse.json(
+            { ok: false, error: "Verified student accounts require an academic department." },
+            { status: 400 }
+          );
+        }
         updateData.department = null;
       } else {
         const check = validateDepartment(rawDept);
@@ -149,6 +161,32 @@ export async function PATCH(req: NextRequest) {
       updateData.gender = rawGender || null;
     }
 
+    if ("preferences" in body && body.preferences && typeof body.preferences === "object") {
+      const currentPrefs = parseUserPreferences(existing?.preferencesJson);
+      const p = body.preferences as Partial<UserPreferences>;
+      const nextPrefs: UserPreferences = {
+        emailRentalAlerts:
+          typeof p.emailRentalAlerts === "boolean"
+            ? p.emailRentalAlerts
+            : currentPrefs.emailRentalAlerts,
+        emailRideAlerts:
+          typeof p.emailRideAlerts === "boolean"
+            ? p.emailRideAlerts
+            : currentPrefs.emailRideAlerts,
+        safetyAlerts:
+          typeof p.safetyAlerts === "boolean"
+            ? p.safetyAlerts
+            : currentPrefs.safetyAlerts,
+        defaultRidePreference:
+          p.defaultRidePreference === "women_only" ||
+          p.defaultRidePreference === "men_only" ||
+          p.defaultRidePreference === "no_preference"
+            ? p.defaultRidePreference
+            : currentPrefs.defaultRidePreference,
+      };
+      updateData.preferencesJson = JSON.stringify(nextPrefs);
+    }
+
     if (Object.keys(updateData).length === 0) {
       return NextResponse.json(
         { ok: false, error: "No editable profile fields provided." },
@@ -165,55 +203,51 @@ export async function PATCH(req: NextRequest) {
         ? verifiedCookie
         : null;
 
-    let updatedRecord: Parameters<typeof toPublicUser>[0] & {
-      passwordHash?: string;
-    } | null = null;
+    if (!existing && !matchingCookie) {
+      return NextResponse.json(
+        { ok: false, error: "Account not found in database. Please sign in again." },
+        { status: 404 }
+      );
+    }
 
-    try {
-      const existing = await db.user.findUnique({ where: { email: session.email } });
-      if (existing) {
-        updatedRecord = await db.user.update({
+    const updatedRecord = existing
+      ? await db.user.update({
           where: { email: session.email },
           data: updateData,
+        })
+      : await db.user.upsert({
+          where: { email: session.email },
+          update: updateData,
+          create: {
+            email: session.email,
+            fullName: updateData.fullName ?? matchingCookie!.fullName,
+            university: matchingCookie!.university,
+            universityId: matchingCookie!.universityId,
+            isCustomUniversity: matchingCookie!.isCustomUniversity,
+            studentId: matchingCookie!.studentId,
+            department:
+              updateData.department !== undefined
+                ? updateData.department
+                : matchingCookie!.department ?? null,
+            programme:
+              updateData.programme !== undefined
+                ? updateData.programme
+                : matchingCookie!.programme ?? null,
+            academicSession:
+              updateData.academicSession !== undefined
+                ? updateData.academicSession
+                : matchingCookie!.academicSession ?? null,
+            gender:
+              updateData.gender !== undefined
+                ? updateData.gender
+                : matchingCookie!.gender ?? null,
+            preferencesJson: updateData.preferencesJson ?? null,
+            passwordHash: matchingCookie!.passwordHash,
+            emailVerified: matchingCookie!.emailVerified,
+            verified: matchingCookie!.verified,
+            tokenBalance: matchingCookie!.tokenBalance,
+          },
         });
-      }
-    } catch (err) {
-      console.warn("PATCH /api/auth/me DB warning:", err);
-    }
-
-    if (!updatedRecord) {
-      updatedRecord = {
-        id: session.userId,
-        email: session.email,
-        fullName: updateData.fullName ?? matchingCookie?.fullName ?? session.fullName,
-        university: matchingCookie?.university ?? session.university,
-        universityId: matchingCookie?.universityId ?? "du",
-        isCustomUniversity: matchingCookie?.isCustomUniversity ?? false,
-        studentId: matchingCookie?.studentId ?? null,
-        department:
-          updateData.department !== undefined
-            ? updateData.department
-            : matchingCookie?.department ?? null,
-        programme:
-          updateData.programme !== undefined
-            ? updateData.programme
-            : matchingCookie?.programme ?? null,
-        academicSession:
-          updateData.academicSession !== undefined
-            ? updateData.academicSession
-            : matchingCookie?.academicSession ?? null,
-        gender:
-          updateData.gender !== undefined
-            ? updateData.gender
-            : matchingCookie?.gender ?? null,
-        createdAt: matchingCookie?.createdAt ?? null,
-        verified: matchingCookie?.verified ?? session.verified,
-        emailVerified: matchingCookie?.emailVerified ?? session.emailVerified,
-        tokenBalance:
-          matchingCookie?.tokenBalance ?? (session.email === DEMO_EMAIL ? 420 : 50),
-        passwordHash: matchingCookie?.passwordHash,
-      };
-    }
 
     const publicUser = toPublicUser(updatedRecord);
     const res = NextResponse.json({

@@ -94,37 +94,18 @@ export async function POST(req: NextRequest) {
     }
 
     const newHash = hashPassword(newPassword);
-    let updatedPublic = matchingCookie
-      ? toPublicUser({
-          id: session.userId,
-          email: session.email,
-          fullName: matchingCookie.fullName,
-          university: matchingCookie.university,
-          universityId: matchingCookie.universityId,
-          isCustomUniversity: matchingCookie.isCustomUniversity,
-          studentId: matchingCookie.studentId,
-          department: matchingCookie.department,
-          programme: matchingCookie.programme,
-          academicSession: matchingCookie.academicSession,
-          gender: matchingCookie.gender,
-          createdAt: matchingCookie.createdAt,
-          verified: matchingCookie.verified,
-          emailVerified: matchingCookie.emailVerified,
-          tokenBalance: matchingCookie.tokenBalance,
-        })
-      : null;
-
-    if (dbUser) {
-      try {
-        const saved = await db.user.update({
-          where: { email: session.email },
-          data: { passwordHash: newHash },
-        });
-        updatedPublic = toPublicUser(saved);
-      } catch (err) {
-        console.warn("Change password DB update warning:", err);
-      }
+    if (!dbUser) {
+      return NextResponse.json(
+        { ok: false, error: "Account record not found. Please log in again." },
+        { status: 404 }
+      );
     }
+
+    const saved = await db.user.update({
+      where: { email: session.email },
+      data: { passwordHash: newHash },
+    });
+    const updatedPublic = toPublicUser(saved);
 
     const res = NextResponse.json({
       ok: true,

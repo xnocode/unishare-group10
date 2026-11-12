@@ -58,23 +58,6 @@ export async function issueOtpCode(params: {
   const codeHash = hashOtpCode(email, params.purpose, code);
   const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
 
-  try {
-    await db.authVerificationCode.updateMany({
-      where: { email, purpose: params.purpose, consumedAt: null },
-      data: { consumedAt: new Date() },
-    });
-    await db.authVerificationCode.create({
-      data: {
-        email,
-        purpose: params.purpose,
-        codeHash,
-        expiresAt,
-      },
-    });
-  } catch (err) {
-    console.warn("OTP DB store warning (signed cookie fallback active):", err);
-  }
-
   const mailResult = await sendOtpEmail({
     to: email,
     code,
@@ -91,6 +74,23 @@ export async function issueOtpCode(params: {
       mailResult,
       status: 502,
     };
+  }
+
+  try {
+    await db.authVerificationCode.updateMany({
+      where: { email, purpose: params.purpose, consumedAt: null },
+      data: { consumedAt: new Date() },
+    });
+    await db.authVerificationCode.create({
+      data: {
+        email,
+        purpose: params.purpose,
+        codeHash,
+        expiresAt,
+      },
+    });
+  } catch (err) {
+    console.warn("OTP DB store warning (signed cookie fallback active):", err);
   }
 
   return { ok: true, codeHash, mailResult };

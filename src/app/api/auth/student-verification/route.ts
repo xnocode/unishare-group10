@@ -20,8 +20,20 @@ import {
   validateStudentId,
 } from "@/app/lib/validation";
 
+const VALID_GENDERS = new Set(["female", "male", "other"]);
+
 export async function POST(req: NextRequest) {
   try {
+    const session = verifySignedPayload<SessionPayload>(
+      req.cookies.get(SESSION_COOKIE)?.value
+    );
+    if (!session?.email) {
+      return NextResponse.json(
+        { error: "Please log in or confirm your email before submitting student verification." },
+        { status: 401 }
+      );
+    }
+
     const body = (await req.json().catch(() => ({}))) as {
       email?: string;
       fullName?: string;
@@ -37,14 +49,27 @@ export async function POST(req: NextRequest) {
       facePhotoPath?: string;
     };
 
-    const session = verifySignedPayload<SessionPayload>(
-      req.cookies.get(SESSION_COOKIE)?.value
-    );
-    const email = normalizeEmail(body.email || session?.email || "");
+    const requestedEmail = body.email ? normalizeEmail(body.email) : "";
+    const sessionEmail = normalizeEmail(session.email);
+    if (requestedEmail && requestedEmail !== sessionEmail) {
+      return NextResponse.json(
+        { error: "You can only verify your own signed-in student account." },
+        { status: 403 }
+      );
+    }
+    const email = sessionEmail;
 
     if (!isValidEmail(email)) {
       return NextResponse.json(
         { error: "Valid university email is required." },
+        { status: 400 }
+      );
+    }
+
+    const rawGender = typeof body.gender === "string" ? body.gender.trim().toLowerCase() : "";
+    if (rawGender && !VALID_GENDERS.has(rawGender)) {
+      return NextResponse.json(
+        { error: "Gender must be 'female', 'male', or 'other'." },
         { status: 400 }
       );
     }
@@ -124,13 +149,25 @@ export async function POST(req: NextRequest) {
             programme,
             academicSession,
             ...(university ? { university } : {}),
-            ...(body.gender ? { gender: body.gender.trim().toLowerCase() } : {}),
+            ...(rawGender ? { gender: rawGender } : {}),
             ...(idCardPhotoPath ? { idCardPhotoPath } : {}),
             ...(facePhotoPath ? { facePhotoPath } : {}),
             emailVerified: true,
             verified: true,
           },
         });
+        await db.notification
+          .create({
+            data: {
+              userId: updatedUser.id,
+              category: "verification",
+              title: "Student profile verified",
+              body: `Your ${updatedUser.university || "campus"} student ID (${studentId}) is verified across Marketplace, Ride Sharing, and Campus Wallet.`,
+              actionLabel: "Explore Marketplace",
+              actionHref: "/marketplace",
+            },
+          })
+          .catch(() => {});
       }
     } catch (err) {
       console.warn("Student verification DB warning:", err);

@@ -36,11 +36,19 @@ model User {
   idCardPhotoPath    String?
   facePhotoPath      String?
 
+  // User Notification & Safety Preferences JSON
+  preferencesJson    String?
+
   // Destination-based Live Companion Matching
   travelJourneys     TravelJourney[]      @relation("UserTravelJourneys")
 
-  // Campus Marketplace Listings
-  marketplaceListings MarketplaceListing[] @relation("UserMarketplaceListings")
+  // Campus Marketplace & Financial Records
+  marketplaceListings MarketplaceListing[]  @relation("UserMarketplaceListings")
+  favorites           MarketplaceFavorite[] @relation("UserFavorites")
+  rentalsBorrowed     MarketplaceRental[]   @relation("UserBorrowedRentals")
+  rentalsLent         MarketplaceRental[]   @relation("UserLentRentals")
+  walletTransactions  WalletTransaction[]   @relation("UserWalletTransactions")
+  notifications       Notification[]        @relation("UserNotifications")
 }
 
 model AuthVerificationCode {
@@ -353,8 +361,91 @@ model MarketplaceListing {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  rentals        MarketplaceRental[]
+  favorites      MarketplaceFavorite[]
+
   @@index([sellerId])
   @@index([status])
   @@index([category])
+  @@index([createdAt])
+}
+
+model MarketplaceFavorite {
+  id        String             @id @default(cuid())
+  userId    String
+  user      User               @relation("UserFavorites", fields: [userId], references: [id], onDelete: Cascade)
+  listingId String
+  listing   MarketplaceListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  createdAt DateTime           @default(now())
+
+  @@unique([userId, listingId])
+  @@index([userId])
+  @@index([listingId])
+}
+
+model MarketplaceRental {
+  id            String             @id @default(cuid())
+  listingId     String
+  listing       MarketplaceListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  listingTitle  String
+  listingImage  String
+  borrowerId    String
+  borrower      User               @relation("UserBorrowedRentals", fields: [borrowerId], references: [id], onDelete: Cascade)
+  borrowerName  String
+  borrowerEmail String
+  lenderId      String
+  lender        User               @relation("UserLentRentals", fields: [lenderId], references: [id], onDelete: Cascade)
+  lenderName    String
+  lenderEmail   String
+  startDate     String
+  endDate       String
+  days          Int
+  ratePerDay    Int
+  rentalFee     Int
+  depositAmount Int
+  totalLocked   Int
+  note          String?
+  status        String             @default("PENDING") // PENDING | ACTIVE | RETURNED | DECLINED | CANCELLED
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  returnedAt    DateTime?
+
+  @@index([listingId])
+  @@index([borrowerId])
+  @@index([lenderId])
+  @@index([status])
+}
+
+model WalletTransaction {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation("UserWalletTransactions", fields: [userId], references: [id], onDelete: Cascade)
+  type         String   // TOPUP | TRANSFER_IN | TRANSFER_OUT | RENTAL_HOLD | RENTAL_REFUND | RENTAL_EARN | BONUS
+  title        String
+  subtitle     String?
+  amount       Int      // Signed token delta (+ credit, - debit)
+  balanceAfter Int
+  referenceId  String?
+  status       String   @default("COMPLETED") // COMPLETED | PENDING
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  category    String   @default("marketplace") // marketplace | rides | wallet | verification | safety
+  title       String
+  body        String
+  actionLabel String?
+  actionHref  String?
+  unread      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([unread])
   @@index([createdAt])
 }

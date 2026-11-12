@@ -26,10 +26,17 @@ export async function POST(req: NextRequest) {
       fullName?: string;
       email?: string;
       password?: string;
+      gender?: string;
       universityName?: string;
       universityId?: string;
       isCustomUniversity?: boolean;
     };
+
+    const rawGender = typeof body.gender === "string" ? body.gender.trim().toLowerCase() : "";
+    const resolvedGender =
+      rawGender === "female" || rawGender === "male" || rawGender === "other"
+        ? rawGender
+        : null;
 
     const nameCheck = validateFullName(body.fullName || "");
     if (!nameCheck.valid) {
@@ -121,6 +128,7 @@ export async function POST(req: NextRequest) {
           university: resolvedUniName,
           universityId: resolvedUniId,
           isCustomUniversity: resolvedIsCustom,
+          ...(resolvedGender ? { gender: resolvedGender } : {}),
           emailVerified: false,
         },
         create: {
@@ -129,6 +137,7 @@ export async function POST(req: NextRequest) {
           university: resolvedUniName,
           universityId: resolvedUniId,
           isCustomUniversity: resolvedIsCustom,
+          ...(resolvedGender ? { gender: resolvedGender } : {}),
           passwordHash,
           emailVerified: false,
           verified: false,

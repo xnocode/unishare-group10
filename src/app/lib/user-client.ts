@@ -17,6 +17,12 @@ export interface ClientUser {
   programme?: string | null;
   academicSession?: string | null;
   gender?: string | null;
+  preferences?: {
+    emailRentalAlerts: boolean;
+    emailRideAlerts: boolean;
+    safetyAlerts: boolean;
+    defaultRidePreference: "no_preference" | "women_only" | "men_only";
+  };
   createdAt?: string | null;
   verified?: boolean;
   emailVerified?: boolean;
@@ -201,15 +207,43 @@ export function clearClientSession() {
   try {
     localStorage.removeItem("unishare_logged_in");
     localStorage.removeItem("unishare_user");
-    document.cookie = "unishare_logged_in=; path=/; max-age=0";
+    sessionStorage.removeItem("unishare_pending_mail_meta");
+    document.cookie = "unishare_logged_in=; path=/; max-age=0; SameSite=Lax";
     document.cookie = "unishare_user=; path=/; max-age=0; SameSite=Lax";
     document.cookie = "unishare_token=; path=/; max-age=0; SameSite=Lax";
     window.dispatchEvent(new Event(USER_EVENT));
     emitStorageUpdate();
-    fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+    fetch("/api/auth/logout", { method: "POST", keepalive: true }).catch(() => {});
   } catch {
     // ignore storage errors
   }
+}
+
+export async function signInDemoStudent(): Promise<ClientUser | null> {
+  try {
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: DEMO_EMAIL,
+        password: "password123",
+        rememberMe: true,
+      }),
+    });
+    if (res.ok) {
+      const data = (await res.json().catch(() => null)) as {
+        ok?: boolean;
+        user?: ClientUser;
+      } | null;
+      if (data?.ok && data.user) {
+        saveClientUser(data.user);
+        return data.user;
+      }
+    }
+  } catch {
+    // ignore network failure
+  }
+  return null;
 }
 
 function subscribeUserStore(callback: () => void) {
@@ -248,7 +282,13 @@ export function useCurrentUser() {
     if (!isLoggedIn) return;
 
     fetch("/api/auth/me")
-      .then((res) => (res.ok ? res.json() : null))
+      .then(async (res) => {
+        if (res.status === 401) {
+          clearClientSession();
+          return null;
+        }
+        return res.ok ? res.json() : null;
+      })
       .then((data: { ok?: boolean; user?: ClientUser } | null) => {
         if (data?.ok && data.user) {
           saveClientUser(data.user);
@@ -263,7 +303,7 @@ export function useCurrentUser() {
         user: null as ClientUser | null,
         resolvedUser: SSR_PLACEHOLDER_USER,
         isDemoUser: false,
-        firstName: "there",
+        firstName: "Student",
         isHydrated: false,
       };
     }
@@ -271,9 +311,9 @@ export function useCurrentUser() {
     if (!rawJson) {
       return {
         user: null as ClientUser | null,
-        resolvedUser: DEMO_USER,
-        isDemoUser: true,
-        firstName: getFirstName(DEMO_USER.name),
+        resolvedUser: SSR_PLACEHOLDER_USER,
+        isDemoUser: false,
+        firstName: "Student",
         isHydrated: true,
       };
     }
@@ -281,12 +321,21 @@ export function useCurrentUser() {
     try {
       const parsed = JSON.parse(rawJson) as Partial<ClientUser>;
       const email = (parsed.email || "").trim().toLowerCase();
+      if (!email) {
+        return {
+          user: null as ClientUser | null,
+          resolvedUser: SSR_PLACEHOLDER_USER,
+          isDemoUser: false,
+          firstName: "Student",
+          isHydrated: true,
+        };
+      }
       const name = (parsed.name || parsed.fullName || "").trim() || "Campus Student";
       const isDemo =
         Boolean(parsed.isDemoUser) || email === DEMO_EMAIL;
       const merged: ClientUser = {
         id: parsed.id,
-        email: email || DEMO_EMAIL,
+        email,
         name,
         fullName: parsed.fullName || name,
         initials: deriveInitials(name, parsed.initials),
@@ -301,6 +350,7 @@ export function useCurrentUser() {
         programme: parsed.programme ?? (isDemo ? "BSc (Honours)" : null),
         academicSession: parsed.academicSession ?? (isDemo ? "2023–2024" : null),
         gender: parsed.gender ?? (isDemo ? "female" : null),
+        preferences: parsed.preferences,
         createdAt: parsed.createdAt ?? (isDemo ? DEMO_USER.createdAt : null),
         verified: parsed.verified ?? false,
         emailVerified: parsed.emailVerified ?? true,
@@ -323,9 +373,9 @@ export function useCurrentUser() {
     } catch {
       return {
         user: null as ClientUser | null,
-        resolvedUser: DEMO_USER,
-        isDemoUser: true,
-        firstName: getFirstName(DEMO_USER.name),
+        resolvedUser: SSR_PLACEHOLDER_USER,
+        isDemoUser: false,
+        firstName: "Student",
         isHydrated: true,
       };
     }

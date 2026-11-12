@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
       department: string | null;
       programme: string | null;
       academicSession: string | null;
+      gender: string | null;
       createdAt: Date | null;
       passwordHash: string;
       emailVerified: boolean;
@@ -93,6 +94,7 @@ export async function POST(req: NextRequest) {
             department: matchingSignedAccount.department ?? null,
             programme: matchingSignedAccount.programme ?? null,
             academicSession: matchingSignedAccount.academicSession ?? null,
+            gender: matchingSignedAccount.gender ?? null,
             passwordHash: matchingSignedAccount.passwordHash,
             emailVerified: matchingSignedAccount.emailVerified,
             verified: matchingSignedAccount.verified,
@@ -107,6 +109,7 @@ export async function POST(req: NextRequest) {
             department: matchingSignedAccount.department ?? null,
             programme: matchingSignedAccount.programme ?? null,
             academicSession: matchingSignedAccount.academicSession ?? null,
+            gender: matchingSignedAccount.gender ?? null,
             passwordHash: matchingSignedAccount.passwordHash,
             emailVerified: matchingSignedAccount.emailVerified,
             verified: matchingSignedAccount.verified,
@@ -125,6 +128,7 @@ export async function POST(req: NextRequest) {
           department: matchingSignedAccount.department ?? null,
           programme: matchingSignedAccount.programme ?? null,
           academicSession: matchingSignedAccount.academicSession ?? null,
+          gender: matchingSignedAccount.gender ?? null,
           createdAt: matchingSignedAccount.createdAt
             ? new Date(matchingSignedAccount.createdAt)
             : new Date(),
@@ -136,26 +140,54 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Guarantee pre-seeded demo account availability even on fresh ephemeral DB
+    // Guarantee pre-seeded demo account exists in DB cleanly so relational actions (listings/rentals/wallet) work
     if (!userRecord && email === DEMO_EMAIL) {
       const demoHash = hashPassword("password123");
-      userRecord = {
-        id: "demo-farhana",
-        email: DEMO_EMAIL,
-        fullName: "Farhana Rahman",
-        university: "University of Dhaka",
-        universityId: "du",
-        isCustomUniversity: false,
-        studentId: "2023-114-028",
-        department: "Computer Science & Engineering",
-        programme: "BSc (Honours)",
-        academicSession: "2023–2024",
-        createdAt: new Date("2026-10-14T00:00:00.000Z"),
-        passwordHash: demoHash,
-        emailVerified: true,
-        verified: true,
-        tokenBalance: 420,
-      };
+      try {
+        userRecord = await db.user.upsert({
+          where: { email: DEMO_EMAIL },
+          update: {
+            emailVerified: true,
+            verified: true,
+            gender: "female",
+          },
+          create: {
+            email: DEMO_EMAIL,
+            fullName: "Farhana Rahman",
+            university: "University of Dhaka",
+            universityId: "du",
+            isCustomUniversity: false,
+            studentId: "2023-114-028",
+            department: "Computer Science & Engineering",
+            programme: "BSc (Honours)",
+            academicSession: "2023–2024",
+            gender: "female",
+            passwordHash: demoHash,
+            emailVerified: true,
+            verified: true,
+            tokenBalance: 420,
+          },
+        });
+      } catch {
+        userRecord = {
+          id: "demo-farhana",
+          email: DEMO_EMAIL,
+          fullName: "Farhana Rahman",
+          university: "University of Dhaka",
+          universityId: "du",
+          isCustomUniversity: false,
+          studentId: "2023-114-028",
+          department: "Computer Science & Engineering",
+          programme: "BSc (Honours)",
+          academicSession: "2023–2024",
+          gender: "female",
+          createdAt: new Date("2026-10-14T00:00:00.000Z"),
+          passwordHash: demoHash,
+          emailVerified: true,
+          verified: true,
+          tokenBalance: 420,
+        };
+      }
     }
 
     if (!userRecord) {

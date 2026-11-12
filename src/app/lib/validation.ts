@@ -32,8 +32,6 @@ const FAKE_NAME_WORDS = new Set([
   "xyz",
   "none",
   "null",
-  "nil",
-  "nan",
   "undefined",
   "unknown",
   "anon",
@@ -114,12 +112,6 @@ const FAKE_NAME_WORDS = new Set([
   "hehe",
   "hahaha",
   "hehehe",
-  "mr",
-  "mrs",
-  "ms",
-  "miss",
-  "sir",
-  "madam",
   "first",
   "last",
   "random",
@@ -369,12 +361,18 @@ function extractLowerTokensWithCamel(words: string[]): string[] {
 }
 
 /** Shared gibberish, keyboard-mash, and vowel check for name and institution tokens. */
+const VALID_NAME_ABBREVIATIONS = new Set(["mst", "md", "sk", "dr", "st"]);
+
 function isGibberishWord(
   word: string,
   options: { allowAcronym?: boolean } = {}
 ): boolean {
   const letters = word.replace(/[^A-Za-z]/g, "");
   const lower = letters.toLowerCase();
+
+  if (options.allowAcronym === false && VALID_NAME_ABBREVIATIONS.has(lower)) {
+    return false;
+  }
 
   if (/(.)\1{2,}/iu.test(word)) return true;
   if (lower.length >= 5 && /^(.{1,2})\1{2,}$/.test(lower)) return true;
@@ -554,16 +552,16 @@ export function validateCustomUniversityName(raw: string): {
     };
   }
 
-  if (/\d/.test(normalized)) {
+  if (/\d{4,}/.test(normalized)) {
     return {
       valid: false,
       normalized,
-      error: "Institution names cannot contain numbers.",
+      error: "Please enter a genuine university or college name (no long number strings).",
     };
   }
 
   if (
-    !/^[A-Za-z][A-Za-z\s.,'&()-]*[A-Za-z)]$/.test(normalized) ||
+    !/^[A-Za-z0-9][A-Za-z0-9\s.,'&()-]*[A-Za-z0-9)]$/.test(normalized) ||
     /[.,'&-]{2,}/.test(normalized)
   ) {
     return {
@@ -808,7 +806,10 @@ export function validateDepartment(raw: string): {
   return { valid: true, normalized };
 }
 
-export function validateImageUpload(file: File | null | undefined): {
+export function validateImageUpload(
+  file: File | null | undefined,
+  maxBytes = 4 * 1024 * 1024
+): {
   valid: boolean;
   error?: string;
 } {
@@ -825,17 +826,18 @@ export function validateImageUpload(file: File | null | undefined): {
     };
   }
 
-  if (file.size < 1024) {
+  if (file.size < 128) {
     return {
       valid: false,
       error: "Selected image looks empty or corrupted. Choose a real clear photo.",
     };
   }
 
-  if (file.size > 10 * 1024 * 1024) {
+  if (file.size > maxBytes) {
+    const mb = Math.round(maxBytes / (1024 * 1024));
     return {
       valid: false,
-      error: "Image must be 10 MB or smaller.",
+      error: `Image must be ${mb} MB or smaller.`,
     };
   }
 

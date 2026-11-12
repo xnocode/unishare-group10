@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/app/lib/db";
 import {
+  canonicalizeEmail,
+  DEMO_EMAIL,
   isValidEmail,
   normalizeEmail,
   OTP_EXPIRY_MS,
@@ -10,6 +12,8 @@ import {
   PendingResetPayload,
   PendingVerifyPayload,
   signPayload,
+  VERIFIED_ACCOUNT_COOKIE,
+  VerifiedAccountPayload,
   verifySignedPayload,
 } from "@/app/lib/auth";
 import { issueOtpCode } from "@/app/lib/otp-service";
@@ -32,22 +36,74 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (purpose === "PASSWORD_RESET" && email === DEMO_EMAIL) {
+      return NextResponse.json(
+        { error: "The shared demo account password cannot be reset." },
+        { status: 400 }
+      );
+    }
+
     const pendingVerify = verifySignedPayload<PendingVerifyPayload>(
       req.cookies.get(PENDING_VERIFY_COOKIE)?.value
     );
     const matchingPendingVerify =
-      pendingVerify && pendingVerify.email === email ? pendingVerify : null;
+      pendingVerify && canonicalizeEmail(pendingVerify.email) === canonicalizeEmail(email)
+        ? pendingVerify
+        : null;
 
-    let university = matchingPendingVerify?.university;
+    const signedAcc = verifySignedPayload<VerifiedAccountPayload>(
+      req.cookies.get(VERIFIED_ACCOUNT_COOKIE)?.value
+    );
+    const matchingSignedAcc =
+      signedAcc && canonicalizeEmail(signedAcc.email) === canonicalizeEmail(email)
+        ? signedAcc
+        : null;
+
+    let targetEmail = email;
+    let university = matchingPendingVerify?.university || matchingSignedAcc?.university;
+    let accountFound = Boolean(
+      purpose === "EMAIL_VERIFY" ? matchingPendingVerify : matchingSignedAcc
+    );
+
     try {
-      const user = await db.user.findUnique({ where: { email } });
-      if (user?.university) university = user.university;
+      let user = await db.user.findUnique({
+        where: { email },
+        select: { id: true, email: true, university: true, emailVerified: true, verified: true },
+      });
+      if (!user) {
+        const canonicalInput = canonicalizeEmail(email);
+        const candidates = await db.user.findMany({
+          select: { id: true, email: true, university: true, emailVerified: true, verified: true },
+        });
+        user = candidates.find((u) => canonicalizeEmail(u.email) === canonicalInput) ?? null;
+      }
+      if (user) {
+        targetEmail = normalizeEmail(user.email);
+        university = user.university || university;
+        if (purpose === "PASSWORD_RESET") {
+          accountFound = true;
+        } else {
+          accountFound = !user.emailVerified;
+        }
+      }
     } catch {
       // ignore DB lookup error
     }
 
+    if (!accountFound) {
+      return NextResponse.json(
+        {
+          error:
+            purpose === "PASSWORD_RESET"
+              ? "No registered account found for that email address."
+              : "No pending unverified registration found for this email. Register or log in instead.",
+        },
+        { status: 404 }
+      );
+    }
+
     const otpRes = await issueOtpCode({
-      email,
+      email: targetEmail,
       purpose,
       university,
       enforceCooldown: true,
@@ -65,7 +121,7 @@ export async function POST(req: NextRequest) {
 
     const res = NextResponse.json({
       ok: true,
-      email,
+      email: targetEmail,
       provider: otpRes.mailResult.provider,
     });
 
@@ -86,7 +142,7 @@ export async function POST(req: NextRequest) {
 
     if (purpose === "PASSWORD_RESET") {
       const resetToken = signPayload<PendingResetPayload>({
-        email,
+        email: targetEmail,
         codeHash: otpRes.codeHash,
         exp: Date.now() + OTP_EXPIRY_MS,
       });
