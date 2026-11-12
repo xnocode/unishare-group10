@@ -209,6 +209,17 @@ export default function WalletPage() {
   const [transferAmount, setTransferAmount] = useState("50");
   const [transferNote, setTransferNote] = useState("");
   const [transferSubmitting, setTransferSubmitting] = useState(false);
+  const [peerSuggestions, setPeerSuggestions] = useState<
+    Array<{
+      id: string;
+      fullName: string;
+      initials: string;
+      email: string;
+      university: string;
+      relation: string;
+    }>
+  >([]);
+  const [isLoadingPeers, setIsLoadingPeers] = useState(false);
 
   const isAuthenticated = useRequireAuth("/wallet");
 
@@ -257,7 +268,55 @@ export default function WalletPage() {
   useEffect(() => {
     if (!isAuthenticated || !resolvedUser.email) return;
     void loadWallet();
+
+    const handleLiveRefresh = () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      void loadWallet();
+    };
+    const interval = setInterval(handleLiveRefresh, 15000);
+    window.addEventListener("focus", handleLiveRefresh);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", handleLiveRefresh);
+    };
   }, [isAuthenticated, resolvedUser.email, loadWallet]);
+
+  useEffect(() => {
+    if (!showTransferModal || !resolvedUser.email) return;
+    let active = true;
+    const timer = setTimeout(async () => {
+      if (active) setIsLoadingPeers(true);
+      try {
+        const res = await fetch(
+          `/api/wallet/peers?q=${encodeURIComponent(recipientEmail.trim())}`,
+          { headers: { "x-user-email": resolvedUser.email } }
+        );
+        const data = (await res.json().catch(() => null)) as {
+          ok?: boolean;
+          peers?: Array<{
+            id: string;
+            fullName: string;
+            initials: string;
+            email: string;
+            university: string;
+            relation: string;
+          }>;
+        } | null;
+        if (active && res.ok && data?.ok && Array.isArray(data.peers)) {
+          setPeerSuggestions(data.peers);
+        }
+      } catch {
+        // Ignore transient lookup issues cleanly
+      } finally {
+        if (active) setIsLoadingPeers(false);
+      }
+    }, 160);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [showTransferModal, recipientEmail, resolvedUser.email]);
 
   const triggerToast = (msg: string) => {
     setToastMsg(msg);
@@ -611,15 +670,43 @@ export default function WalletPage() {
             <h3>Transfer Tokens</h3>
             <p>Send tokens instantly to another registered student account.</p>
             <label style={{ fontSize: "12px", color: "var(--muted)", display: "block", marginBottom: "4px" }}>
-              Recipient student email
+              Recipient student (type name or email)
             </label>
             <input
-              type="email"
+              type="text"
               className="input-field"
-              placeholder="classmate@university.edu.bd"
+              placeholder="Search classmate name or classmate@university.edu.bd"
               value={recipientEmail}
               onChange={(e) => setRecipientEmail(e.target.value)}
             />
+            {(isLoadingPeers || peerSuggestions.length > 0) && (
+              <div className="peer-picker-box" aria-label="Verified campus recipients">
+                <div className="peer-picker-head">
+                  <span>{isLoadingPeers ? "Finding verified students..." : "Verified classmates"}</span>
+                </div>
+                <div className="peer-picker-list">
+                  {peerSuggestions.map((peer) => {
+                    const isSelected =
+                      recipientEmail.trim().toLowerCase() === peer.email.toLowerCase();
+                    return (
+                      <button
+                        key={peer.id}
+                        type="button"
+                        className={`peer-picker-item ${isSelected ? "active" : ""}`}
+                        onClick={() => setRecipientEmail(peer.email)}
+                      >
+                        <span className="peer-avatar">{peer.initials}</span>
+                        <span className="peer-meta">
+                          <strong>{peer.fullName}</strong>
+                          <small>{peer.email}</small>
+                        </span>
+                        <span className="peer-tag">{peer.relation}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <label style={{ fontSize: "12px", color: "var(--muted)", display: "block", marginBottom: "4px" }}>
               Amount (tokens)
             </label>
