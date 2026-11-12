@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/app/lib/db";
 import { getAuthenticatedRideUser } from "@/app/lib/ride-auth";
-import { deriveInitials } from "@/app/lib/user-client";
+
+function derivePeerInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "US";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+}
 
 interface PeerCandidate {
   id: string;
@@ -87,7 +93,7 @@ export async function GET(req: NextRequest) {
     const peers: PeerCandidate[] = sorted.slice(0, 8).map((row) => ({
       id: row.id,
       fullName: row.fullName,
-      initials: deriveInitials(row.fullName),
+      initials: derivePeerInitials(row.fullName),
       email: row.email,
       university: row.university || "Verified Campus",
       relation: recentPeerIds.has(row.id)
