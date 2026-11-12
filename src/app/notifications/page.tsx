@@ -1,21 +1,18 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppNavbar from "../components/AppNavbar";
 import {
   clearClientSession,
-  getUserScopedKey,
   useCurrentUser,
-  useLocalStorageRaw,
   useRequireAuth,
-  writeUserScopedJson,
 } from "../lib/user-client";
 import "./notifications.css";
 
 interface NotificationItem {
-  id: number;
+  id: string;
   unread: boolean;
   icon: "box" | "car" | "wallet" | "boxcheck" | "coins";
   title: string;
@@ -25,68 +22,41 @@ interface NotificationItem {
   actionHref: string;
 }
 
-const INITIAL_NOTIFICATIONS: NotificationItem[] = [
-  {
-    id: 1,
-    unread: true,
-    icon: "box",
-    title: "A new request for your camera",
-    body: "Nabila Sultana wants to rent your Canon EOS 200D from 19–21 October. Review the request before confirming.",
-    meta: "Rental · 10 minutes ago",
-    actionText: "Review request",
-    actionHref: "/my-products",
-  },
-  {
-    id: 2,
-    unread: true,
-    icon: "car",
-    title: "Your ride leaves soon",
-    body: "Arif Hossain is heading from Dhanmondi 27 to TSC, DU at 8:30 AM. Your seat is confirmed.",
-    meta: "Ride · 25 minutes ago",
-    actionText: "View ride",
-    actionHref: "#",
-  },
-  {
-    id: 3,
-    unread: true,
-    icon: "wallet",
-    title: "50 deposit tokens released",
-    body: "Your phone charger return was confirmed. The refundable deposit is back in your available balance.",
-    meta: "Wallet · 1 hour ago",
-    actionText: "View transaction",
-    actionHref: "/wallet",
-  },
-  {
-    id: 4,
-    unread: false,
-    icon: "boxcheck",
-    title: "Pickup confirmed",
-    body: "You picked up the scientific calculator from Nafis Ahmed at Science Library. Return by 15 October, 5:00 PM.",
-    meta: "Rental · Yesterday · 4:20 PM",
-    actionText: "View rental",
-    actionHref: "#",
-  },
-  {
-    id: 5,
-    unread: false,
-    icon: "car",
-    title: "Ride booking successful",
-    body: "1 seat reserved with Arif Hossain. 80 tokens were paid from your wallet for Dhanmondi 27 → TSC, DU.",
-    meta: "Ride · Yesterday · 2:15 PM",
-    actionText: "View booking",
-    actionHref: "#",
-  },
-  {
-    id: 6,
-    unread: false,
-    icon: "coins",
-    title: "Rental earnings received",
-    body: "120 tokens from your camera rental have been added to your wallet. Thank you for sharing on campus.",
-    meta: "Wallet · 12 October · 6:40 PM",
-    actionText: "View earnings",
-    actionHref: "/wallet",
-  },
-];
+interface RawDbNotification {
+  id: string;
+  category: string;
+  title: string;
+  body: string;
+  unread: boolean;
+  actionLabel?: string | null;
+  actionHref?: string | null;
+  createdAt: string;
+}
+
+function formatNotifTime(iso: string): string {
+  try {
+    const diffMs = Date.now() - new Date(iso).getTime();
+    const mins = Math.round(diffMs / 60000);
+    if (mins < 1) return "Just now";
+    if (mins < 60) return `${mins} minute${mins === 1 ? "" : "s"} ago`;
+    const hours = Math.round(mins / 60);
+    if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+    return new Date(iso).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+    });
+  } catch {
+    return "Recent";
+  }
+}
+
+function mapCategoryToIcon(category: string): NotificationItem["icon"] {
+  if (category === "wallet" || category === "topup") return "wallet";
+  if (category === "ride") return "car";
+  if (category === "rental") return "boxcheck";
+  if (category === "marketplace") return "box";
+  return "coins";
+}
 
 function NotificationIcon({ type }: { type: NotificationItem["icon"] }) {
   switch (type) {
@@ -137,32 +107,72 @@ function NotificationIcon({ type }: { type: NotificationItem["icon"] }) {
 
 export default function NotificationsPage() {
   const router = useRouter();
-  const { resolvedUser, isDemoUser } = useCurrentUser();
+  const { resolvedUser } = useCurrentUser();
   const [activeTab, setActiveTab] = useState<"all" | "unread">("all");
   const isAuthenticated = useRequireAuth("/notifications");
 
-  const notificationsKey = getUserScopedKey(
-    "unishare_notifications",
-    resolvedUser.email,
-    isDemoUser
-  );
-  const rawNotificationsJson = useLocalStorageRaw(notificationsKey);
+  const [dbNotifications, setDbNotifications] = useState<NotificationItem[]>([]);
+  const [dbLoaded, setDbLoaded] = useState(false);
+  const [unreadTotal, setUnreadTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  const defaultItems: NotificationItem[] = useMemo(() => {
-    if (isDemoUser) return INITIAL_NOTIFICATIONS;
-    return [
+  const loadNotifications = useCallback(
+    async (offset = 0, append = false) => {
+      if (!resolvedUser.email) return;
+      try {
+        const res = await fetch(
+          `/api/notifications?limit=20&offset=${offset}`,
+          { headers: { "x-user-email": resolvedUser.email } }
+        );
+        const data = (await res.json().catch(() => null)) as {
+          ok?: boolean;
+          notifications?: RawDbNotification[];
+          unreadCount?: number;
+          hasMore?: boolean;
+        } | null;
+        if (res.ok && data?.ok && Array.isArray(data.notifications)) {
+          const mapped: NotificationItem[] = data.notifications.map((n) => ({
+            id: n.id,
+            unread: Boolean(n.unread),
+            icon: mapCategoryToIcon(n.category),
+            title: n.title,
+            body: n.body,
+            meta: `${n.category ? n.category.charAt(0).toUpperCase() + n.category.slice(1) : "Campus"} · ${formatNotifTime(n.createdAt)}`,
+            actionText: (n.actionLabel || "View details").replace(/\s*→\s*$/, ""),
+            actionHref: n.actionHref && n.actionHref !== "#" ? n.actionHref : "/home",
+          }));
+          setDbNotifications((prev) => (append ? [...prev, ...mapped] : mapped));
+          setUnreadTotal(typeof data.unreadCount === "number" ? data.unreadCount : 0);
+          setHasMore(Boolean(data.hasMore));
+        }
+      } finally {
+        setDbLoaded(true);
+        setLoadingMore(false);
+      }
+    },
+    [resolvedUser.email]
+  );
+
+  useEffect(() => {
+    if (!isAuthenticated || !resolvedUser.email) return;
+    void loadNotifications(0, false);
+  }, [isAuthenticated, resolvedUser.email, loadNotifications]);
+
+  const fallbackItems: NotificationItem[] = useMemo(
+    () => [
       {
-        id: 1,
-        unread: true,
+        id: "onboarding-wallet",
+        unread: false,
         icon: "wallet",
         title: `Welcome to ${resolvedUser.university} on UniShare`,
-        body: `Your account (${resolvedUser.email}) is active with ${resolvedUser.tokenBalance} starter tokens ready to spend on campus rentals or rides.`,
-        meta: "Just now · Account created",
-        actionText: "Open wallet →",
+        body: `Your account (${resolvedUser.email}) is active with ${resolvedUser.tokenBalance} tokens ready for campus rentals or rides.`,
+        meta: "Account · Active",
+        actionText: "Open wallet",
         actionHref: "/wallet",
       },
       {
-        id: 2,
+        id: "onboarding-verify",
         unread: !resolvedUser.verified,
         icon: "boxcheck",
         title: resolvedUser.studentId
@@ -172,60 +182,70 @@ export default function NotificationsPage() {
           ? `Department: ${resolvedUser.department} · ${resolvedUser.university}.`
           : `Submit your university ID card and face photo for ${resolvedUser.university}.`,
         meta: "Verification · Campus trust",
-        actionText: resolvedUser.verified
-          ? "View status →"
-          : resolvedUser.studentId
-          ? "View status →"
-          : "Verify now →",
+        actionText: resolvedUser.verified || resolvedUser.studentId ? "View status" : "Verify now",
         actionHref: resolvedUser.verified
           ? "/verification-approved"
           : resolvedUser.studentId
           ? "/verification-pending"
           : "/student-verification",
       },
-      {
-        id: 3,
-        unread: false,
-        icon: "coins",
-        title: "Share an item from your dorm",
-        body: `List calculators, books, cameras, or accessories for verified ${resolvedUser.university} peers.`,
-        meta: "Marketplace · Earn tokens",
-        actionText: "Add a product →",
-        actionHref: "/my-products",
-      },
-    ];
-  }, [
-    isDemoUser,
-    resolvedUser.department,
-    resolvedUser.email,
-    resolvedUser.studentId,
-    resolvedUser.tokenBalance,
-    resolvedUser.university,
-    resolvedUser.verified,
-  ]);
+    ],
+    [
+      resolvedUser.department,
+      resolvedUser.email,
+      resolvedUser.studentId,
+      resolvedUser.tokenBalance,
+      resolvedUser.university,
+      resolvedUser.verified,
+    ]
+  );
 
-  const items: NotificationItem[] = useMemo(() => {
-    if (!rawNotificationsJson) return defaultItems;
-    try {
-      const parsed = JSON.parse(rawNotificationsJson);
-      return Array.isArray(parsed) ? (parsed as NotificationItem[]) : defaultItems;
-    } catch {
-      return defaultItems;
+  const items = dbNotifications.length > 0 ? dbNotifications : dbLoaded ? fallbackItems : [];
+  const unreadCount = dbNotifications.length > 0 ? unreadTotal : items.filter((i) => i.unread).length;
+
+  const handleMarkAllAsRead = async () => {
+    setDbNotifications((prev) => prev.map((item) => ({ ...item, unread: false })));
+    setUnreadTotal(0);
+    if (resolvedUser.email) {
+      await fetch("/api/notifications", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-email": resolvedUser.email,
+        },
+        body: JSON.stringify({ action: "mark_all_read" }),
+      }).catch(() => {});
     }
-  }, [rawNotificationsJson, defaultItems]);
+  };
 
-  const unreadCount = items.filter((item) => item.unread).length;
-
-  const handleMarkAllAsRead = () => {
-    writeUserScopedJson(
-      notificationsKey,
-      items.map((item) => ({ ...item, unread: false }))
+  const handleMarkSingleRead = (id: string) => {
+    if (id.startsWith("onboarding-")) return;
+    setDbNotifications((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, unread: false } : item))
     );
+    setUnreadTotal((prev) => Math.max(0, prev - 1));
+    if (resolvedUser.email) {
+      void fetch("/api/notifications", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-email": resolvedUser.email,
+        },
+        body: JSON.stringify({ id }),
+      }).catch(() => {});
+    }
+  };
+
+  const handleLoadEarlier = () => {
+    if (!hasMore || loadingMore) return;
+    setLoadingMore(true);
+    void loadNotifications(dbNotifications.length, true);
   };
 
   const displayedItems = activeTab === "unread" ? items.filter((item) => item.unread) : items;
 
-  const handleLogout = () => {
+  const handleLogout = (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
     clearClientSession();
     router.push("/login");
   };
@@ -321,7 +341,11 @@ export default function NotificationsPage() {
                   {item.unread && <span className="badge">Unread</span>}
                   <p>{item.body}</p>
                   <div className="meta">{item.meta}</div>
-                  <Link className="action" href={item.actionHref}>
+                  <Link
+                    className="action"
+                    href={item.actionHref}
+                    onClick={() => handleMarkSingleRead(item.id)}
+                  >
                     {item.actionText}
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M5 12h14M13 6l6 6-6 6" />
@@ -330,14 +354,23 @@ export default function NotificationsPage() {
                 </div>
               </div>
             ))
+          ) : !dbLoaded ? (
+            <div className="empty-state">Loading campus notifications...</div>
           ) : (
             <div className="empty-state">No unread notifications right now.</div>
           )}
         </div>
 
-        <button className="load-more" type="button">
-          Load earlier notifications
-        </button>
+        {hasMore && (
+          <button
+            className="load-more"
+            type="button"
+            disabled={loadingMore}
+            onClick={handleLoadEarlier}
+          >
+            {loadingMore ? "Loading earlier updates..." : "Load earlier notifications"}
+          </button>
+        )}
       </main>
 
       {/* Footer */}
@@ -345,10 +378,12 @@ export default function NotificationsPage() {
         <div className="footer-inner">
           <span>UniShare. Made for university students in Bangladesh.</span>
           <nav>
-            <Link href="#">Privacy</Link>
-            <Link href="#">Terms</Link>
-            <Link href="#">Get help</Link>
-            <Link href="/login">Log out</Link>
+            <Link href="/privacy">Privacy</Link>
+            <Link href="/terms">Terms</Link>
+            <Link href="/help">Get help</Link>
+            <a href="#" onClick={handleLogout}>
+              Log out
+            </a>
           </nav>
         </div>
       </footer>

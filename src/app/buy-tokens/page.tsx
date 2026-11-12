@@ -1,67 +1,61 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppNavbar from "../components/AppNavbar";
 import {
   clearClientSession,
-  getUserScopedKey,
+  saveClientUser,
   useCurrentUser,
-  useLocalStorageRaw,
   useRequireAuth,
+  type ClientUser,
 } from "../lib/user-client";
 import "./buy-tokens.css";
 
-interface PackageOption {
-  tokens: number;
-  tag: string;
-  desc: string;
-}
-
-const PACKAGES: PackageOption[] = [
-  {
-    tokens: 100,
-    tag: "A little top-up",
-    desc: "Keep a few extra tokens ready for your next campus plan.",
-  },
-  {
-    tokens: 250,
-    tag: "Ready for the week",
-    desc: "A comfortable top-up for more borrowing and shared journeys.",
-  },
-  {
-    tokens: 500,
-    tag: "More room to share",
-    desc: "Stock up your wallet for the campus plans ahead.",
-  },
-];
+const PACKAGE_META: Record<
+  number,
+  { id: "starter" | "campus" | "scholar"; bonus: number; bdt: number }
+> = {
+  100: { id: "starter", bonus: 0, bdt: 100 },
+  250: { id: "campus", bonus: 15, bdt: 250 },
+  500: { id: "scholar", bonus: 40, bdt: 500 },
+};
 
 export default function BuyTokensPage() {
   const router = useRouter();
-  const { resolvedUser, isDemoUser, firstName } = useCurrentUser();
+  const { resolvedUser, firstName } = useCurrentUser();
   const isAuthenticated = useRequireAuth("/buy-tokens");
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedTokens, setSelectedTokens] = useState(250);
   const [selectedPayment, setSelectedPayment] = useState("bKash");
-  const [senderPhone, setSenderPhone] = useState("017XXXXXXXX");
+  const [senderPhone, setSenderPhone] = useState("");
   const [trxId, setTrxId] = useState("");
-  const [paymentRef, setPaymentRef] = useState("000001");
+  const [paymentRef, setPaymentRef] = useState("");
+  const [creditedAmount, setCreditedAmount] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [fetchedBalance, setFetchedBalance] = useState<number | null>(null);
+  const balance = fetchedBalance ?? resolvedUser.tokenBalance;
   const [toastMsg, setToastMsg] = useState("");
   const [showToast, setShowToast] = useState(false);
 
-  const rawWalletJson = useLocalStorageRaw(
-    getUserScopedKey("unishare_wallet", resolvedUser.email, isDemoUser)
-  );
-  const balance = useMemo(() => {
-    if (!rawWalletJson) return resolvedUser.tokenBalance;
-    try {
-      const parsed = JSON.parse(rawWalletJson) as { balance?: number };
-      return parsed.balance ?? resolvedUser.tokenBalance;
-    } catch {
-      return resolvedUser.tokenBalance;
-    }
-  }, [rawWalletJson, resolvedUser.tokenBalance]);
+  useEffect(() => {
+    if (!isAuthenticated || !resolvedUser.email) return;
+    let active = true;
+    fetch("/api/wallet", {
+      headers: { "x-user-email": resolvedUser.email },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { ok?: boolean; tokenBalance?: number } | null) => {
+        if (active && d?.ok && typeof d.tokenBalance === "number") {
+          setFetchedBalance(d.tokenBalance);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, resolvedUser.email]);
 
   const uniPrefix = (
     resolvedUser.universityId ||
@@ -78,13 +72,17 @@ export default function BuyTokensPage() {
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, "")}`;
 
+  const selectedMeta = PACKAGE_META[selectedTokens] || PACKAGE_META[250];
+  const expectedTotalTokens = selectedTokens + selectedMeta.bonus;
+
   const triggerToast = (msg: string) => {
     setToastMsg(msg);
     setShowToast(true);
-    setTimeout(() => setShowToast(false), 2000);
+    setTimeout(() => setShowToast(false), 2600);
   };
 
-  const handleLogout = () => {
+  const handleLogout = (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
     clearClientSession();
     router.push("/login");
   };
@@ -95,15 +93,59 @@ export default function BuyTokensPage() {
     triggerToast(`Selected ${tokens} tokens package`);
   };
 
-  const handleSubmitPayment = (e: React.FormEvent) => {
+  const handleSubmitPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!trxId.trim()) {
-      triggerToast("Please enter your payment Transaction ID (TrxID)");
+    if (isSubmitting) return;
+    const cleanPhone = senderPhone.replace(/[\s-]/g, "");
+    if (!/^01[3-9]\d{8}$/.test(cleanPhone)) {
+      triggerToast("Enter a valid 11-digit Bangladesh mobile number (e.g., 017XXXXXXXX).");
       return;
     }
-    setPaymentRef(Date.now().toString().slice(-6));
-    setCurrentStep(5);
-    triggerToast("Payment submitted for review!");
+    const cleanTrx = trxId.trim();
+    if (cleanTrx.length < 4) {
+      triggerToast("Please enter a valid payment Transaction ID (min 4 characters).");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await fetch("/api/wallet/topup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-email": resolvedUser.email,
+        },
+        body: JSON.stringify({
+          packageId: selectedMeta.id,
+          method: selectedPayment,
+          senderPhone: cleanPhone,
+          trxRef: cleanTrx,
+        }),
+      });
+      const data = (await res.json().catch(() => null)) as {
+        ok?: boolean;
+        error?: string;
+        creditedTokens?: number;
+        tokenBalance?: number;
+        user?: ClientUser;
+      } | null;
+
+      if (!res.ok || !data?.ok) {
+        triggerToast(data?.error || "Could not process token top-up.");
+        return;
+      }
+
+      if (data.user) saveClientUser(data.user);
+      if (typeof data.tokenBalance === "number") setFetchedBalance(data.tokenBalance);
+      setCreditedAmount(data.creditedTokens || expectedTotalTokens);
+      setPaymentRef(cleanTrx);
+      setCurrentStep(5);
+      triggerToast(`+${data.creditedTokens || expectedTotalTokens} tokens credited to your wallet!`);
+    } catch {
+      triggerToast("Network error while processing token top-up.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (!isAuthenticated) {
@@ -272,7 +314,7 @@ export default function BuyTokensPage() {
                       x="76"
                       y="34"
                       textAnchor="middle"
-                      fontFamily="Schibsted Grotesk,sans-serif"
+                      fontFamily="var(--font-bricolage), Bricolage Grotesque, sans-serif"
                       fontWeight="700"
                       fontSize="20"
                       fill="#fff"
@@ -291,7 +333,7 @@ export default function BuyTokensPage() {
                       x="42"
                       y="42"
                       textAnchor="middle"
-                      fontFamily="Schibsted Grotesk,sans-serif"
+                      fontFamily="var(--font-bricolage), Bricolage Grotesque, sans-serif"
                       fontWeight="700"
                       fontSize="20"
                       fill="#0b5d5b"
@@ -343,7 +385,7 @@ export default function BuyTokensPage() {
                       x="96"
                       y="28"
                       textAnchor="middle"
-                      fontFamily="Schibsted Grotesk,sans-serif"
+                      fontFamily="var(--font-bricolage), Bricolage Grotesque, sans-serif"
                       fontWeight="700"
                       fontSize="20"
                       fill="#0b5d5b"
@@ -371,7 +413,7 @@ export default function BuyTokensPage() {
                       x="68"
                       y="36"
                       textAnchor="middle"
-                      fontFamily="Schibsted Grotesk,sans-serif"
+                      fontFamily="var(--font-bricolage), Bricolage Grotesque, sans-serif"
                       fontWeight="700"
                       fontSize="20"
                       fill="#fff"
@@ -390,7 +432,7 @@ export default function BuyTokensPage() {
                       x="40"
                       y="44"
                       textAnchor="middle"
-                      fontFamily="Schibsted Grotesk,sans-serif"
+                      fontFamily="var(--font-bricolage), Bricolage Grotesque, sans-serif"
                       fontWeight="700"
                       fontSize="20"
                       fill="#0b5d5b"
@@ -401,10 +443,10 @@ export default function BuyTokensPage() {
                 </div>
                 <div className="amount">250 tokens</div>
                 <p className="desc">
-                  A comfortable top-up for more borrowing and shared journeys.
+                  A comfortable top-up (+15 bonus tokens) for borrowing and shared journeys.
                 </p>
                 <hr className="rule" />
-                <div className="pay">Payment amount provided at checkout</div>
+                <div className="pay">৳250 BDT · 265 total tokens credited</div>
                 <button
                   className={`btn ${selectedTokens === 250 ? "primary" : ""}`}
                   type="button"
@@ -428,7 +470,7 @@ export default function BuyTokensPage() {
                   )}
                 </div>
                 <div className="coins">
-                  <svg width="130" height="64" viewBox="0 0 130 64">
+                  <svg width="134" height="68" viewBox="0 -4 134 68">
                     <ellipse cx="65" cy="52" rx="60" ry="5" fill="#e4efec" />
                     <circle
                       cx="108"
@@ -442,7 +484,7 @@ export default function BuyTokensPage() {
                       x="112"
                       y="24"
                       textAnchor="middle"
-                      fontFamily="Schibsted Grotesk,sans-serif"
+                      fontFamily="var(--font-bricolage), Bricolage Grotesque, sans-serif"
                       fontWeight="700"
                       fontSize="19"
                       fill="#0b5d5b"
@@ -461,7 +503,7 @@ export default function BuyTokensPage() {
                       x="90"
                       y="31"
                       textAnchor="middle"
-                      fontFamily="Schibsted Grotesk,sans-serif"
+                      fontFamily="var(--font-bricolage), Bricolage Grotesque, sans-serif"
                       fontWeight="700"
                       fontSize="19"
                       fill="#0b5d5b"
@@ -489,7 +531,7 @@ export default function BuyTokensPage() {
                       x="62"
                       y="38"
                       textAnchor="middle"
-                      fontFamily="Schibsted Grotesk,sans-serif"
+                      fontFamily="var(--font-bricolage), Bricolage Grotesque, sans-serif"
                       fontWeight="700"
                       fontSize="20"
                       fill="#fff"
@@ -508,7 +550,7 @@ export default function BuyTokensPage() {
                       x="36"
                       y="45"
                       textAnchor="middle"
-                      fontFamily="Schibsted Grotesk,sans-serif"
+                      fontFamily="var(--font-bricolage), Bricolage Grotesque, sans-serif"
                       fontWeight="700"
                       fontSize="19"
                       fill="#0b5d5b"
@@ -519,10 +561,10 @@ export default function BuyTokensPage() {
                 </div>
                 <div className="amount">500 tokens</div>
                 <p className="desc">
-                  Stock up your wallet for the campus plans ahead.
+                  Stock up your wallet (+40 bonus tokens) for the campus plans ahead.
                 </p>
                 <hr className="rule" />
-                <div className="pay">Payment amount provided at checkout</div>
+                <div className="pay">৳500 BDT · 540 total tokens credited</div>
                 <button
                   className={`btn ${selectedTokens === 500 ? "primary" : ""}`}
                   type="button"
@@ -578,8 +620,20 @@ export default function BuyTokensPage() {
                   marginBottom: "8px",
                 }}
               >
-                <span>{resolvedUser.university} Student Discount:</span>
-                <span style={{ color: "var(--teal)", fontWeight: 600 }}>0% fee waiver</span>
+                <span>Campus Bonus:</span>
+                <span style={{ color: "var(--teal)", fontWeight: 600 }}>
+                  {selectedMeta.bonus > 0 ? `+${selectedMeta.bonus} bonus tokens` : "Standard pack"}
+                </span>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: "8px",
+                }}
+              >
+                <span>Total Credited:</span>
+                <b>{expectedTotalTokens} Tokens</b>
               </div>
               <hr style={{ border: 0, borderTop: "1px solid var(--line)", margin: "12px 0" }} />
               <div
@@ -702,8 +756,8 @@ export default function BuyTokensPage() {
                 >
                   ← Back
                 </button>
-                <button className="btn primary" type="submit">
-                  Submit Payment Details
+                <button className="btn primary" type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? "Verifying & crediting..." : "Submit Payment Details"}
                 </button>
               </div>
             </form>
@@ -729,9 +783,9 @@ export default function BuyTokensPage() {
             >
               ✓
             </div>
-            <h3 style={{ fontSize: "22px" }}>Payment Submitted for Review</h3>
+            <h3 style={{ fontSize: "22px" }}>Tokens Credited to Your Wallet</h3>
             <p style={{ maxWidth: "440px", margin: "8px auto 20px" }}>
-              Thank you, {firstName}! Your top-up of <b>{selectedTokens} tokens</b> is currently being verified by the {resolvedUser.university} campus team.
+              Thank you, {firstName}! <b>+{creditedAmount || expectedTotalTokens} tokens</b> have been added to your {resolvedUser.university} wallet. Available balance: <b>{balance} tokens</b>.
             </p>
             <div
               style={{
@@ -744,7 +798,7 @@ export default function BuyTokensPage() {
                 marginBottom: "24px",
               }}
             >
-              Reference: <b>{uniPrefix || "UNI"}-{paymentRef}</b> · Status: <span style={{ color: "var(--teal)", fontWeight: 700 }}>Under Review</span>
+              Reference: <b>{paymentRef || refTag}</b> · Status: <span style={{ color: "var(--teal)", fontWeight: 700 }}>Credited</span>
             </div>
             <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
               <Link className="btn primary" href="/wallet">
@@ -860,9 +914,9 @@ export default function BuyTokensPage() {
         <div className="foot">
           <span>UniShare. Made for university students in Bangladesh.</span>
           <nav>
-            <Link href="#">Privacy</Link>
-            <Link href="#">Terms</Link>
-            <Link href="#">Get help</Link>
+            <Link href="/privacy">Privacy</Link>
+            <Link href="/terms">Terms</Link>
+            <Link href="/help">Get help</Link>
             <a href="#" onClick={handleLogout}>
               Log out
             </a>

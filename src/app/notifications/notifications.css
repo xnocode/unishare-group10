@@ -328,6 +328,7 @@
 @media (max-width: 640px) {
   .notifications-page .title-row {
     flex-direction: column;
+    align-items: flex-start;
     gap: 16px;
   }
   .notifications-page h1 {

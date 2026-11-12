@@ -1,9 +1,11 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import "./landing.css";
 import CampusHomeDashboard from "./CampusHomeDashboard";
+import { UniShareMark } from "./components/UniShareMark";
 import {
   clearClientSession,
   useIsHydrated,
@@ -17,12 +19,21 @@ export default function Home() {
   const isLoggedIn =
     hasMounted &&
     (rawLoggedIn === "true" ||
-      document.cookie.includes("unishare_logged_in=true") ||
-      (typeof window !== "undefined" &&
-        new URLSearchParams(window.location.search).get("view") === "campus"));
+      document.cookie.includes("unishare_logged_in=true"));
+
+  useEffect(() => {
+    if (!hasMounted || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (!isLoggedIn && params.get("view") === "campus") {
+      window.history.replaceState(null, "", "/");
+    }
+  }, [hasMounted, isLoggedIn]);
 
   const handleLogout = () => {
     clearClientSession();
+    if (typeof window !== "undefined" && window.location.search) {
+      window.history.replaceState(null, "", "/");
+    }
   };
 
   // If user is logged in, show the Campus Home Dashboard!
@@ -36,19 +47,7 @@ export default function Home() {
       <nav>
         <div className="wrap">
           <Link className="logo" href="/">
-            <svg
-              viewBox="0 0 32 32"
-              fill="none"
-              stroke="#0B5D5E"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <circle cx="11" cy="16" r="5" />
-              <circle cx="21" cy="16" r="5" />
-              <path d="M16 11.5v9" />
-            </svg>
+            <UniShareMark size={28} />
             UniShare
           </Link>
           <div className="nav-actions">
@@ -89,9 +88,13 @@ export default function Home() {
             <small>Only students with a university email can join.</small>
           </div>
           <div className="photo">
-            <img
+            <Image
               src="/images/landing/hero-student.jpeg"
               alt="A smiling UniShare student in a red kameez with a white shawl, hands open in welcome, standing in a green campus garden"
+              width={440}
+              height={550}
+              priority
+              unoptimized
             />
           </div>
         </div>
@@ -108,49 +111,67 @@ export default function Home() {
             </p>
             <ul className="items">
               <li>
-                <img
+                <Image
                   src="/images/landing/football.jpeg"
                   alt="Three footballs stacked on grass"
+                  width={220}
+                  height={220}
+                  unoptimized
                   style={{ objectPosition: "50% 45%" }}
                 />
                 <span>Football</span>
               </li>
               <li>
-                <img
+                <Image
                   src="/images/landing/laptop-charger.jpeg"
                   alt="Black laptop charger held in a hand"
+                  width={220}
+                  height={220}
+                  unoptimized
                   style={{ objectPosition: "40% 55%" }}
                 />
                 <span>Laptop charger</span>
               </li>
               <li>
-                <img
+                <Image
                   src="/images/landing/earphones.jpeg"
                   alt="Wired earphones on a wooden table"
+                  width={220}
+                  height={220}
+                  unoptimized
                   style={{ objectPosition: "50% 60%" }}
                 />
                 <span>Earphones</span>
               </li>
               <li>
-                <img
+                <Image
                   src="/images/landing/phone-charger.jpeg"
                   alt="White 45W phone charger with cable"
+                  width={220}
+                  height={220}
+                  unoptimized
                   style={{ objectPosition: "50% 50%" }}
                 />
                 <span>Phone charger</span>
               </li>
               <li>
-                <img
+                <Image
                   src="/images/landing/airpods.jpeg"
                   alt="AirPods in an open charging case"
+                  width={220}
+                  height={220}
+                  unoptimized
                   style={{ objectPosition: "50% 40%" }}
                 />
                 <span>AirPods</span>
               </li>
               <li>
-                <img
+                <Image
                   src="/images/landing/calculator.jpeg"
                   alt="Two transparent calculators held in a hand"
+                  width={220}
+                  height={220}
+                  unoptimized
                   style={{ objectPosition: "50% 55%" }}
                 />
                 <span>Calculator</span>
@@ -166,9 +187,12 @@ export default function Home() {
             <ul className="items rides">
               <li>
                 <Link href="/rides" style={{ display: "contents", color: "inherit" }}>
-                  <img
+                  <Image
                     src="/images/landing/car-ride.jpeg"
                     alt="Phone showing a Ride Share booking next to a white car on a Dhaka street"
+                    width={260}
+                    height={260}
+                    unoptimized
                     style={{ objectPosition: "0% 50%" }}
                   />
                   <span>Car ride</span>
@@ -176,9 +200,12 @@ export default function Home() {
               </li>
               <li>
                 <Link href="/rides" style={{ display: "contents", color: "inherit" }}>
-                  <img
+                  <Image
                     src="/images/landing/rickshaw.jpeg"
                     alt="A student with a backpack talking to a rickshaw puller while a passenger steps out of a painted rickshaw"
+                    width={260}
+                    height={260}
+                    unoptimized
                     style={{ objectPosition: "28% 50%" }}
                   />
                   <span>Rickshaw</span>

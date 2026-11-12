@@ -57,9 +57,9 @@ header.unishare-topbar a.ut-logo:hover {
 }
 
 header.unishare-topbar a.ut-logo svg {
-  width: 28px;
-  height: 18px;
-  stroke: #0B5D5E;
+  width: 26px;
+  height: 26px;
+  color: #0B5D5E;
   fill: none;
   flex-shrink: 0;
 }
@@ -531,6 +531,20 @@ header.unishare-topbar .ut-mobile-drawer {
     font-weight: 600;
     color: #4a5b59;
     text-decoration: none;
+    background: transparent;
+    border: 0;
+    width: 100%;
+    text-align: left;
+    font-family: inherit;
+    cursor: pointer;
+  }
+
+  header.unishare-topbar .ut-mobile-link.danger {
+    color: #c0392b;
+    border-top: 1px solid #eef2f1;
+    border-radius: 0 0 10px 10px;
+    margin-top: 4px;
+    padding-top: 12px;
   }
 
   header.unishare-topbar .ut-mobile-link svg {
@@ -549,8 +563,23 @@ header.unishare-topbar .ut-mobile-drawer {
 
 @media (max-width: 520px) {
   header.unishare-topbar .ut-inner {
-    padding: 0 16px;
-    gap: 8px;
+    padding: 0 12px;
+    height: 60px;
+    gap: 6px;
+  }
+
+  header.unishare-topbar a.ut-logo {
+    font-size: 19px;
+    gap: 6px;
+  }
+
+  header.unishare-topbar a.ut-logo svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  header.unishare-topbar .ut-actions {
+    gap: 5px;
   }
 
   header.unishare-topbar .ut-user-name,
@@ -558,13 +587,44 @@ header.unishare-topbar .ut-mobile-drawer {
     display: none;
   }
 
-  header.unishare-topbar .ut-profile-btn {
-    padding: 4px 6px 4px 4px;
-    gap: 4px;
+  header.unishare-topbar .ut-bell-link,
+  header.unishare-topbar .ut-mobile-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
   }
 
   header.unishare-topbar .ut-sos-btn {
-    padding: 0 10px;
+    height: 34px;
+    padding: 0 9px;
+    border-radius: 8px;
+    gap: 0;
+  }
+
+  header.unishare-topbar .ut-profile-btn {
+    height: 34px;
+    padding: 3px 5px 3px 3px;
+    gap: 3px;
+    border-radius: 8px;
+  }
+
+  header.unishare-topbar .ut-avatar {
+    width: 26px;
+    height: 26px;
+    font-size: 10.5px;
+    border-radius: 6px;
+  }
+
+  header.unishare-topbar .ut-guest-login {
+    font-size: 13.5px;
+    padding: 4px 6px;
+  }
+
+  header.unishare-topbar .ut-guest-cta {
+    height: 34px;
+    padding: 0 11px;
+    font-size: 13px;
+    border-radius: 7px;
   }
 }
 

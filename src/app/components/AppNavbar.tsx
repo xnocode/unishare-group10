@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { UniShareMark } from "./UniShareMark";
 import {
   clearClientSession,
   deriveInitials,
@@ -148,7 +149,7 @@ export default function AppNavbar({
   mode = "app",
   activeNav,
   user,
-  unreadCount = 1,
+  unreadCount,
   redirectPath,
   onLogout,
   onOpenProfile,
@@ -158,6 +159,7 @@ export default function AppNavbar({
   const { resolvedUser: currentUser, isDemoUser } = useCurrentUser();
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [fetchedUnreadCount, setFetchedUnreadCount] = useState(0);
 
   const profileRef = useRef<HTMLDivElement>(null);
 
@@ -240,7 +242,7 @@ export default function AppNavbar({
   const sosContact = storedSosContact || fetchedSosContact;
 
   useEffect(() => {
-    if (!resolvedUser.email) return;
+    if (mode !== "app" || !resolvedUser.email) return;
     let active = true;
     fetch(`/api/emergency-contacts?email=${encodeURIComponent(resolvedUser.email)}`)
       .then((r) => r.json())
@@ -257,7 +259,27 @@ export default function AppNavbar({
     return () => {
       active = false;
     };
-  }, [resolvedUser.email]);
+  }, [mode, resolvedUser.email]);
+
+  useEffect(() => {
+    if (mode !== "app" || unreadCount !== undefined || !currentUser.email) return;
+    let active = true;
+    fetch("/api/notifications?limit=1", {
+      headers: { "x-user-email": currentUser.email },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { ok?: boolean; unreadCount?: number } | null) => {
+        if (!active || !d?.ok) return;
+        setFetchedUnreadCount(typeof d.unreadCount === "number" ? d.unreadCount : 0);
+      })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, [mode, unreadCount, currentUser.email]);
+
+  const resolvedUnreadCount = unreadCount ?? fetchedUnreadCount;
 
   const triggerSosEmergency = async () => {
     setIsTriggering(true);
@@ -439,10 +461,7 @@ export default function AppNavbar({
           className="ut-logo"
           onClick={() => setMobileOpen(false)}
         >
-          <svg width="28" height="18" viewBox="0 0 22 14" fill="none" stroke="#0B5D5E" strokeWidth="2.3" aria-hidden="true">
-            <circle cx="6.5" cy="7" r="4.5" />
-            <circle cx="15.5" cy="7" r="4.5" />
-          </svg>
+          <UniShareMark size={26} />
           <span>UniShare</span>
         </Link>
 
@@ -497,7 +516,7 @@ export default function AppNavbar({
                 title="Notifications"
               >
                 <NavIcon name="bell" />
-                {unreadCount > 0 && <span className="ut-bell-dot" />}
+                {resolvedUnreadCount > 0 && <span className="ut-bell-dot" />}
               </Link>
 
               <button
@@ -703,19 +722,43 @@ export default function AppNavbar({
             ...NAV_ITEMS,
             { key: "my-products" as ActiveNavKey, label: "My products", href: "/my-products" },
             { key: "favorites" as ActiveNavKey, label: "Favorites", href: "/favorites" },
+            { key: "notifications" as ActiveNavKey, label: "Notifications", href: "/notifications" },
+            { key: "wallet" as ActiveNavKey, label: "Buy tokens", href: "/buy-tokens" },
             { key: "sos" as ActiveNavKey, label: "Emergency SOS", href: "/sos" },
             { key: "settings" as ActiveNavKey, label: "Settings", href: "/settings" },
-          ].map((item) => (
-            <Link
-              key={item.key}
-              href={item.href}
-              className={`ut-mobile-link ${activeNav === item.key ? "active" : ""}`}
-              onClick={() => setMobileOpen(false)}
-            >
-              <NavIcon name={item.key === "my-products" ? "box" : item.key === "favorites" ? "heart" : item.key === "sos" ? "shield" : item.key} />
-              <span>{item.label}</span>
-            </Link>
-          ))}
+          ].map((item) => {
+            const iconName =
+              item.href === "/buy-tokens"
+                ? "coin"
+                : item.key === "my-products"
+                ? "box"
+                : item.key === "favorites"
+                ? "heart"
+                : item.key === "notifications"
+                ? "bell"
+                : item.key === "sos"
+                ? "shield"
+                : item.key;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`ut-mobile-link ${activeNav === item.key && item.href !== "/buy-tokens" ? "active" : ""}`}
+                onClick={() => setMobileOpen(false)}
+              >
+                <NavIcon name={iconName} />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+          <button
+            type="button"
+            className="ut-mobile-link danger"
+            onClick={handleSignOut}
+          >
+            <NavIcon name="logout" />
+            <span>Log out</span>
+          </button>
         </div>
       )}
 
