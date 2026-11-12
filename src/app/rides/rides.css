@@ -3617,13 +3617,13 @@
    FARE SPLIT & SAVINGS OPTIMIZER + IN-CHAT WALLET SETTLEMENT
    ------------------------------------------------------------- */
 .rides-savings-card {
-  border: 1.5px solid #cde5df;
+  border: 1.5px solid var(--hair);
   border-radius: var(--radius-md);
-  padding: 12px 14px;
-  background: linear-gradient(180deg, #f5fbf9 0%, #ffffff 100%);
+  padding: 14px 16px;
+  background: #ffffff;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 10px;
 }
 
 .rides-savings-header {
@@ -3634,23 +3634,30 @@
 }
 
 .rides-savings-title {
-  font-size: 12px;
-  font-weight: 800;
-  color: var(--teal-dark);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ink);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.rides-savings-title svg {
+  color: var(--teal);
+  flex-shrink: 0;
 }
 
 .rides-savings-badge {
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: #dcfce7;
-  color: #166534;
+  padding: 3px 9px;
+  border-radius: 9999px;
+  background: var(--mint);
+  border: 1px solid rgba(13, 107, 99, 0.22);
+  color: var(--teal);
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
   white-space: nowrap;
 }
 
@@ -3658,7 +3665,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -3666,29 +3673,35 @@
 .rides-riders-pills {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  background: #f1f5f4;
+  gap: 3px;
+  background: var(--field-bg);
+  border: 1px solid var(--hair);
   padding: 3px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
 }
 
 .rides-mini-pill {
-  border: none;
+  border: 1px solid transparent;
   background: transparent;
-  color: #4b5553;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 4px 8px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 9px;
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.14s ease;
   white-space: nowrap;
 }
 
+.rides-mini-pill:hover {
+  color: var(--ink);
+}
+
 .rides-mini-pill.active {
   background: #ffffff;
   color: var(--teal);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  border-color: rgba(13, 107, 99, 0.25);
+  font-weight: 700;
 }
 
 .rides-savings-breakdown {
@@ -3703,38 +3716,48 @@
   display: inline-flex;
   align-items: baseline;
   gap: 6px;
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 800;
   color: var(--ink);
 }
 
 .rides-savings-solo {
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
-  color: #94a3b8;
+  color: var(--muted);
+  opacity: 0.65;
   text-decoration: line-through;
 }
 
 .rides-savings-monthly {
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--teal);
 }
 
 .rides-mrt-hint {
-  font-size: 11px;
-  color: #0369a1;
-  background: #f0f9ff;
-  border: 1px solid #bae6fd;
-  border-radius: 6px;
-  padding: 5px 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--teal-dark);
+  background: var(--mint);
+  border: 1px solid rgba(13, 107, 99, 0.18);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
   font-weight: 600;
+  line-height: 1.35;
+}
+
+.rides-mrt-hint svg {
+  color: var(--teal);
+  flex-shrink: 0;
 }
 
 .chat-split-fare-bar {
-  background: #f8faf9;
+  background: var(--mint-soft);
   border-bottom: 1px solid var(--hair);
-  padding: 8px 12px;
+  padding: 8px 14px;
   display: flex;
   flex-direction: column;
   gap: 7px;
@@ -3751,14 +3774,19 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 4px 9px;
+  padding: 4px 10px;
   border-radius: 6px;
-  border: 1px solid #b7dfd9;
+  border: 1px solid rgba(13, 107, 99, 0.28);
   background: var(--mint);
   color: var(--teal);
   font-size: 11px;
   font-weight: 700;
   cursor: pointer;
+}
+
+.chat-split-fare-trigger:hover {
+  background: var(--teal);
+  color: #ffffff;
 }
 
 .chat-split-fare-form {
@@ -3771,8 +3799,9 @@
 .chat-split-fare-input {
   width: 78px;
   padding: 5px 8px;
-  border: 1px solid #cbd5e1;
+  border: 1.5px solid var(--hair);
   border-radius: 6px;
+  background: #ffffff;
   font-size: 12px;
   font-weight: 700;
   color: var(--ink);
@@ -3787,6 +3816,10 @@
   font-size: 11.5px;
   font-weight: 700;
   cursor: pointer;
+}
+
+.chat-split-pay-btn:hover:not(:disabled) {
+  background: var(--teal-dark);
 }
 
 .chat-split-pay-btn:disabled {

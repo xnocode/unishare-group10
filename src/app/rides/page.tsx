@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import Link from "next/link";
+import { TrainFront, Wallet } from "lucide-react";
 import AppNavbar from "../components/AppNavbar";
 import {
   getUserScopedKey,
@@ -2516,7 +2517,10 @@ export default function RideSharingPage() {
                 ------------------------------------------------- */}
             <div className="rides-savings-card" aria-label="Commute fare split optimizer">
               <div className="rides-savings-header">
-                <span className="rides-savings-title">💸 Commute Savings Estimator</span>
+                <span className="rides-savings-title">
+                  <Wallet size={14} strokeWidth={2.2} />
+                  <span>Cost split &amp; savings</span>
+                </span>
                 <span className="rides-savings-badge">
                   Save ৳{fareEstimate.savingsBdt}/trip ({fareEstimate.savingsPercent}%)
                 </span>
@@ -2526,9 +2530,9 @@ export default function RideSharingPage() {
                 <div className="rides-mode-pills" role="group" aria-label="Transport mode">
                   {(
                     [
-                      { id: "cng", label: "🛺 CNG" },
-                      { id: "car", label: "🚗 Car" },
-                      { id: "rickshaw", label: "🚲 Rickshaw" },
+                      { id: "cng", label: "CNG" },
+                      { id: "car", label: "Car" },
+                      { id: "rickshaw", label: "Rickshaw" },
                     ] as const
                   ).map((m) => (
                     <button
@@ -2575,7 +2579,8 @@ export default function RideSharingPage() {
 
               {fareEstimate.mrtHint && (
                 <div className="rides-mrt-hint">
-                  🚇 Budget alternative: {fareEstimate.mrtHint}
+                  <TrainFront size={14} strokeWidth={2.2} />
+                  <span>Budget tip: {fareEstimate.mrtHint}</span>
                 </div>
               )}
             </div>
@@ -3599,7 +3604,8 @@ export default function RideSharingPage() {
                       setShowSplitFareBar((prev) => !prev);
                     }}
                   >
-                    💸 {showSplitFareBar ? "Hide Split" : "Pay Fair Share"}
+                    <Wallet size={12} strokeWidth={2.2} />
+                    <span>{showSplitFareBar ? "Hide split" : "Pay fair share"}</span>
                   </button>
                 </div>
 
