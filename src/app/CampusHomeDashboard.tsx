@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppNavbar from "./components/AppNavbar";
@@ -196,11 +196,16 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(0);
   const [myActiveJourney, setMyActiveJourney] = useState<HomeJourney | null>(null);
   const [activePartnersCount, setActivePartnersCount] = useState<number>(0);
+  const resolvedUserRef = useRef(resolvedUser);
+  useEffect(() => {
+    resolvedUserRef.current = resolvedUser;
+  }, [resolvedUser]);
 
   useEffect(() => {
     if (!isAuthenticated || !resolvedUser.email) return;
     let active = true;
-    const headers = { "x-user-email": resolvedUser.email };
+    const userEmail = resolvedUser.email;
+    const headers = { "x-user-email": userEmail };
 
     const load = async () => {
       try {
@@ -223,8 +228,9 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
           if (active && w?.ok) {
             if (typeof w.tokenBalance === "number") {
               setFetchedTokenBalance(w.tokenBalance);
-              if (w.tokenBalance !== resolvedUser.tokenBalance) {
-                saveClientUser({ ...resolvedUser, tokenBalance: w.tokenBalance });
+              const latestUser = resolvedUserRef.current;
+              if (w.tokenBalance !== latestUser.tokenBalance) {
+                saveClientUser({ ...latestUser, tokenBalance: w.tokenBalance });
               }
             }
             setHeldDeposit(w.heldDeposit ?? 0);
@@ -283,10 +289,20 @@ export default function CampusHomeDashboard({ onLogout }: CampusHomeProps) {
     };
 
     void load();
+
+    const handleLiveRefresh = () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      void load();
+    };
+    const interval = setInterval(handleLiveRefresh, 15000);
+    window.addEventListener("focus", handleLiveRefresh);
+
     return () => {
       active = false;
+      clearInterval(interval);
+      window.removeEventListener("focus", handleLiveRefresh);
     };
-  }, [isAuthenticated, resolvedUser]);
+  }, [isAuthenticated, resolvedUser.email]);
 
   const activeBorrowedRentals = borrowedRentals.filter(
     (r) => r.status === "PENDING" || r.status === "ACTIVE"

@@ -128,15 +128,21 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       data: dataToUpdate,
     });
 
-    // Create meeting update message in thread
+    // Create meeting update message in thread & notify peer
     if (meetingLocation || meetingConfirmed !== undefined) {
       const spotName = meetingLocation || updated.meetingLocation || "Intended Meeting Point";
+      const isConfirmed = Boolean(meetingConfirmed ?? updated.meetingConfirmed);
+      const recipientId =
+        conversation.participant1Id === user.id
+          ? conversation.participant2Id
+          : conversation.participant1Id;
+
       await db.travelMessage.create({
         data: {
           conversationId: id,
           senderId: user.id,
           senderName: user.fullName,
-          text: (meetingConfirmed ?? updated.meetingConfirmed)
+          text: isConfirmed
             ? `🤝 Meeting point confirmed: ${spotName}`
             : `📍 Proposed meeting point: ${spotName}`,
           messageType: "MEETING_LOCATION",
@@ -145,6 +151,23 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
           locationLng: meetingLng || updated.meetingLng || null,
         },
       });
+
+      if (recipientId) {
+        await db.notification
+          .create({
+            data: {
+              userId: recipientId,
+              category: "ride",
+              title: isConfirmed
+                ? `Pickup confirmed · ${spotName}`
+                : `${user.fullName} suggested pickup: ${spotName}`,
+              body: "Open Campus Rides to view map meetup details.",
+              actionLabel: "Open Rides",
+              actionHref: "/rides",
+            },
+          })
+          .catch(() => {});
+      }
     }
 
     return NextResponse.json({

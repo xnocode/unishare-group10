@@ -67,32 +67,46 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     }
 
     if (action === "ACCEPT") {
-      // 1. Update invitation status to ACCEPTED
-      const updated = await db.travelPartnerInvitation.update({
-        where: { id },
-        data: { status: "ACCEPTED" },
-      });
+      // Update invitation, ensure conversation exists, and notify requester atomically
+      const { updated, conversation } = await db.$transaction(async (tx) => {
+        const nextInv = await tx.travelPartnerInvitation.update({
+          where: { id },
+          data: { status: "ACCEPTED" },
+        });
 
-      // 2. Atomically create or retrieve private conversation
-      let conversation = invitation.conversation;
-      if (!conversation) {
-        conversation = await db.travelConversation.create({
-          data: {
-            invitationId: invitation.id,
-            participant1Id: invitation.senderId,
-            participant2Id: invitation.receiverId,
-            status: "ACTIVE",
-            messages: {
-              create: {
-                senderId: user.id,
-                senderName: user.fullName,
-                text: "Travel connection accepted! You can now coordinate your meeting location and departure.",
-                messageType: "STATUS_UPDATE",
+        let conv = invitation.conversation;
+        if (!conv) {
+          conv = await tx.travelConversation.create({
+            data: {
+              invitationId: invitation.id,
+              participant1Id: invitation.senderId,
+              participant2Id: invitation.receiverId,
+              status: "ACTIVE",
+              messages: {
+                create: {
+                  senderId: user.id,
+                  senderName: user.fullName,
+                  text: "Travel connection accepted! You can now coordinate your meeting location and departure.",
+                  messageType: "STATUS_UPDATE",
+                },
               },
             },
+          });
+        }
+
+        await tx.notification.create({
+          data: {
+            userId: invitation.senderId,
+            category: "ride",
+            title: `${user.fullName} accepted your ride request`,
+            body: "Open Campus Rides to confirm pickup point, chat, and split your fare.",
+            actionLabel: "Open Rides",
+            actionHref: "/rides",
           },
         });
-      }
+
+        return { updated: nextInv, conversation: conv };
+      });
 
       return NextResponse.json({
         success: true,
@@ -104,9 +118,22 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     }
 
     if (action === "REJECT") {
-      const updated = await db.travelPartnerInvitation.update({
-        where: { id },
-        data: { status: "REJECTED" },
+      const updated = await db.$transaction(async (tx) => {
+        const nextInv = await tx.travelPartnerInvitation.update({
+          where: { id },
+          data: { status: "REJECTED" },
+        });
+        await tx.notification.create({
+          data: {
+            userId: invitation.senderId,
+            category: "ride",
+            title: `Ride request declined by ${user.fullName}`,
+            body: "No worries — invite another verified student on your campus route.",
+            actionLabel: "Find partners",
+            actionHref: "/rides",
+          },
+        });
+        return nextInv;
       });
 
       return NextResponse.json({

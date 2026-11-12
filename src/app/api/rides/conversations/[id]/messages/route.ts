@@ -67,6 +67,40 @@ export async function POST(req: NextRequest, context: RouteContext) {
       },
     });
 
+    // Notify co-rider (throttled to avoid duplicate alerts during rapid chat)
+    const recipientId =
+      conversation.participant1Id === user.id
+        ? conversation.participant2Id
+        : conversation.participant1Id;
+    if (recipientId) {
+      try {
+        const recentUnread = await db.notification.findFirst({
+          where: {
+            userId: recipientId,
+            category: "ride",
+            unread: true,
+            title: `New message from ${user.fullName}`,
+            createdAt: { gte: new Date(Date.now() - 120_000) },
+          },
+          select: { id: true },
+        });
+        if (!recentUnread) {
+          await db.notification.create({
+            data: {
+              userId: recipientId,
+              category: "ride",
+              title: `New message from ${user.fullName}`,
+              body: text.slice(0, 120),
+              actionLabel: "Open Ride Chat",
+              actionHref: "/rides",
+            },
+          });
+        }
+      } catch {
+        // Non-blocking notification failure
+      }
+    }
+
     return NextResponse.json({
       success: true,
       message: {

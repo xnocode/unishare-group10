@@ -8,6 +8,7 @@ import {
   clearClientSession,
   deriveInitials,
   getUserScopedKey,
+  triggerSessionSync,
   useCurrentUser,
   useLocalStorageRaw,
 } from "../lib/user-client";
@@ -264,20 +265,37 @@ export default function AppNavbar({
   }, [mode, resolvedUser.email]);
 
   useEffect(() => {
-    if (mode !== "app" || unreadCount !== undefined || !currentUser.email) return;
+    if (mode !== "app" || !currentUser.email) return;
     let active = true;
-    fetch("/api/notifications?limit=1", {
-      headers: { "x-user-email": currentUser.email },
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: { ok?: boolean; unreadCount?: number } | null) => {
-        if (!active || !d?.ok) return;
-        setFetchedUnreadCount(typeof d.unreadCount === "number" ? d.unreadCount : 0);
+
+    const refreshNotifications = () => {
+      if (unreadCount !== undefined) return;
+      fetch("/api/notifications?limit=1", {
+        headers: { "x-user-email": currentUser.email },
       })
-      .catch(() => {});
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: { ok?: boolean; unreadCount?: number } | null) => {
+          if (!active || !d?.ok) return;
+          setFetchedUnreadCount(typeof d.unreadCount === "number" ? d.unreadCount : 0);
+        })
+        .catch(() => {});
+    };
+
+    refreshNotifications();
+
+    const syncLiveState = () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      refreshNotifications();
+      triggerSessionSync();
+    };
+
+    const interval = setInterval(syncLiveState, 12000);
+    window.addEventListener("focus", syncLiveState);
 
     return () => {
       active = false;
+      clearInterval(interval);
+      window.removeEventListener("focus", syncLiveState);
     };
   }, [mode, unreadCount, currentUser.email]);
 

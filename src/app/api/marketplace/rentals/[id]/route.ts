@@ -177,15 +177,25 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         },
       });
 
-      await tx.notification.create({
-        data: {
-          userId: rental.borrowerId,
-          category: "wallet",
-          title: `Deposit released · +${rental.depositAmount} tokens`,
-          body: `${rental.lenderName} confirmed return of ${rental.listingTitle}.`,
-          actionLabel: "View Wallet",
-          actionHref: "/wallet",
-        },
+      await tx.notification.createMany({
+        data: [
+          {
+            userId: rental.borrowerId,
+            category: "wallet",
+            title: `Deposit released · +${rental.depositAmount} tokens`,
+            body: `${rental.lenderName} confirmed return of ${rental.listingTitle}.`,
+            actionLabel: "View Wallet",
+            actionHref: "/wallet",
+          },
+          {
+            userId: rental.lenderId,
+            category: "wallet",
+            title: `Rental completed · +${rental.rentalFee} tokens earned`,
+            body: `Confirmed return of ${rental.listingTitle} from ${rental.borrowerName}.`,
+            actionLabel: "View Wallet",
+            actionHref: "/wallet",
+          },
+        ],
       });
 
       return nextRental;

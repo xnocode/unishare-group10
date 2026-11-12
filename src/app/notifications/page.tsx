@@ -52,7 +52,7 @@ function formatNotifTime(iso: string): string {
 
 function mapCategoryToIcon(category: string): NotificationItem["icon"] {
   if (category === "wallet" || category === "topup") return "wallet";
-  if (category === "ride") return "car";
+  if (category === "ride" || category === "rides") return "car";
   if (category === "rental") return "boxcheck";
   if (category === "marketplace") return "box";
   return "coins";
@@ -157,6 +157,18 @@ export default function NotificationsPage() {
   useEffect(() => {
     if (!isAuthenticated || !resolvedUser.email) return;
     void loadNotifications(0, false);
+
+    const handleLiveRefresh = () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      void loadNotifications(0, false);
+    };
+
+    const interval = setInterval(handleLiveRefresh, 12000);
+    window.addEventListener("focus", handleLiveRefresh);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", handleLiveRefresh);
+    };
   }, [isAuthenticated, resolvedUser.email, loadNotifications]);
 
   const fallbackItems: NotificationItem[] = useMemo(
