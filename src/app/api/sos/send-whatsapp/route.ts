@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getAuthenticatedRideUser } from "@/app/lib/ride-auth";
 import { sendUltraMsgWhatsApp } from "@/app/lib/ultramsg";
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await getAuthenticatedRideUser(req);
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized: Please log in to send SOS alerts." },
+        { status: 401 }
+      );
+    }
+
     const body = await req.json();
     const { toPhoneNumber, studentName, trackingUrl } = body;
 

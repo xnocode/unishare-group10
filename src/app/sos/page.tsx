@@ -6,6 +6,7 @@ import AppNavbar from "../components/AppNavbar";
 import {
   getUserScopedKey,
   useCurrentUser,
+  useRequireAuth,
   writeUserScopedJson,
 } from "../lib/user-client";
 import "../campus-home.css";
@@ -23,6 +24,7 @@ interface EmergencyContact {
 
 export default function SOSSetupPage() {
   const { resolvedUser: currentUser, isDemoUser, isHydrated } = useCurrentUser();
+  const isAuthenticated = useRequireAuth("/sos");
   const contactsStorageKey = getUserScopedKey(
     "unishare_emergency_contacts",
     currentUser.email,
@@ -33,6 +35,7 @@ export default function SOSSetupPage() {
   const [contact, setContact] = useState<EmergencyContact | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   // Form Fields
   const [formName, setFormName] = useState("");
@@ -197,9 +200,6 @@ export default function SOSSetupPage() {
   // Remove Contact
   const handleRemoveContact = async () => {
     if (!contact) return;
-    if (!confirm(`Are you sure you want to remove ${contact.name} (${contact.phoneNumber})?`)) {
-      return;
-    }
 
     try {
       const res = await fetch(`/api/emergency-contacts?id=${contact.id}&email=${encodeURIComponent(currentUser.email)}`, {
@@ -209,6 +209,7 @@ export default function SOSSetupPage() {
       const data = await res.json();
       if (data.success) {
         setContact(null);
+        setConfirmRemove(false);
         writeUserScopedJson(contactsStorageKey, []);
         setFormName("");
         setFormPhone("");
@@ -229,7 +230,10 @@ export default function SOSSetupPage() {
     try {
       const res = await fetch("/api/sos/send-whatsapp", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-email": currentUser.email,
+        },
         body: JSON.stringify({
           toPhoneNumber: contact.phoneNumber,
           studentName: currentUser.name,
@@ -254,6 +258,18 @@ export default function SOSSetupPage() {
     const clean = contact.phoneNumber.replace(/[^\d+]/g, "");
     window.location.href = `tel:${clean}`;
   };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="unishare-campus-home" style={{ minHeight: "100vh", background: "#ffffff" }}>
+        <AppNavbar activeNav="sos" />
+        <main className="wrap" style={{ paddingTop: "36px" }}>
+          <div style={{ height: "42px", width: "260px", borderRadius: "8px", background: "#f5f7f6", marginBottom: "18px" }} />
+          <div style={{ height: "140px", borderRadius: "12px", background: "#e9f2ef" }} />
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="unishare-campus-home">
@@ -307,13 +323,25 @@ export default function SOSSetupPage() {
           <div>
             <h1>Emergency Contact Setup</h1>
             <p className="sub" style={{ maxWidth: "680px" }}>
-              Configure your trusted emergency contact number. Tapping the red floating <strong>SOS</strong> button anywhere on UniShare will instantly open WhatsApp with your live GPS location map and launch your phone dialer.
+              Configure your trusted emergency contact number. Pressing &amp; holding the red <strong>SOS</strong> button in the top navigation bar for 2 seconds dispatches an instant alert with your GPS coordinates and opens your dialer.
             </p>
           </div>
         </div>
 
         {/* STATUS BAND */}
-        {contact ? (
+        {isLoading ? (
+          <div className="band" style={{ background: "#f5f7f6", color: "#4b5553", border: "1px solid #d5dcda", marginBottom: "24px" }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 7v5l3 2" />
+            </svg>
+            <div>
+              <b>Checking Emergency Contact Status...</b>
+              <p>Loading your configured campus safety contact from UniShare.</p>
+            </div>
+            <span>Syncing...</span>
+          </div>
+        ) : contact ? (
           <div className="band" style={{ background: "#e9f2ef", color: "#0d6b63", marginBottom: "24px" }}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
@@ -321,7 +349,7 @@ export default function SOSSetupPage() {
             </svg>
             <div>
               <b>Emergency Contact Active &amp; Ready</b>
-              <p>Your trusted contact ({contact.name} · {contact.phoneNumber}) is verified and linked to your 1-click floating SOS button.</p>
+              <p>Your trusted contact ({contact.name} · {contact.phoneNumber}) is verified and linked to your top-bar SOS button.</p>
             </div>
             <span>1 / 1 Configured</span>
           </div>
@@ -334,14 +362,14 @@ export default function SOSSetupPage() {
             </svg>
             <div>
               <b>No Emergency Contact Configured</b>
-              <p>Please add and verify your trusted contact number below so you can use the floating SOS button.</p>
+              <p>Please add and verify your trusted contact number below so you can trigger the top-bar SOS button.</p>
             </div>
             <span>0 / 1 Configured</span>
           </div>
         )}
 
         {/* 2-COLUMN MAIN CONTENT: LEFT = CONTACT CARD/FORM, RIGHT = INSTRUCTIONS & HELPLINES */}
-        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: "24px", alignItems: "start" }}>
+        <div className="sos-main-grid">
           
           {/* ================= LEFT: EMERGENCY CONTACT CARD OR FORM ================= */}
           <div
@@ -439,24 +467,48 @@ export default function SOSSetupPage() {
                   </button>
                 </div>
 
-                <div style={{ borderTop: "1px solid #e5eae8", paddingTop: "14px", display: "flex", justifyContent: "flex-end" }}>
-                  <button
-                    type="button"
-                    onClick={handleRemoveContact}
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      color: "#b3261e",
-                      fontSize: "13px",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "4px",
-                    }}
-                  >
-                    🗑️ Remove Emergency Contact
-                  </button>
+                <div style={{ borderTop: "1px solid #e5eae8", paddingTop: "14px", display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                  {confirmRemove ? (
+                    <>
+                      <span style={{ fontSize: "12.5px", color: "#4b5553", fontWeight: 600 }}>
+                        Remove {contact.name}?
+                      </span>
+                      <button
+                        type="button"
+                        className="btn"
+                        style={{ padding: "5px 12px", fontSize: "12.5px" }}
+                        onClick={() => setConfirmRemove(false)}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className="btn"
+                        style={{ padding: "5px 12px", fontSize: "12.5px", background: "#b3261e", borderColor: "#b3261e", color: "#ffffff" }}
+                        onClick={handleRemoveContact}
+                      >
+                        Yes, remove
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmRemove(true)}
+                      style={{
+                        background: "transparent",
+                        border: "none",
+                        color: "#b3261e",
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "4px",
+                      }}
+                    >
+                      🗑️ Remove Emergency Contact
+                    </button>
+                  )}
                 </div>
               </div>
             ) : (
@@ -470,7 +522,7 @@ export default function SOSSetupPage() {
                     {contact ? "Update Contact Details" : "Set Your Trusted Number"}
                   </h2>
                   <p style={{ fontSize: "13px", color: "#4b5553", marginTop: "2px" }}>
-                    Enter 1 verified phone number that will receive emergency alerts when you press the floating SOS button.
+                    Enter 1 verified phone number that will receive emergency alerts when you hold the top-bar SOS button.
                   </p>
                 </div>
 
@@ -634,10 +686,10 @@ export default function SOSSetupPage() {
                   </span>
                   <div>
                     <div style={{ fontSize: "13.5px", fontWeight: 700, color: "#161b1a" }}>
-                      Floating Red SOS Everywhere
+                      Top-Bar SOS Everywhere
                     </div>
                     <p style={{ fontSize: "12px", color: "#4b5553", margin: "2px 0 0", lineHeight: "1.4" }}>
-                      A small red <strong>SOS</strong> button stays permanently pinned at the bottom-right corner of every page across the website.
+                      The red <strong>SOS</strong> pill stays pinned inside the top navigation bar across every UniShare page. Tap once to manage setup, or press &amp; hold for 2 seconds to trigger an alert.
                     </p>
                   </div>
                 </div>
@@ -648,10 +700,10 @@ export default function SOSSetupPage() {
                   </span>
                   <div>
                     <div style={{ fontSize: "13.5px", fontWeight: 700, color: "#161b1a" }}>
-                      Instant WhatsApp &amp; Dialpad
+                      Instant Alert &amp; Dialpad
                     </div>
                     <p style={{ fontSize: "12px", color: "#4b5553", margin: "2px 0 0", lineHeight: "1.4" }}>
-                      Tapping the floating SOS immediately opens WhatsApp with your real-time GPS map tracking link and launches your phone dialpad.
+                      Holding SOS for 2 seconds dispatches your live GPS coordinates to your saved contact and opens your phone dialer automatically.
                     </p>
                   </div>
                 </div>
@@ -672,24 +724,26 @@ export default function SOSSetupPage() {
               </h3>
 
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                <a
-                  href="tel:01711374747"
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    background: "#ffffff",
-                    border: "1px solid #d5dcda",
-                    borderRadius: "6px",
-                    padding: "9px 12px",
-                    fontSize: "13px",
-                    fontWeight: 600,
-                    color: "#161b1a",
-                  }}
-                >
-                  <span>Proctor &amp; Campus Security</span>
-                  <span style={{ color: "#0d6b63", fontWeight: 700 }}>01711-374747</span>
-                </a>
+                {currentUser.university.toLowerCase().includes("dhaka") && (
+                  <a
+                    href="tel:01711374747"
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      background: "#ffffff",
+                      border: "1px solid #d5dcda",
+                      borderRadius: "6px",
+                      padding: "9px 12px",
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      color: "#161b1a",
+                    }}
+                  >
+                    <span>DU Proctor &amp; Campus Security</span>
+                    <span style={{ color: "#0d6b63", fontWeight: 700 }}>01711-374747</span>
+                  </a>
+                )}
 
                 <a
                   href="tel:999"
@@ -725,8 +779,27 @@ export default function SOSSetupPage() {
                     color: "#161b1a",
                   }}
                 >
-                  <span>Dhaka Medical Emergency</span>
+                  <span>National Ambulance Service</span>
                   <span style={{ color: "#0d6b63", fontWeight: 700 }}>199</span>
+                </a>
+
+                <a
+                  href="tel:109"
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    background: "#ffffff",
+                    border: "1px solid #d5dcda",
+                    borderRadius: "6px",
+                    padding: "9px 12px",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    color: "#161b1a",
+                  }}
+                >
+                  <span>Women &amp; Children Helpline</span>
+                  <span style={{ color: "#0d6b63", fontWeight: 700 }}>109</span>
                 </a>
               </div>
             </div>
@@ -740,12 +813,12 @@ export default function SOSSetupPage() {
       <footer>
         <div className="wrap">
           <span>UniShare. Made for university students in Bangladesh.</span>
-          <div>
-            <Link href="#">Privacy</Link>
-            <Link href="#">Terms</Link>
-            <Link href="#">Get help</Link>
+          <span>
+            <Link href="/privacy" style={{ marginLeft: 0 }}>Privacy</Link>
+            <Link href="/terms">Terms</Link>
+            <Link href="/help">Get help</Link>
             <Link href="/settings">Settings</Link>
-          </div>
+          </span>
         </div>
       </footer>
     </div>

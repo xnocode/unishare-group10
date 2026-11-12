@@ -3,7 +3,11 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import Link from "next/link";
 import AppNavbar from "../components/AppNavbar";
-import { useCurrentUser } from "../lib/user-client";
+import {
+  getUserScopedKey,
+  useCurrentUser,
+  useRequireAuth,
+} from "../lib/user-client";
 import CampusRouteMap, { MapPeerItem, resolvePeerPoint } from "./CampusRouteMap";
 import {
   computeFitViewport,
@@ -12,7 +16,6 @@ import {
   findNearestLandmark,
   LatLngPoint,
   QUICK_CAMPUS_DESTINATIONS,
-  resolveLandmarkByName,
 } from "./rides-geo";
 import "./rides.css";
 
@@ -169,11 +172,47 @@ const GOOGLE_MAPS_LIGHT_STYLES = [
   { featureType: "water", elementType: "geometry", stylers: [{ color: "#c5e3ed" }] },
 ];
 
+interface RideMatchRequestItem {
+  id: string;
+  status: string;
+  message?: string | null;
+  conversationId?: string | null;
+  senderAvatarInitials?: string;
+  senderName?: string;
+  senderDepartment?: string;
+  receiverAvatarInitials?: string;
+  receiverName?: string;
+  verificationBadge?: string;
+}
+
+interface RideConversationMessage {
+  id: string;
+  text: string;
+  messageType?: string;
+  locationName?: string | null;
+  senderId?: string;
+  senderName?: string;
+  isSelf?: boolean;
+  createdAt: string;
+}
+
+interface RideConversationDetail {
+  id?: string;
+  partnerName?: string;
+  partnerAvatarInitials?: string;
+  partnerBadge?: string;
+  partnerDepartment?: string;
+  meetingLocation?: string | null;
+  meetingConfirmed?: boolean;
+  messages?: RideConversationMessage[];
+}
+
 export default function RideSharingPage() {
   // -----------------------------------------------------------
   // 1. User & State
   // -----------------------------------------------------------
-  const { resolvedUser: currentUser } = useCurrentUser();
+  const { resolvedUser: currentUser, isDemoUser } = useCurrentUser();
+  const isAuthenticated = useRequireAuth("/rides");
 
   // Journey Coordinates & Text
   const [pickup, setPickup] = useState("Dhanmondi 27, Dhaka");
@@ -187,8 +226,11 @@ export default function RideSharingPage() {
     lng: 90.3957,
   });
 
-  // Gender Preference
-  const [genderPreference, setGenderPreference] = useState<"no_preference" | "women_only" | "men_only">("no_preference");
+  // Gender Preference (defaults to saved Account Settings preference until changed in-session)
+  const [genderOverride, setGenderOverride] = useState<"no_preference" | "women_only" | "men_only" | null>(null);
+  const setGenderPreference = setGenderOverride;
+  const genderPreference =
+    genderOverride ?? currentUser?.preferences?.defaultRidePreference ?? "no_preference";
 
   // Map Picking Mode: "none" | "pickup" | "destination"
   const [mapPickMode, setMapPickMode] = useState<"none" | "pickup" | "destination">("none");
@@ -231,8 +273,6 @@ export default function RideSharingPage() {
   const [isRegisteringRoute, setIsRegisteringRoute] = useState(false);
   const [routeRegisteredSuccess, setRouteRegisteredSuccess] = useState(false);
   const [isSendingGroupInvite, setIsSendingGroupInvite] = useState(false);
-  const [realtimeConnected, setRealtimeConnected] = useState(false);
-  const [lastSyncedTime, setLastSyncedTime] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // References for Real-Time SSE Stream & Custom Map Markers
@@ -243,17 +283,17 @@ export default function RideSharingPage() {
   // Connection Requests & Private Coordination Chat State
   const [showRequestsModal, setShowRequestsModal] = useState(false);
   const [requestsTab, setRequestsTab] = useState<"incoming" | "outgoing">("incoming");
-  const [incomingRequests, setIncomingRequests] = useState<any[]>([]);
-  const [outgoingRequests, setOutgoingRequests] = useState<any[]>([]);
+  const [incomingRequests, setIncomingRequests] = useState<RideMatchRequestItem[]>([]);
+  const [outgoingRequests, setOutgoingRequests] = useState<RideMatchRequestItem[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
-  const [activeConversation, setActiveConversation] = useState<any | null>(null);
-  const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [activeConversation, setActiveConversation] = useState<RideConversationDetail | null>(null);
+  const [chatMessages, setChatMessages] = useState<RideConversationMessage[]>([]);
   const [newMessageText, setNewMessageText] = useState("");
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
   // Consent-Based Live GPS Tracking State
-  const [trackingSession, setTrackingSession] = useState<{
+  const [rawTrackingSession, setTrackingSession] = useState<{
     id: string;
     conversationId: string;
     journeyStatus: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
@@ -288,8 +328,22 @@ export default function RideSharingPage() {
 
   const [isUpdatingConsent, setIsUpdatingConsent] = useState(false);
   const [isUpdatingTrackingAction, setIsUpdatingTrackingAction] = useState(false);
-  const [partnerDistanceMeters, setPartnerDistanceMeters] = useState<number | null>(null);
+  const [rawPartnerDistanceMeters, setPartnerDistanceMeters] = useState<number | null>(null);
+  const trackingSession = activeConversationId ? rawTrackingSession : null;
+  const partnerDistanceMeters = activeConversationId ? rawPartnerDistanceMeters : null;
   const [myLiveCoords, setMyLiveCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const trackingSessionRef = useRef(trackingSession);
+  const myLiveCoordsRef = useRef(myLiveCoords);
+  const pickupCoordsRef = useRef(pickupCoords);
+  useEffect(() => {
+    trackingSessionRef.current = trackingSession;
+  }, [trackingSession]);
+  useEffect(() => {
+    myLiveCoordsRef.current = myLiveCoords;
+  }, [myLiveCoords]);
+  useEffect(() => {
+    pickupCoordsRef.current = pickupCoords;
+  }, [pickupCoords]);
   const [showConsentModal, setShowConsentModal] = useState(false);
   const [gpsErrorState, setGpsErrorState] = useState<string | null>(null);
   const [isConfirmingArrival, setIsConfirmingArrival] = useState(false);
@@ -304,7 +358,6 @@ export default function RideSharingPage() {
   const [reviewCategory, setReviewCategory] = useState("INAPPROPRIATE_BEHAVIOR");
   const [reviewDetails, setReviewDetails] = useState("");
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
-  const [hasReviewed, setHasReviewed] = useState(false);
 
   // References for Live Tracking Watcher & Markers
   const trackingWatchIdRef = useRef<number | null>(null);
@@ -413,26 +466,6 @@ export default function RideSharingPage() {
     }, 180);
     return () => clearTimeout(timer);
   }, [destination]);
-
-  // Report active search presence to server so other students see active explorers on campus map
-  const reportRidesPresence = useCallback(
-    (coords: { lat: number; lng: number }, pickupName?: string, destName?: string) => {
-      fetch("/api/rides/presence", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          lat: coords.lat,
-          lng: coords.lng,
-          pickupLocation: pickupName || pickup,
-          destinationLocation: destName || destination,
-          destinationLat: destCoords.lat,
-          destinationLng: destCoords.lng,
-          genderPreference,
-        }),
-      }).catch(() => {});
-    },
-    [pickup, destination, destCoords, genderPreference]
-  );
 
   // Toast feedback helper
   const showToast = useCallback((msg: string) => {
@@ -829,10 +862,30 @@ export default function RideSharingPage() {
   };
 
   // Consistent auth header helper (keeps multi-session & demo requests cleanly authenticated alongside cookies)
+  const currentUserEmail = currentUser.email.trim();
   const getRideAuthHeaders = useCallback((): Record<string, string> => {
-    const email = currentUser?.email?.trim();
-    return email ? { "x-user-email": email } : {};
-  }, [currentUser?.email]);
+    return currentUserEmail ? { "x-user-email": currentUserEmail } : {};
+  }, [currentUserEmail]);
+
+  // Report active search presence to server so other students see active explorers on campus map
+  const reportRidesPresence = useCallback(
+    (coords: { lat: number; lng: number }, pickupName?: string, destName?: string) => {
+      fetch("/api/rides/presence", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getRideAuthHeaders() },
+        body: JSON.stringify({
+          lat: coords.lat,
+          lng: coords.lng,
+          pickupLocation: pickupName || pickup,
+          destinationLocation: destName || destination,
+          destinationLat: destCoords.lat,
+          destinationLng: destCoords.lng,
+          genderPreference,
+        }),
+      }).catch(() => {});
+    },
+    [pickup, destination, destCoords, genderPreference, getRideAuthHeaders]
+  );
 
   // Load active campus riders & self live status right away (polls every 5s so friends appear live)
   const fetchActiveCampusRiders = useCallback(async () => {
@@ -1076,14 +1129,6 @@ export default function RideSharingPage() {
     );
   };
 
-  const handleSelectAllPartners = () => {
-    if (selectedPartnerIds.length === searchResults.length) {
-      setSelectedPartnerIds([]);
-    } else {
-      setSelectedPartnerIds(searchResults.map((p) => p.id));
-    }
-  };
-
   // Send Multi-Partner Travel Request
   const handleSendGroupInvitations = async () => {
     if (selectedPartnerIds.length === 0) return;
@@ -1184,8 +1229,7 @@ export default function RideSharingPage() {
     eventSourceRef.current = es;
 
     es.addEventListener("connected", () => {
-      setRealtimeConnected(true);
-      setLastSyncedTime(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+      // Live SSE stream established
     });
 
     es.addEventListener("matches", (event: MessageEvent) => {
@@ -1193,7 +1237,6 @@ export default function RideSharingPage() {
         const data = JSON.parse(event.data);
         if (Array.isArray(data.partners)) {
           setSearchResults(data.partners);
-          setLastSyncedTime(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
         }
       } catch (err) {
         console.error("SSE parse error:", err);
@@ -1201,7 +1244,7 @@ export default function RideSharingPage() {
     });
 
     es.onerror = () => {
-      setRealtimeConnected(false);
+      // Transient SSE error; browser EventSource retries automatically
     };
 
     return () => {
@@ -1304,9 +1347,16 @@ export default function RideSharingPage() {
   }, [getRideAuthHeaders]);
 
   useEffect(() => {
-    fetchConnectionRequests();
-    const interval = setInterval(fetchConnectionRequests, 8000);
-    return () => clearInterval(interval);
+    const initTimer = setTimeout(() => {
+      void fetchConnectionRequests();
+    }, 0);
+    const interval = setInterval(() => {
+      void fetchConnectionRequests();
+    }, 8000);
+    return () => {
+      clearTimeout(initTimer);
+      clearInterval(interval);
+    };
   }, [fetchConnectionRequests]);
 
   const handleRespondRequest = async (id: string, action: "ACCEPT" | "REJECT") => {
@@ -1436,9 +1486,13 @@ export default function RideSharingPage() {
   const recordNotification = useCallback(
     (title: string, body: string, icon: "car" | "box" | "wallet" = "car") => {
       try {
-        const storageKey = `unishare_${currentUser.email || "demo"}_unishare_notifications`;
+        const storageKey = getUserScopedKey(
+          "unishare_notifications",
+          currentUser.email,
+          isDemoUser
+        );
         const existing = localStorage.getItem(storageKey);
-        let list: any[] = [];
+        let list: Array<Record<string, unknown>> = [];
         if (existing) {
           try {
             list = JSON.parse(existing);
@@ -1459,7 +1513,7 @@ export default function RideSharingPage() {
         // ignore storage errors
       }
     },
-    [currentUser.email]
+    [currentUser.email, isDemoUser]
   );
 
   // Start browser Geolocation API watchPosition
@@ -1479,16 +1533,19 @@ export default function RideSharingPage() {
           setMyLiveCoords(coords);
 
           if (mapInstanceRef.current && window.google?.maps) {
+            const currentSession = trackingSessionRef.current;
             updateLiveTrackingMarkersOnMap(
-              trackingSession?.partnerLocation ? { lat: trackingSession.partnerLocation.lat, lng: trackingSession.partnerLocation.lng } : null,
-              trackingSession?.partner?.fullName || "Travel Partner",
+              currentSession?.partnerLocation
+                ? { lat: currentSession.partnerLocation.lat, lng: currentSession.partnerLocation.lng }
+                : null,
+              currentSession?.partner?.fullName || "Travel Partner",
               coords
             );
           }
 
           fetch(`/api/rides/conversations/${conversationId}/tracking/location`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...getRideAuthHeaders() },
             body: JSON.stringify({
               lat: latitude,
               lng: longitude,
@@ -1535,17 +1592,19 @@ export default function RideSharingPage() {
 
       trackingWatchIdRef.current = watchId;
     },
-    [destCoords.lat, destCoords.lng, destination, proximityRadius, recordNotification, showToast, trackingSession, updateLiveTrackingMarkersOnMap]
+    [destCoords.lat, destCoords.lng, destination, getRideAuthHeaders, proximityRadius, recordNotification, showToast, updateLiveTrackingMarkersOnMap]
   );
 
   // Fetch current tracking state & arrival detection
   const fetchTrackingState = useCallback(
     async (conversationId: string) => {
       try {
-        const res = await fetch(`/api/rides/conversations/${conversationId}/tracking`);
+        const res = await fetch(`/api/rides/conversations/${conversationId}/tracking`, {
+          headers: getRideAuthHeaders(),
+        });
         const data = await res.json();
         if (data.success && data.tracking) {
-          const prev = trackingSession;
+          const prev = trackingSessionRef.current;
           setTrackingSession(data.tracking);
 
           // Detect partner arrival transition
@@ -1560,14 +1619,14 @@ export default function RideSharingPage() {
 
           if (data.tracking.partnerLocation) {
             const pLoc = data.tracking.partnerLocation;
-            const refCoords = myLiveCoords || pickupCoords;
+            const refCoords = myLiveCoordsRef.current || pickupCoordsRef.current;
             const dist = computeDistanceBetweenKm(refCoords.lat, refCoords.lng, pLoc.lat, pLoc.lng);
             setPartnerDistanceMeters(Math.round(dist * 1000));
 
             updateLiveTrackingMarkersOnMap(
               { lat: pLoc.lat, lng: pLoc.lng },
               data.tracking.partner?.fullName || "Travel Partner",
-              myLiveCoords
+              myLiveCoordsRef.current
             );
           } else {
             setPartnerDistanceMeters(null);
@@ -1585,7 +1644,7 @@ export default function RideSharingPage() {
         console.error("fetchTrackingState error:", err);
       }
     },
-    [destination, myLiveCoords, pickupCoords, recordNotification, showToast, stopBrowserGeolocation, trackingSession, updateLiveTrackingMarkersOnMap]
+    [destination, getRideAuthHeaders, recordNotification, showToast, stopBrowserGeolocation, updateLiveTrackingMarkersOnMap]
   );
 
   // Manual arrival confirmation handler
@@ -1595,7 +1654,7 @@ export default function RideSharingPage() {
     try {
       const res = await fetch(`/api/rides/conversations/${activeConversationId}/arrival`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getRideAuthHeaders() },
         body: JSON.stringify({ manualArrival: true }),
       });
       const data = await res.json();
@@ -1607,7 +1666,9 @@ export default function RideSharingPage() {
           "car"
         );
         fetchTrackingState(activeConversationId);
-        const msgRes = await fetch(`/api/rides/conversations/${activeConversationId}/messages`);
+        const msgRes = await fetch(`/api/rides/conversations/${activeConversationId}/messages`, {
+          headers: getRideAuthHeaders(),
+        });
         const msgData = await msgRes.json();
         if (msgData.success && Array.isArray(msgData.messages)) {
           setChatMessages(msgData.messages);
@@ -1628,7 +1689,7 @@ export default function RideSharingPage() {
     try {
       const res = await fetch(`/api/rides/conversations/${activeConversationId}/tracking/consent`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getRideAuthHeaders() },
         body: JSON.stringify({ consent }),
       });
       const data = await res.json();
@@ -1645,7 +1706,9 @@ export default function RideSharingPage() {
           stopBrowserGeolocation();
         }
         await fetchTrackingState(activeConversationId);
-        const msgRes = await fetch(`/api/rides/conversations/${activeConversationId}/messages`);
+        const msgRes = await fetch(`/api/rides/conversations/${activeConversationId}/messages`, {
+          headers: getRideAuthHeaders(),
+        });
         const msgData = await msgRes.json();
         if (msgData.success && Array.isArray(msgData.messages)) {
           setChatMessages(msgData.messages);
@@ -1668,7 +1731,7 @@ export default function RideSharingPage() {
     try {
       const res = await fetch(`/api/rides/conversations/${activeConversationId}/tracking/stop`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getRideAuthHeaders() },
         body: JSON.stringify({ action }),
       });
       const data = await res.json();
@@ -1683,7 +1746,9 @@ export default function RideSharingPage() {
           setShowReviewModal(true);
         }
         await fetchTrackingState(activeConversationId);
-        const msgRes = await fetch(`/api/rides/conversations/${activeConversationId}/messages`);
+        const msgRes = await fetch(`/api/rides/conversations/${activeConversationId}/messages`, {
+          headers: getRideAuthHeaders(),
+        });
         const msgData = await msgRes.json();
         if (msgData.success && Array.isArray(msgData.messages)) {
           setChatMessages(msgData.messages);
@@ -1705,7 +1770,7 @@ export default function RideSharingPage() {
     try {
       const res = await fetch(`/api/rides/conversations/${activeConversationId}/review`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getRideAuthHeaders() },
         body: JSON.stringify({
           rating: reviewRating,
           feedback: reviewFeedback.trim() || undefined,
@@ -1722,7 +1787,6 @@ export default function RideSharingPage() {
             : "🌟 Thank you for reviewing your commute partner!"
         );
         setShowReviewModal(false);
-        setHasReviewed(true);
         recordNotification(
           "Review Submitted ⭐",
           `Your rating and feedback for ${activeConversation?.partnerName || "your travel partner"} has been recorded.`,
@@ -1749,6 +1813,7 @@ export default function RideSharingPage() {
 
   const openConversation = async (conversationId: string) => {
     setActiveConversationId(conversationId);
+    setMobileTab("map");
     try {
       const res = await fetch(`/api/rides/conversations/${conversationId}`, {
         headers: getRideAuthHeaders(),
@@ -1767,7 +1832,6 @@ export default function RideSharingPage() {
         .then((r) => r.json())
         .then((d) => {
           if (d.success) {
-            setHasReviewed(d.hasReviewed);
             if (d.isJourneyCompleted && !d.hasReviewed) {
               setShowReviewModal(true);
             }
@@ -1799,8 +1863,8 @@ export default function RideSharingPage() {
         setChatMessages((prev) => [...prev, data.message]);
         if (!textToSend) setNewMessageText("");
         if (messageType === "MEETING_LOCATION") {
-          setActiveConversation((prev: any) => ({
-            ...prev,
+          setActiveConversation((prev) => ({
+            ...(prev || {}),
             meetingLocation: locationName || text,
             meetingConfirmed: false,
           }));
@@ -1819,7 +1883,7 @@ export default function RideSharingPage() {
     try {
       const res = await fetch(`/api/rides/conversations/${activeConversationId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getRideAuthHeaders() },
         body: JSON.stringify({
           meetingLocation: activeConversation.meetingLocation,
           meetingConfirmed: true,
@@ -1827,9 +1891,11 @@ export default function RideSharingPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setActiveConversation((prev: any) => ({ ...prev, meetingConfirmed: true }));
+        setActiveConversation((prev) => ({ ...(prev || {}), meetingConfirmed: true }));
         showToast("🤝 Meeting location confirmed with travel partner!");
-        const msgRes = await fetch(`/api/rides/conversations/${activeConversationId}/messages`);
+        const msgRes = await fetch(`/api/rides/conversations/${activeConversationId}/messages`, {
+          headers: getRideAuthHeaders(),
+        });
         const msgData = await msgRes.json();
         if (msgData.success && Array.isArray(msgData.messages)) {
           setChatMessages(msgData.messages);
@@ -1845,7 +1911,9 @@ export default function RideSharingPage() {
     if (!activeConversationId) return;
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/rides/conversations/${activeConversationId}/messages`);
+        const res = await fetch(`/api/rides/conversations/${activeConversationId}/messages`, {
+          headers: getRideAuthHeaders(),
+        });
         const data = await res.json();
         if (data.success && Array.isArray(data.messages)) {
           setChatMessages(data.messages);
@@ -1855,27 +1923,39 @@ export default function RideSharingPage() {
       }
     }, 2500);
     return () => clearInterval(interval);
-  }, [activeConversationId]);
+  }, [activeConversationId, getRideAuthHeaders]);
 
   // Periodic tracking refresh and live cleanup
   useEffect(() => {
     if (!activeConversationId) {
       stopBrowserGeolocation();
-      setTrackingSession(null);
-      setPartnerDistanceMeters(null);
       return;
     }
 
-    fetchTrackingState(activeConversationId);
+    const initTimer = setTimeout(() => {
+      void fetchTrackingState(activeConversationId);
+    }, 0);
     const trackingInterval = setInterval(() => {
-      fetchTrackingState(activeConversationId);
+      void fetchTrackingState(activeConversationId);
     }, 3000);
 
     return () => {
+      clearTimeout(initTimer);
       clearInterval(trackingInterval);
       stopBrowserGeolocation();
     };
   }, [activeConversationId, fetchTrackingState, stopBrowserGeolocation]);
+
+  if (!isAuthenticated) {
+    return (
+      <div className="unishare-rides-container" style={{ minHeight: "100vh", background: "#ffffff" }}>
+        <AppNavbar activeNav="rides" />
+        <div style={{ padding: "36px 24px", textAlign: "center", color: "#4b5553", fontWeight: 600 }}>
+          Checking campus authorization...
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="unishare-rides-container">
@@ -2024,6 +2104,7 @@ export default function RideSharingPage() {
                     <div
                       className="autocomplete-item autocomplete-gps-item"
                       role="option"
+                      aria-selected={isLocatingGps}
                       onMouseDown={(e) => {
                         e.preventDefault();
                         setShowPickupAutocomplete(false);
@@ -2488,7 +2569,7 @@ export default function RideSharingPage() {
                   className="search-error-btn"
                   onClick={() => handleFindPartners("no_preference")}
                 >
-                  Switch to "No Preference" & Retry
+                  Switch to &quot;No Preference&quot; &amp; Retry
                 </button>
               </div>
             )}
@@ -2518,7 +2599,7 @@ export default function RideSharingPage() {
                       className="switch-filter-btn"
                       onClick={() => handleFindPartners("no_preference")}
                     >
-                      Search with "No Preference" (All Verified Students)
+                      Search with &quot;No Preference&quot; (All Verified Students)
                     </button>
                   )}
 
@@ -2702,7 +2783,7 @@ export default function RideSharingPage() {
                         </div>
 
                         {partner.notes && (
-                          <div className="partner-notes-bubble">"{partner.notes}"</div>
+                          <div className="partner-notes-bubble">&quot;{partner.notes}&quot;</div>
                         )}
 
                         <div className="partner-card-footer">
@@ -3449,7 +3530,7 @@ export default function RideSharingPage() {
 
                         {req.message && (
                           <div className="request-message-quote">
-                            "{req.message}"
+                            &quot;{req.message}&quot;
                           </div>
                         )}
 
@@ -3477,7 +3558,9 @@ export default function RideSharingPage() {
                               className="request-chat-btn"
                               onClick={() => {
                                 setShowRequestsModal(false);
-                                openConversation(req.conversationId);
+                                if (req.conversationId) {
+                                  openConversation(req.conversationId);
+                                }
                               }}
                             >
                               💬 Open Private Chat
@@ -3494,7 +3577,7 @@ export default function RideSharingPage() {
                 <>
                   {outgoingRequests.length === 0 ? (
                     <div style={{ textAlign: "center", color: "#64748b", fontSize: "13px", padding: "30px 10px" }}>
-                      You haven't sent any travel requests yet.
+                      You haven&apos;t sent any travel requests yet.
                     </div>
                   ) : (
                     outgoingRequests.map((req) => (
@@ -3534,7 +3617,9 @@ export default function RideSharingPage() {
                               className="request-chat-btn"
                               onClick={() => {
                                 setShowRequestsModal(false);
-                                openConversation(req.conversationId);
+                                if (req.conversationId) {
+                                  openConversation(req.conversationId);
+                                }
                               }}
                             >
                               💬 Coordinate in Private Chat

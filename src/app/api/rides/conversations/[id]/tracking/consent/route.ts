@@ -66,7 +66,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
     const p2Consent = isP2 ? consentValue : tracking.participant2Consent;
     const bothConsented = p1Consent && p2Consent;
 
-    let updateData: Record<string, unknown> = {};
+    const updateData: Record<string, unknown> = {};
 
     if (consentValue) {
       // Granting consent

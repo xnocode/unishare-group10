@@ -23,7 +23,6 @@ export interface ActiveRiderPresence {
 }
 
 declare global {
-  // eslint-disable-next-line no-var
   var __unishare_rides_presence__: Map<string, ActiveRiderPresence> | undefined;
 }
 

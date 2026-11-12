@@ -203,26 +203,28 @@ export async function GET(req: NextRequest) {
 
     // 3. Safety Policy Enforcement for Self-Declared Profile Gender
     // "Never infer gender from names or photos. Keep profile gender private and use appropriate verified or self-declared profile information."
-    if (user.gender) {
-      const normalizedUserGender = user.gender.toLowerCase();
-      if (genderPreference === "women_only" && normalizedUserGender === "male") {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Safety Policy: The 'Women Only' travel partner filter is reserved for verified female students.",
-          },
-          { status: 403 }
-        );
-      }
-      if (genderPreference === "men_only" && normalizedUserGender === "female") {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Safety Policy: The 'Men Only' travel partner filter is reserved for verified male students.",
-          },
-          { status: 403 }
-        );
-      }
+    const normalizedUserGender = user.gender ? user.gender.toLowerCase() : "";
+    if (genderPreference === "women_only" && normalizedUserGender !== "female") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: user.gender
+            ? "Safety Policy: The 'Women Only' travel partner filter is reserved for verified female students."
+            : "Safety Policy: Set your gender in Settings before using the 'Women Only' filter.",
+        },
+        { status: 403 }
+      );
+    }
+    if (genderPreference === "men_only" && normalizedUserGender !== "male") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: user.gender
+            ? "Safety Policy: The 'Men Only' travel partner filter is reserved for verified male students."
+            : "Safety Policy: Set your gender in Settings before using the 'Men Only' filter.",
+        },
+        { status: 403 }
+      );
     }
 
     // Auto-record current user active searching presence if location is available
@@ -441,11 +443,12 @@ export async function GET(req: NextRequest) {
     // 7. Include students active on the website searching for rides (who haven't posted/taken a ride yet)
     const activeSearchers = getActiveRidersPresence(user.id);
     for (const searcher of activeSearchers) {
-      if (seenPartnerUserIds.has(searcher.userId)) continue;
+      if (!searcher.verified || seenPartnerUserIds.has(searcher.userId)) continue;
 
-      // Filter by gender safety if set
-      if (genderPreference === "women_only" && searcher.gender?.toLowerCase() === "male") continue;
-      if (genderPreference === "men_only" && searcher.gender?.toLowerCase() === "female") continue;
+      // Enforce the same verified self-declared gender policy as DB journey matches
+      const searcherGender = searcher.gender?.toLowerCase() ?? "";
+      if (genderPreference === "women_only" && searcherGender !== "female") continue;
+      if (genderPreference === "men_only" && searcherGender !== "male") continue;
 
       let distKm: number | null = null;
       let distText = "Nearby on Campus";
@@ -630,26 +633,28 @@ export async function POST(req: NextRequest) {
     const genderPreference = genderPreferenceParam as GenderPreference;
 
     // Safety checks against self-declared gender
-    if (user.gender) {
-      const g = user.gender.toLowerCase();
-      if (genderPreference === "women_only" && g === "male") {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Safety Policy: 'Women Only' preference is restricted to female students.",
-          },
-          { status: 403 }
-        );
-      }
-      if (genderPreference === "men_only" && g === "female") {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Safety Policy: 'Men Only' preference is restricted to male students.",
-          },
-          { status: 403 }
-        );
-      }
+    const g = user.gender ? user.gender.toLowerCase() : "";
+    if (genderPreference === "women_only" && g !== "female") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: user.gender
+            ? "Safety Policy: 'Women Only' preference is restricted to female students."
+            : "Safety Policy: Set your gender in Settings before enabling 'Women Only'.",
+        },
+        { status: 403 }
+      );
+    }
+    if (genderPreference === "men_only" && g !== "male") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: user.gender
+            ? "Safety Policy: 'Men Only' preference is restricted to male students."
+            : "Safety Policy: Set your gender in Settings before enabling 'Men Only'.",
+        },
+        { status: 403 }
+      );
     }
 
     const originLat = typeof body.originLat === "number" ? body.originLat : null;

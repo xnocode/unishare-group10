@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/app/lib/db";
 import { getAuthenticatedRideUser } from "@/app/lib/ride-auth";
-import { VALID_GENDER_PREFERENCES, GenderPreference } from "../route";
+import { VALID_GENDER_PREFERENCES } from "../route";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -106,7 +106,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       return NextResponse.json({ success: false, error: "Invalid JSON." }, { status: 400 });
     }
 
-    const dataToUpdate: any = {};
+    const dataToUpdate: Record<string, unknown> = {};
     if (body.origin && typeof body.origin === "string") dataToUpdate.origin = body.origin.trim();
     if (body.destination && typeof body.destination === "string") dataToUpdate.destination = body.destination.trim();
     if (body.genderPreference && VALID_GENDER_PREFERENCES.includes(body.genderPreference)) {

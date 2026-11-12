@@ -1,6 +1,6 @@
 /* UniShare Campus Ride Sharing · Destination-Based Live Companion Matching */
 
-:root {
+.unishare-rides-container {
   --teal: #0d6b63;
   --teal-dark: #09524c;
   --teal-light: #128278;
@@ -21,9 +21,7 @@
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.06);
   --shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.10);
-}
 
-.unishare-rides-container {
   font-family: "DM Sans", var(--font-dm-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   color: var(--ink);
   background: #ffffff;

@@ -117,7 +117,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     const rawConfirmed = body.meetingConfirmed !== undefined ? body.meetingConfirmed : body.confirmMeeting;
     const meetingConfirmed = typeof rawConfirmed === "boolean" ? rawConfirmed : undefined;
 
-    const dataToUpdate: any = {};
+    const dataToUpdate: Record<string, unknown> = {};
     if (meetingLocation !== undefined) dataToUpdate.meetingLocation = meetingLocation;
     if (meetingLat !== undefined) dataToUpdate.meetingLat = meetingLat;
     if (meetingLng !== undefined) dataToUpdate.meetingLng = meetingLng;
