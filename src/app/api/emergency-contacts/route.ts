@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/app/lib/db";
+import { getAuthenticatedRideUser } from "@/app/lib/ride-auth";
 
 interface MemoryContact {
   id: string;
@@ -12,7 +13,7 @@ interface MemoryContact {
   updatedAt: Date;
 }
 
-// In-memory fallback store to guarantee demo functionality on serverless/read-only hosts
+// In-memory fallback store only for transient DB read/write errors (scoped by authenticated userId)
 const fallbackStore = new Map<string, MemoryContact[]>();
 
 function getFallbackContacts(userId: string): MemoryContact[] {
@@ -22,87 +23,16 @@ function getFallbackContacts(userId: string): MemoryContact[] {
   return fallbackStore.get(userId)!;
 }
 
-// Helper to determine the authenticated user from request
-async function getAuthenticatedUser(
-  req: NextRequest,
-  bodyEmail?: string,
-  bodyName?: string
-) {
-  let email = req.headers.get("x-user-email");
-  let cookieName = bodyName;
-
-  if (!email && bodyEmail) {
-    email = bodyEmail;
-  }
-
-  const userCookie = req.cookies.get("unishare_user")?.value;
-  if (userCookie) {
-    try {
-      const parsed = JSON.parse(decodeURIComponent(userCookie)) as {
-        email?: string;
-        name?: string;
-      };
-      if (!email && parsed.email) email = parsed.email;
-      if (!cookieName && parsed.name) cookieName = parsed.name;
-    } catch {
-      // ignore JSON parse error
-    }
-  }
-
-  if (!email) {
-    const url = new URL(req.url);
-    const queryEmail = url.searchParams.get("email");
-    if (queryEmail) email = queryEmail;
-  }
-
-  if (!email) {
-    email = "farhana@std.du.ac.bd";
-  }
-
-  email = email.trim().toLowerCase();
-  const resolvedName =
-    (cookieName || "").trim() ||
-    (email.includes("farhana") ? "Farhana Rahman" : "Campus Student");
-  const isDemo = email === "farhana@std.du.ac.bd";
-
-  try {
-    let user = await db.user.findUnique({
-      where: { email },
-    });
-
-    if (!user) {
-      user = await db.user.create({
-        data: {
-          email,
-          fullName: resolvedName,
-          studentId: isDemo ? "DU-2023-8841" : null,
-          passwordHash: "student_verified_auth",
-          verified: isDemo,
-          tokenBalance: isDemo ? 420 : 50,
-        },
-      });
-    }
-
-    return user;
-  } catch (err) {
-    console.warn("DB user lookup fallback:", err);
-    return {
-      id: "u-" + Buffer.from(email).toString("hex").slice(0, 16),
-      email,
-      fullName: resolvedName,
-      studentId: isDemo ? "DU-2023-8841" : null,
-      passwordHash: "student_verified_auth",
-      verified: isDemo,
-      tokenBalance: isDemo ? 420 : 50,
-      createdAt: new Date(),
-    };
-  }
-}
-
 // GET: Retrieve authenticated user's emergency contacts
 export async function GET(req: NextRequest) {
   try {
-    const user = await getAuthenticatedUser(req);
+    const user = await getAuthenticatedRideUser(req);
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized: Please log in to view emergency contacts." },
+        { status: 401 }
+      );
+    }
 
     try {
       const contacts = await db.emergencyContact.findMany({
@@ -144,11 +74,18 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST: Add a new emergency contact (max 5)
+// POST: Add a new emergency contact (max 3)
 export async function POST(req: NextRequest) {
   try {
+    const user = await getAuthenticatedRideUser(req);
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized: Please log in to save emergency contacts." },
+        { status: 401 }
+      );
+    }
+
     const body = await req.json().catch(() => ({}));
-    const user = await getAuthenticatedUser(req, body.email);
 
     const { name, phoneNumber, relationship, priority } = body;
 
@@ -278,8 +215,11 @@ export async function POST(req: NextRequest) {
 // PUT: Edit an emergency contact or reorder contacts
 export async function PUT(req: NextRequest) {
   try {
+    const user = await getAuthenticatedRideUser(req);
+    if (!user) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
     const body = await req.json().catch(() => ({}));
-    const user = await getAuthenticatedUser(req, body.email);
 
     // Case 1: Batch reorder by priority
     if (body.reorder && Array.isArray(body.reorder)) {
@@ -446,8 +386,12 @@ export async function PUT(req: NextRequest) {
 // PATCH: Reorder contacts by priority
 export async function PATCH(req: NextRequest) {
   try {
+    const user = await getAuthenticatedRideUser(req);
+    if (!user) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await req.json().catch(() => ({}));
-    const user = await getAuthenticatedUser(req, body.email);
     const { orderedIds } = body;
 
     if (!Array.isArray(orderedIds)) {
@@ -455,6 +399,20 @@ export async function PATCH(req: NextRequest) {
     }
 
     try {
+      const owned = await db.emergencyContact.findMany({
+        where: { userId: user.id },
+        select: { id: true },
+      });
+      const ownedIds = new Set(owned.map((c) => c.id));
+      for (const cid of orderedIds) {
+        if (typeof cid !== "string" || !ownedIds.has(cid)) {
+          return NextResponse.json(
+            { success: false, error: "Forbidden: Contact does not belong to you." },
+            { status: 403 }
+          );
+        }
+      }
+
       for (let i = 0; i < orderedIds.length; i++) {
         await db.emergencyContact.update({
           where: { id: orderedIds[i] },
@@ -489,7 +447,10 @@ export async function PATCH(req: NextRequest) {
 // DELETE: Delete an emergency contact
 export async function DELETE(req: NextRequest) {
   try {
-    const user = await getAuthenticatedUser(req);
+    const user = await getAuthenticatedRideUser(req);
+    if (!user) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
     const url = new URL(req.url);
     const id = url.searchParams.get("id");
 

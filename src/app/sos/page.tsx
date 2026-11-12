@@ -68,9 +68,9 @@ export default function SOSSetupPage() {
       if (rawContact && rawContact.includes("1939853593")) {
         localStorage.removeItem("unishare_emergency_contact");
       }
-      const res = await fetch(
-        `/api/emergency-contacts?email=${encodeURIComponent(currentUser.email)}`
-      );
+      const res = await fetch("/api/emergency-contacts", {
+        headers: { "x-user-email": currentUser.email },
+      });
       const data = await res.json();
       if (data.success && Array.isArray(data.contacts) && data.contacts.length > 0) {
         setContact(data.contacts[0]);
@@ -202,7 +202,7 @@ export default function SOSSetupPage() {
     if (!contact) return;
 
     try {
-      const res = await fetch(`/api/emergency-contacts?id=${contact.id}&email=${encodeURIComponent(currentUser.email)}`, {
+      const res = await fetch(`/api/emergency-contacts?id=${encodeURIComponent(contact.id)}`, {
         method: "DELETE",
         headers: { "x-user-email": currentUser.email },
       });

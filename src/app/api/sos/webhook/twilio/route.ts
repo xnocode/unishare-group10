@@ -2,7 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/app/lib/db";
 import { mapTwilioCallStatus } from "@/app/lib/telephony";
 
-const getTwimlResponse = (student = "Campus Student") => `<?xml version="1.0" encoding="UTF-8"?>
+function escapeXml(raw: string): string {
+  return raw
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+const getTwimlResponse = (student = "Campus Student") => {
+  const safeStudent = escapeXml(student.slice(0, 80));
+  return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Pause length="1"/>
   <Say language="bn-IN">
@@ -14,10 +25,11 @@ const getTwimlResponse = (student = "Campus Student") => `<?xml version="1.0" en
   </Say>
   <Pause length="1"/>
   <Say voice="alice" language="en-US">
-    Urgent emergency alert: Student ${student} is in danger and has activated an SOS alert. A live location tracking link has been sent to your mobile phone via SMS.
+    Urgent emergency alert: Student ${safeStudent} is in danger and has activated an SOS alert. A live location tracking link has been sent to your mobile phone via SMS.
   </Say>
   <Pause length="2"/>
 </Response>`;
+};
 
 // TwiML voice instruction provider for Twilio Url calls (GET)
 export async function GET(req: NextRequest) {

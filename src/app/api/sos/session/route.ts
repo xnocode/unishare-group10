@@ -10,88 +10,18 @@ import {
 } from "@/app/lib/telephony";
 import { sendUltraMsgWhatsApp } from "@/app/lib/ultramsg";
 import { signPayload } from "@/app/lib/auth";
-
-// Helper to resolve authenticated student
-async function getAuthenticatedUser(
-  req: NextRequest,
-  bodyEmail?: string,
-  bodyName?: string
-) {
-  let email = req.headers.get("x-user-email");
-  let cookieName = bodyName;
-
-  if (!email && bodyEmail) {
-    email = bodyEmail;
-  }
-
-  const userCookie = req.cookies.get("unishare_user")?.value;
-  if (userCookie) {
-    try {
-      const parsed = JSON.parse(decodeURIComponent(userCookie)) as {
-        email?: string;
-        name?: string;
-      };
-      if (!email && parsed.email) email = parsed.email;
-      if (!cookieName && parsed.name) cookieName = parsed.name;
-    } catch {
-      // ignore parse error
-    }
-  }
-
-  if (!email) {
-    const url = new URL(req.url);
-    const queryEmail = url.searchParams.get("email");
-    if (queryEmail) email = queryEmail;
-  }
-
-  if (!email) {
-    email = "farhana@std.du.ac.bd";
-  }
-
-  email = email.trim().toLowerCase();
-  const isDemo = email === "farhana@std.du.ac.bd";
-  const resolvedName =
-    (cookieName || "").trim() ||
-    (isDemo ? "Farhana Rahman" : "Campus Student");
-
-  try {
-    let user = await db.user.findUnique({
-      where: { email },
-    });
-
-    if (!user) {
-      user = await db.user.create({
-        data: {
-          email,
-          fullName: resolvedName,
-          studentId: isDemo ? "DU-2023-8841" : null,
-          passwordHash: "student_verified_auth",
-          verified: isDemo,
-          tokenBalance: isDemo ? 420 : 50,
-        },
-      });
-    }
-
-    return user;
-  } catch (err) {
-    console.warn("Session user lookup fallback:", err);
-    return {
-      id: "u-" + Buffer.from(email).toString("hex").slice(0, 16),
-      email,
-      fullName: resolvedName,
-      studentId: isDemo ? "DU-2023-8841" : null,
-      passwordHash: "student_verified_auth",
-      verified: isDemo,
-      tokenBalance: isDemo ? 420 : 50,
-      createdAt: new Date(),
-    };
-  }
-}
+import { getAuthenticatedRideUser } from "@/app/lib/ride-auth";
 
 // GET: Retrieve latest active session & telephony status
 export async function GET(req: NextRequest) {
   try {
-    const user = await getAuthenticatedUser(req);
+    const user = await getAuthenticatedRideUser(req);
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized: Please log in to view SOS sessions." },
+        { status: 401 }
+      );
+    }
     const telephony = getTelephonyProviderInfo();
 
     const latestSession = await db.emergencySession.findFirst({
@@ -165,8 +95,15 @@ export async function GET(req: NextRequest) {
 // POST: Manage Emergency Session Lifecycle & Calling Steps
 export async function POST(req: NextRequest) {
   try {
+    const user = await getAuthenticatedRideUser(req);
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized: Please log in to manage SOS sessions." },
+        { status: 401 }
+      );
+    }
+
     const body = await req.json().catch(() => ({}));
-    const user = await getAuthenticatedUser(req, body?.email, body?.studentName);
     const action = body.action || "START";
 
     const telephony = getTelephonyProviderInfo();
@@ -594,14 +531,18 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, error: "callSid is required" }, { status: 400 });
       }
 
+      const callAttempt = await db.emergencyCallAttempt.findFirst({
+        where: { telephonySid: callSid },
+        include: { session: true },
+      });
+
+      if (!callAttempt || callAttempt.session.userId !== user.id) {
+        return NextResponse.json({ success: false, error: "Call attempt not found or access denied" }, { status: 404 });
+      }
+
       const twilioStatus = await checkTwilioCallStatus(callSid);
       if (twilioStatus) {
-        const callAttempt = await db.emergencyCallAttempt.findFirst({
-          where: { telephonySid: callSid },
-          include: { session: true },
-        });
-
-        if (callAttempt && callAttempt.status !== twilioStatus.status) {
+        if (callAttempt.status !== twilioStatus.status) {
           await db.emergencyCallAttempt.update({
             where: { id: callAttempt.id },
             data: {
@@ -686,6 +627,13 @@ export async function POST(req: NextRequest) {
       const { sessionId, reason } = body;
       if (!sessionId) {
         return NextResponse.json({ success: false, error: "sessionId is required." }, { status: 400 });
+      }
+
+      const existingSession = await db.emergencySession.findUnique({
+        where: { id: sessionId },
+      });
+      if (!existingSession || existingSession.userId !== user.id) {
+        return NextResponse.json({ success: false, error: "Session not found." }, { status: 404 });
       }
 
       const session = await db.emergencySession.update({

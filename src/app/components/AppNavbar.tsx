@@ -244,8 +244,10 @@ export default function AppNavbar({
   useEffect(() => {
     if (mode !== "app" || !resolvedUser.email) return;
     let active = true;
-    fetch(`/api/emergency-contacts?email=${encodeURIComponent(resolvedUser.email)}`)
-      .then((r) => r.json())
+    fetch("/api/emergency-contacts", {
+      headers: { "x-user-email": resolvedUser.email },
+    })
+      .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (!active) return;
         if (d?.contacts?.[0]) {
@@ -357,7 +359,10 @@ export default function AppNavbar({
       if (!sessionRes.ok || !sessionData.success || !whatsappDispatched) {
         const waRes = await fetch("/api/sos/send-whatsapp", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "x-user-email": studentEmail,
+          },
           body: JSON.stringify({
             toPhoneNumber: activeContact.phoneNumber,
             studentName,
