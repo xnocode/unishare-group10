@@ -56,6 +56,7 @@ function ProductDetailContent({ productId }: ProductDetailViewProps) {
   const [isBorrowing, setIsBorrowing] = useState(false);
   const [borrowError, setBorrowError] = useState('');
   const [borrowRequested, setBorrowRequested] = useState(false);
+  const [existingRentalStatus, setExistingRentalStatus] = useState<'PENDING' | 'ACTIVE' | null>(null);
   const [isDemoLoading, setIsDemoLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastVisible, setToastVisible] = useState(false);
@@ -112,10 +113,26 @@ function ProductDetailContent({ productId }: ProductDetailViewProps) {
         }
       })
       .catch(() => {});
+
+    if (effectiveId && !DEFAULT_ITEMS.some((d) => d.id === effectiveId)) {
+      fetch('/api/marketplace/rentals', {
+        headers: { 'x-user-email': email },
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data: { ok?: boolean; borrowed?: Array<{ listingId: string; status: string }> } | null) => {
+          if (!active || !data?.ok || !Array.isArray(data.borrowed)) return;
+          const match = data.borrowed.find(
+            (r) => r.listingId === effectiveId && (r.status === 'PENDING' || r.status === 'ACTIVE')
+          );
+          setExistingRentalStatus(match ? (match.status as 'PENDING' | 'ACTIVE') : null);
+        })
+        .catch(() => {});
+    }
+
     return () => {
       active = false;
     };
-  }, [user?.email]);
+  }, [user?.email, effectiveId]);
 
   const favoritesKey = getUserScopedKey(
     'unishare_favorites',
@@ -444,6 +461,8 @@ function ProductDetailContent({ productId }: ProductDetailViewProps) {
   // Calculation
   const rentalFee = rentalDays * item.price;
   const totalTokens = rentalFee + item.deposit;
+  const isShowcaseSample = !remoteItem && DEFAULT_ITEMS.some((d) => d.id === item.id);
+  const hasOpenRequest = borrowRequested || existingRentalStatus !== null;
 
   return (
     <div className="product-detail-page">
@@ -579,12 +598,16 @@ function ProductDetailContent({ productId }: ProductDetailViewProps) {
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                       <path d="M20 6L9 17l-5-5" />
                     </svg>
-                    <span>Verified {item.university || resolvedUser.university} student</span>
+                    <span>
+                      {isShowcaseSample
+                        ? 'Sample showcase · Reference item'
+                        : `Verified ${item.university || resolvedUser.university} student`}
+                    </span>
                   </div>
                 </div>
               </div>
               <div style={{ textAlign: 'right', fontSize: 12, color: 'var(--muted)' }}>
-                <span>{item.university || resolvedUser.university}</span>
+                <span>{isShowcaseSample ? 'Campus Reference' : item.university || resolvedUser.university}</span>
                 <br />
                 <span style={{ color: 'var(--brand)', fontWeight: 600 }}>Meet at {item.area}</span>
               </div>
@@ -614,17 +637,52 @@ function ProductDetailContent({ productId }: ProductDetailViewProps) {
             </div>
 
             {/* Confirmation Banner If Borrowed */}
-            {borrowRequested && (
+            {hasOpenRequest && (
               <div className="pd-confirm-banner">
                 <h4>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <path d="M20 6L9 17l-5-5" />
                   </svg>
-                  Request Sent Successfully!
+                  {existingRentalStatus === 'ACTIVE'
+                    ? 'Active Rental In Progress'
+                    : 'Request Sent Successfully!'}
                 </h4>
                 <p>
-                  {item.owner} has been notified. Meet at <strong>{item.area}</strong> to collect your {item.name}.
+                  {existingRentalStatus === 'ACTIVE' ? (
+                    <>
+                      Your borrow from <strong>{item.owner}</strong> is active at <strong>{item.area}</strong>.{' '}
+                    </>
+                  ) : (
+                    <>
+                      {item.owner} has been notified. Meet at <strong>{item.area}</strong> to collect your {item.name}.{' '}
+                    </>
+                  )}
+                  {!isShowcaseSample && (
+                    <Link href="/my-products" style={{ color: 'var(--brand)', fontWeight: 700, textDecoration: 'underline' }}>
+                      Track in My Products →
+                    </Link>
+                  )}
                 </p>
+              </div>
+            )}
+
+            {isShowcaseSample && !hasOpenRequest && (
+              <div
+                style={{
+                  background: 'var(--soft)',
+                  border: '1px solid var(--hair)',
+                  borderRadius: 10,
+                  padding: '10px 12px',
+                  fontSize: 12.5,
+                  color: 'var(--muted)',
+                  marginBottom: 14,
+                  lineHeight: 1.45,
+                }}
+              >
+                <strong style={{ color: 'var(--ink)' }}>Sample showcase item:</strong> Preview pricing without locking tokens. To borrow with live wallet escrow, pick any{' '}
+                <Link href="/marketplace" style={{ color: 'var(--brand)', fontWeight: 700, textDecoration: 'underline' }}>
+                  verified student listing →
+                </Link>
               </div>
             )}
 
@@ -691,7 +749,7 @@ function ProductDetailContent({ productId }: ProductDetailViewProps) {
               </div>
             </div>
 
-            {!isOwnListing && !borrowRequested && item.available !== false && (
+            {!isOwnListing && !hasOpenRequest && item.available !== false && (
               <div style={{ marginBottom: 14 }}>
                 <label className="pd-duration-label" htmlFor="rental-note">
                   Meetup note for {item.owner} (optional)
@@ -770,11 +828,11 @@ function ProductDetailContent({ productId }: ProductDetailViewProps) {
                 <span>Edit your listing</span>
               </Link>
             ) : (
-              <button
+                <button
                 type="button"
                 className="pd-borrow-btn"
                 onClick={handleBorrowRequest}
-                disabled={isBorrowing || borrowRequested || item.available === false}
+                disabled={isBorrowing || hasOpenRequest || item.available === false}
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M12 5v14M5 12h14" />
@@ -782,7 +840,9 @@ function ProductDetailContent({ productId }: ProductDetailViewProps) {
                 <span>
                   {item.available === false
                     ? 'Currently unavailable'
-                    : borrowRequested
+                    : existingRentalStatus === 'ACTIVE'
+                    ? 'Active Rental In Progress'
+                    : hasOpenRequest
                     ? 'Request Pending Lender Approval'
                     : isBorrowing
                     ? 'Holding escrow...'

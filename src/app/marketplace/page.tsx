@@ -978,7 +978,10 @@ function MarketplaceContent() {
 
                 {/* Content Body */}
                 <div className="card-body">
-                  <small className="cat-tag">{item.category}</small>
+                  <small className="cat-tag">
+                    {item.category}
+                    {!item.ownerEmail && DEFAULT_ITEMS.some((d) => d.id === item.id) ? ' · Sample showcase' : ''}
+                  </small>
                   <h3>{item.name}</h3>
 
                   <div className="price-line">
@@ -1005,7 +1008,11 @@ function MarketplaceContent() {
                     <span className="owner-avatar">{item.initials}</span>
                     <div className="owner-info">
                       <strong>{item.owner}</strong>
-                      <small>Verified {item.university || resolvedUser.university} student</small>
+                      <small>
+                        {!item.ownerEmail && DEFAULT_ITEMS.some((d) => d.id === item.id)
+                          ? 'Sample showcase · Reference item'
+                          : `Verified ${item.university || resolvedUser.university} student`}
+                      </small>
                     </div>
                     <svg
                       className="verified-check"
