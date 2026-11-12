@@ -95,6 +95,11 @@ function ListMarketplaceItemContent() {
     resolvedUser.email,
     isDemoUser
   );
+  const marketCacheKey = getUserScopedKey(
+    "unishare_marketplace_items",
+    resolvedUser.email,
+    isDemoUser
+  );
   const rawProductsJson = useLocalStorageRaw(productsKey);
 
   const triggerToast = (msg: string) => {
@@ -238,7 +243,7 @@ function ListMarketplaceItemContent() {
       ]);
 
       if (!asDraft) {
-        upsertMarketplaceItem(apiData.marketItem);
+        upsertMarketplaceItem(apiData.marketItem, marketCacheKey);
         triggerToast(editId ? `"${cleanTitle}" updated!` : `"${cleanTitle}" published to Marketplace!`);
         setTimeout(() => router.push(editId ? "/my-products" : "/marketplace"), 550);
       } else {

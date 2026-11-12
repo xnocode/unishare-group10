@@ -71,6 +71,11 @@ export default function MyProductsPage() {
     resolvedUser.email,
     isDemoUser
   );
+  const marketCacheKey = getUserScopedKey(
+    "unishare_marketplace_items",
+    resolvedUser.email,
+    isDemoUser
+  );
   const rawProductsJson = useLocalStorageRaw(productsKey);
   const [serverProducts, setServerProducts] = useState<ProductItem[]>([]);
   const [lentRentals, setLentRentals] = useState<RentalRecord[]>([]);
@@ -205,7 +210,7 @@ export default function MyProductsPage() {
     nextDeposit = item.deposit
   ) => {
     if (nextState === "draft") {
-      removeMarketplaceItem(item.id);
+      removeMarketplaceItem(item.id, marketCacheKey);
       return;
     }
     const marketItem: MarketplaceItem = {
@@ -225,7 +230,7 @@ export default function MyProductsPage() {
       maxRentalDays: item.maxRentalDays || 7,
       description: item.description || `${item.condition} condition ${item.name}. ${item.note}`,
     };
-    upsertMarketplaceItem(marketItem);
+    upsertMarketplaceItem(marketItem, marketCacheKey);
   };
 
   // State toggles (awaited with explicit API verification)
@@ -291,7 +296,7 @@ export default function MyProductsPage() {
         return;
       }
       setProducts((prev) => prev.filter((p) => p.id !== id));
-      removeMarketplaceItem(id);
+      removeMarketplaceItem(id, marketCacheKey);
       setDeleteTarget(null);
       triggerToast(`"${name}" deleted.`);
     } catch {

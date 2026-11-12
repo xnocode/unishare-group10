@@ -71,7 +71,14 @@ export const DEMO_USER: ClientUser = {
 
 const USER_EVENT = "unishare-user-updated";
 const STORAGE_EVENT = "unishare-storage-updated";
-let cachedMeSynced = false;
+const SESSION_SYNC_EVENT = "unishare-session-sync";
+let lastSyncedEmail: string | null = null;
+
+export function triggerSessionSync(): void {
+  lastSyncedEmail = null;
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(SESSION_SYNC_EVENT));
+}
 
 export function getUserScopedKey(
   baseKey: string,
@@ -193,6 +200,10 @@ export function formatMemberSince(createdAt?: string | null): string {
 
 export function saveClientUser(user: ClientUser) {
   try {
+    const nextEmail = (user.email || "").trim().toLowerCase();
+    if (lastSyncedEmail && lastSyncedEmail !== nextEmail) {
+      lastSyncedEmail = null;
+    }
     localStorage.setItem("unishare_logged_in", "true");
     localStorage.setItem("unishare_user", JSON.stringify(user));
     window.dispatchEvent(new Event(USER_EVENT));
@@ -203,10 +214,12 @@ export function saveClientUser(user: ClientUser) {
 }
 
 export function clearClientSession() {
-  cachedMeSynced = false;
+  lastSyncedEmail = null;
   try {
     localStorage.removeItem("unishare_logged_in");
     localStorage.removeItem("unishare_user");
+    localStorage.removeItem("unishare_marketplace_items");
+    localStorage.removeItem("unishare_wallet");
     sessionStorage.removeItem("unishare_pending_mail_meta");
     document.cookie = "unishare_logged_in=; path=/; max-age=0; SameSite=Lax";
     document.cookie = "unishare_user=; path=/; max-age=0; SameSite=Lax";
@@ -274,28 +287,51 @@ export function useCurrentUser() {
   );
 
   useEffect(() => {
-    if (cachedMeSynced || typeof window === "undefined") return;
-    cachedMeSynced = true;
-    const isLoggedIn =
-      localStorage.getItem("unishare_logged_in") === "true" ||
-      document.cookie.includes("unishare_logged_in=true");
-    if (!isLoggedIn) return;
+    if (typeof window === "undefined") return;
 
-    fetch("/api/auth/me")
-      .then(async (res) => {
-        if (res.status === 401) {
-          clearClientSession();
-          return null;
-        }
-        return res.ok ? res.json() : null;
-      })
-      .then((data: { ok?: boolean; user?: ClientUser } | null) => {
-        if (data?.ok && data.user) {
-          saveClientUser(data.user);
-        }
-      })
-      .catch(() => {});
-  }, []);
+    const syncMe = (force = false) => {
+      const isLoggedIn =
+        localStorage.getItem("unishare_logged_in") === "true" ||
+        document.cookie.includes("unishare_logged_in=true");
+      if (!isLoggedIn) return;
+
+      let storedEmail = "";
+      try {
+        const parsed = JSON.parse(localStorage.getItem("unishare_user") || "{}") as {
+          email?: string;
+        };
+        storedEmail = (parsed.email || "").trim().toLowerCase();
+      } catch {}
+
+      if (!force && storedEmail && lastSyncedEmail === storedEmail) return;
+      lastSyncedEmail = storedEmail || "__pending__";
+
+      fetch("/api/auth/me")
+        .then(async (res) => {
+          if (res.status === 401) {
+            clearClientSession();
+            return null;
+          }
+          return res.ok ? res.json() : null;
+        })
+        .then((data: { ok?: boolean; user?: ClientUser } | null) => {
+          if (data?.ok && data.user) {
+            lastSyncedEmail = (data.user.email || "").trim().toLowerCase();
+            saveClientUser(data.user);
+          }
+        })
+        .catch(() => {
+          lastSyncedEmail = null;
+        });
+    };
+
+    syncMe(false);
+    const handleSyncRequest = () => syncMe(true);
+    window.addEventListener(SESSION_SYNC_EVENT, handleSyncRequest);
+    return () => {
+      window.removeEventListener(SESSION_SYNC_EVENT, handleSyncRequest);
+    };
+  }, [rawJson]);
 
   return useMemo(() => {
     if (!hydrated) {

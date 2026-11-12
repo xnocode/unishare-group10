@@ -119,16 +119,15 @@ function MarketplaceContent() {
     resolvedUser.email,
     isDemoUser
   );
-  const walletKey = getUserScopedKey(
-    'unishare_wallet',
+  const customMarketKey = getUserScopedKey(
+    'unishare_marketplace_items',
     resolvedUser.email,
     isDemoUser
   );
 
-  const rawItemsJson = useLocalStorageRaw('unishare_marketplace_items');
+  const rawItemsJson = useLocalStorageRaw(customMarketKey);
   const rawFavsJson = useLocalStorageRaw(favoritesKey);
   const rawRecentJson = useLocalStorageRaw(recentKey);
-  const rawWalletJson = useLocalStorageRaw(walletKey);
   const [serverItems, setServerItems] = useState<MarketplaceItem[]>([]);
   const [serverFavRecord, setServerFavRecord] = useState<{
     email: string;
@@ -198,17 +197,28 @@ function MarketplaceContent() {
   }, [user?.email]);
 
   const items: MarketplaceItem[] = useMemo(() => {
-    let localItems: MarketplaceItem[] = DEFAULT_ITEMS;
+    const mergedMap = new Map<string, MarketplaceItem>();
+    for (const it of serverItems) {
+      mergedMap.set(it.id, it);
+    }
     if (rawItemsJson) {
       try {
         const parsed = JSON.parse(rawItemsJson);
-        if (Array.isArray(parsed)) localItems = parsed as MarketplaceItem[];
+        if (Array.isArray(parsed)) {
+          for (const it of parsed as MarketplaceItem[]) {
+            if (it?.id && !mergedMap.has(it.id)) {
+              mergedMap.set(it.id, it);
+            }
+          }
+        }
       } catch {}
     }
-
-    if (serverItems.length === 0) return localItems;
-    const seenIds = new Set(serverItems.map((it) => it.id));
-    return [...serverItems, ...localItems.filter((it) => !seenIds.has(it.id))];
+    for (const def of DEFAULT_ITEMS) {
+      if (!mergedMap.has(def.id)) {
+        mergedMap.set(def.id, def);
+      }
+    }
+    return Array.from(mergedMap.values());
   }, [rawItemsJson, serverItems]);
 
   const favorites: Record<string, boolean> = useMemo(() => {
@@ -242,15 +252,7 @@ function MarketplaceContent() {
     }
   }, [rawRecentJson]);
 
-  const walletBalance = useMemo(() => {
-    if (rawWalletJson) {
-      try {
-        const parsed = JSON.parse(rawWalletJson) as { balance?: number };
-        if (parsed.balance !== undefined) return parsed.balance;
-      } catch {}
-    }
-    return resolvedUser.tokenBalance;
-  }, [rawWalletJson, resolvedUser.tokenBalance]);
+  const walletBalance = resolvedUser.tokenBalance;
 
   // Toast State
   const [toastMessage, setToastMessage] = useState('');

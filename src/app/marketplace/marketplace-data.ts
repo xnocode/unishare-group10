@@ -203,11 +203,14 @@ export function getItemById(id: string): MarketplaceItem | undefined {
   });
 }
 
-export function upsertMarketplaceItem(item: MarketplaceItem) {
+export function upsertMarketplaceItem(
+  item: MarketplaceItem,
+  storageKey = 'unishare_marketplace_items'
+) {
   if (typeof window === 'undefined') return;
-  let current: MarketplaceItem[] = DEFAULT_ITEMS;
+  let current: MarketplaceItem[] = [];
   try {
-    const raw = window.localStorage.getItem('unishare_marketplace_items');
+    const raw = window.localStorage.getItem(storageKey);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) current = parsed as MarketplaceItem[];
@@ -218,22 +221,25 @@ export function upsertMarketplaceItem(item: MarketplaceItem) {
     ? current.map((x) => (x.id === item.id ? item : x))
     : [item, ...current];
   try {
-    window.localStorage.setItem('unishare_marketplace_items', JSON.stringify(next));
+    window.localStorage.setItem(storageKey, JSON.stringify(next));
     window.dispatchEvent(new Event('unishare-storage'));
   } catch {
     // Ignore localStorage quota limits cleanly when large base64 fallback URIs are used
   }
 }
 
-export function removeMarketplaceItem(id: string) {
+export function removeMarketplaceItem(
+  id: string,
+  storageKey = 'unishare_marketplace_items'
+) {
   if (typeof window === 'undefined') return;
   try {
-    const raw = window.localStorage.getItem('unishare_marketplace_items');
+    const raw = window.localStorage.getItem(storageKey);
     if (!raw) return;
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return;
     const next = (parsed as MarketplaceItem[]).filter((x) => x.id !== id);
-    window.localStorage.setItem('unishare_marketplace_items', JSON.stringify(next));
+    window.localStorage.setItem(storageKey, JSON.stringify(next));
     window.dispatchEvent(new Event('unishare-storage'));
   } catch {}
 }

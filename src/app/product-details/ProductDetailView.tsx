@@ -127,15 +127,14 @@ function ProductDetailContent({ productId }: ProductDetailViewProps) {
     resolvedUser.email,
     isDemoUser
   );
-  const walletKey = getUserScopedKey(
-    'unishare_wallet',
+  const customMarketKey = getUserScopedKey(
+    'unishare_marketplace_items',
     resolvedUser.email,
     isDemoUser
   );
 
   const rawFavsJson = useLocalStorageRaw(favoritesKey);
-  const rawWalletJson = useLocalStorageRaw(walletKey);
-  const rawCustomItemsJson = useLocalStorageRaw('unishare_marketplace_items');
+  const rawCustomItemsJson = useLocalStorageRaw(customMarketKey);
   const myProductsKey = getUserScopedKey(
     'unishare_my_products',
     resolvedUser.email,
@@ -156,15 +155,7 @@ function ProductDetailContent({ productId }: ProductDetailViewProps) {
     return merged;
   }, [rawFavsJson, dbFavoriteIds]);
 
-  const walletBalance = useMemo(() => {
-    if (rawWalletJson) {
-      try {
-        const parsed = JSON.parse(rawWalletJson) as { balance?: number };
-        if (parsed.balance !== undefined) return parsed.balance;
-      } catch {}
-    }
-    return resolvedUser.tokenBalance;
-  }, [rawWalletJson, resolvedUser.tokenBalance]);
+  const walletBalance = resolvedUser.tokenBalance;
 
   // Determine the active item cleanly without false fallback to Calculator on 404
   const item: MarketplaceItem | null = useMemo(() => {
@@ -329,7 +320,6 @@ function ProductDetailContent({ productId }: ProductDetailViewProps) {
         if (user) {
           saveClientUser({ ...(user as ClientUser), tokenBalance: data.newBalance });
         }
-        writeUserScopedJson(walletKey, { balance: data.newBalance });
       }
       setBorrowRequested(true);
       showToast(`Borrow request sent to ${item.owner}! Meet at ${item.area}.`);
