@@ -1,7 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/app/lib/db";
 import { getAuthenticatedRideUser } from "@/app/lib/ride-auth";
+import { CATEGORIES, ITEM_CONDITIONS } from "@/app/marketplace/marketplace-data";
 import { serializeListingRow } from "../route";
+
+const ALLOWED_CATEGORIES = new Set(CATEGORIES.filter((c) => c !== "All items"));
+const ALLOWED_CONDITIONS = new Set<string>(ITEM_CONDITIONS);
+
+function isSafeImageUrl(url: string): boolean {
+  const clean = url.trim();
+  if (!clean || clean.length > 2_900_000) return false;
+  if (clean.startsWith("/images/")) return true;
+  if (/^https:\/\/[^\s]+$/i.test(clean)) return true;
+  if (/^data:image\/(jpeg|jpg|png|webp);base64,[A-Za-z0-9+/=]+$/i.test(clean)) {
+    return true;
+  }
+  return false;
+}
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -44,6 +59,12 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     }
 
     const body = (await req.json().catch(() => null)) as {
+      title?: string;
+      category?: string;
+      condition?: string;
+      description?: string;
+      imageUrl?: string;
+      maxRentalDays?: number;
       status?: "active" | "paused" | "draft";
       isRentedOut?: boolean;
       rate?: number;
@@ -55,37 +76,144 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       return NextResponse.json({ ok: false, error: "Invalid payload." }, { status: 400 });
     }
 
-    const nextStatus =
-      body.status && ["active", "paused", "draft"].includes(body.status)
-        ? body.status
-        : existing.status;
+    const nextData: {
+      title?: string;
+      category?: string;
+      condition?: string;
+      description?: string;
+      imageUrl?: string;
+      maxRentalDays?: number;
+      area?: string;
+      status: string;
+      rate: number;
+      deposit: number;
+      isRentedOut: boolean;
+      available: boolean;
+    } = {
+      status: existing.status,
+      rate: existing.rate,
+      deposit: existing.deposit,
+      isRentedOut: existing.isRentedOut,
+      available: existing.available,
+    };
 
-    const nextRate =
-      typeof body.rate === "number" && Number.isFinite(body.rate) && body.rate >= 5 && body.rate <= 500
-        ? Math.round(body.rate)
-        : existing.rate;
+    if ("title" in body) {
+      const cleanTitle = (body.title || "").trim();
+      if (cleanTitle.length < 3 || cleanTitle.length > 90) {
+        return NextResponse.json(
+          { ok: false, error: "Item title must be between 3 and 90 characters." },
+          { status: 400 }
+        );
+      }
+      nextData.title = cleanTitle;
+    }
 
-    const nextDeposit =
-      typeof body.deposit === "number" &&
-      Number.isFinite(body.deposit) &&
-      body.deposit >= 0 &&
-      body.deposit <= 2000
-        ? Math.round(body.deposit)
-        : existing.deposit;
+    if ("category" in body) {
+      const cleanCat = (body.category || "").trim();
+      if (!ALLOWED_CATEGORIES.has(cleanCat)) {
+        return NextResponse.json(
+          { ok: false, error: "Please select a valid category." },
+          { status: 400 }
+        );
+      }
+      nextData.category = cleanCat;
+    }
 
-    const nextIsRentedOut =
-      typeof body.isRentedOut === "boolean" ? body.isRentedOut : existing.isRentedOut;
+    if ("condition" in body) {
+      const cleanCond = (body.condition || "").trim();
+      if (!ALLOWED_CONDITIONS.has(cleanCond)) {
+        return NextResponse.json(
+          { ok: false, error: "Condition must be Like new, Good, or Fair." },
+          { status: 400 }
+        );
+      }
+      nextData.condition = cleanCond;
+    }
+
+    if ("area" in body) {
+      const cleanArea = (body.area || "").trim();
+      if (cleanArea.length < 2 || cleanArea.length > 60) {
+        return NextResponse.json(
+          { ok: false, error: "Pickup area must be between 2 and 60 characters." },
+          { status: 400 }
+        );
+      }
+      nextData.area = cleanArea;
+    }
+
+    if ("description" in body) {
+      const cleanDesc = (body.description || "").trim().slice(0, 600);
+      if (cleanDesc.length < 10) {
+        return NextResponse.json(
+          { ok: false, error: "Description should be at least 10 characters." },
+          { status: 400 }
+        );
+      }
+      nextData.description = cleanDesc;
+    }
+
+    if ("imageUrl" in body && typeof body.imageUrl === "string" && body.imageUrl.trim()) {
+      if (!isSafeImageUrl(body.imageUrl)) {
+        return NextResponse.json(
+          { ok: false, error: "Invalid product image URL format." },
+          { status: 400 }
+        );
+      }
+      nextData.imageUrl = body.imageUrl.trim();
+    }
+
+    if ("maxRentalDays" in body) {
+      const days = Math.round(Number(body.maxRentalDays));
+      if (!Number.isFinite(days) || days < 1 || days > 30) {
+        return NextResponse.json(
+          { ok: false, error: "Max rental period must be between 1 and 30 days." },
+          { status: 400 }
+        );
+      }
+      nextData.maxRentalDays = days;
+    }
+
+    if ("status" in body) {
+      if (!body.status || !["active", "paused", "draft"].includes(body.status)) {
+        return NextResponse.json(
+          { ok: false, error: "Listing status must be active, paused, or draft." },
+          { status: 400 }
+        );
+      }
+      nextData.status = body.status;
+    }
+
+    if ("rate" in body) {
+      const rateVal = Math.round(Number(body.rate));
+      if (!Number.isFinite(rateVal) || rateVal < 5 || rateVal > 500) {
+        return NextResponse.json(
+          { ok: false, error: "Daily rental rate must be between 5 and 500 tokens." },
+          { status: 400 }
+        );
+      }
+      nextData.rate = rateVal;
+    }
+
+    if ("deposit" in body) {
+      const depVal = Math.round(Number(body.deposit));
+      if (!Number.isFinite(depVal) || depVal < 0 || depVal > 2000) {
+        return NextResponse.json(
+          { ok: false, error: "Refundable deposit must be between 0 and 2000 tokens." },
+          { status: 400 }
+        );
+      }
+      nextData.deposit = depVal;
+    }
+
+    if ("isRentedOut" in body && typeof body.isRentedOut === "boolean") {
+      nextData.isRentedOut = body.isRentedOut;
+    }
+
+    nextData.available = nextData.status === "active" && !nextData.isRentedOut;
 
     const updated = await db.marketplaceListing.update({
       where: { id },
-      data: {
-        status: nextStatus,
-        rate: nextRate,
-        deposit: nextDeposit,
-        isRentedOut: nextIsRentedOut,
-        available: nextStatus === "active" && !nextIsRentedOut,
-        ...(body.area ? { area: body.area.trim() } : {}),
-      },
+      data: nextData,
     });
 
     const serialized = serializeListingRow(updated);

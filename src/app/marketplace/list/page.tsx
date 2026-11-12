@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import AppNavbar from "../../components/AppNavbar";
 import {
   CATEGORIES,
@@ -23,11 +23,16 @@ import {
   useRequireAuth,
   writeUserScopedJson,
 } from "../../lib/user-client";
+import { validateImageUpload } from "../../lib/validation";
 import "./list.css";
 
-export default function ListMarketplaceItemPage() {
+function ListMarketplaceItemContent() {
   const router = useRouter();
-  const isAuthenticated = useRequireAuth("/marketplace/list");
+  const searchParams = useSearchParams();
+  const editId = (searchParams.get("edit") || "").trim();
+  const isAuthenticated = useRequireAuth(
+    editId ? `/marketplace/list?edit=${encodeURIComponent(editId)}` : "/marketplace/list"
+  );
   const { resolvedUser, isDemoUser } = useCurrentUser();
 
   const [title, setTitle] = useState("");
@@ -43,10 +48,47 @@ export default function ListMarketplaceItemPage() {
   );
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [customPhotoUsed, setCustomPhotoUsed] = useState(false);
+  const [isLoadingEdit, setIsLoadingEdit] = useState(Boolean(editId));
   const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [toastMsg, setToastMsg] = useState("");
   const [showToast, setShowToast] = useState(false);
+
+  useEffect(() => {
+    if (!editId || !isAuthenticated) return;
+    let active = true;
+    fetch(`/api/marketplace/${encodeURIComponent(editId)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { ok?: boolean; marketItem?: MarketplaceItem } | null) => {
+        if (!active) return;
+        if (data?.ok && data.marketItem) {
+          const item = data.marketItem;
+          setTitle(item.name);
+          setCategory(item.category);
+          setCondition(item.condition || "Good");
+          setPricePerDay(String(item.price));
+          setDeposit(String(item.deposit));
+          setPickupArea(item.area || "TSC");
+          setMaxRentalDays(String(item.maxRentalDays || 7));
+          setDescription(item.description || "");
+          if (item.image) {
+            setSelectedPhoto(item.image);
+            setCustomPhotoUsed(true);
+          }
+        } else {
+          setErrorMsg("Could not load listing details for editing.");
+        }
+      })
+      .catch(() => {
+        if (active) setErrorMsg("Unable to load listing details right now.");
+      })
+      .finally(() => {
+        if (active) setIsLoadingEdit(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [editId, isAuthenticated]);
 
   const productsKey = getUserScopedKey(
     "unishare_my_products",
@@ -70,13 +112,12 @@ export default function ListMarketplaceItemPage() {
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      setErrorMsg("Please upload an image file (JPG, PNG, or WebP).");
-      return;
-    }
-    if (file.size > 2_000_000) {
-      setErrorMsg("Image file must be under 2.0 MB.");
+    const check = validateImageUpload(file, 2 * 1024 * 1024);
+    if (!check.valid) {
+      setSelectedFile(null);
+      setErrorMsg(check.error || "Please upload a JPG, PNG, or WebP image under 2 MB.");
       return;
     }
     setSelectedFile(file);
@@ -94,14 +135,14 @@ export default function ListMarketplaceItemPage() {
   const saveListing = async (asDraft: boolean) => {
     setErrorMsg("");
     const cleanTitle = title.trim();
-    if (cleanTitle.length < 3) {
-      setErrorMsg("Please enter a clear item title (at least 3 characters).");
+    if (cleanTitle.length < 3 || cleanTitle.length > 90) {
+      setErrorMsg("Please enter an item title between 3 and 90 characters.");
       return;
     }
 
-    const rateNum = Number(pricePerDay);
-    const depositNum = Number(deposit);
-    const maxDaysNum = Number(maxRentalDays);
+    const rateNum = Math.round(Number(pricePerDay));
+    const depositNum = Math.round(Number(deposit));
+    const maxDaysNum = Math.round(Number(maxRentalDays));
 
     if (!Number.isFinite(rateNum) || rateNum < 5 || rateNum > 500) {
       setErrorMsg("Daily rental rate must be between 5 and 500 tokens.");
@@ -109,6 +150,10 @@ export default function ListMarketplaceItemPage() {
     }
     if (!Number.isFinite(depositNum) || depositNum < 0 || depositNum > 2000) {
       setErrorMsg("Refundable deposit must be between 0 and 2000 tokens.");
+      return;
+    }
+    if (!Number.isFinite(maxDaysNum) || maxDaysNum < 1 || maxDaysNum > 30) {
+      setErrorMsg("Maximum rental duration must be between 1 and 30 days.");
       return;
     }
 
@@ -142,8 +187,13 @@ export default function ListMarketplaceItemPage() {
         description.trim() ||
         `${condition} condition ${cleanTitle}. Pickup at ${pickupArea}.`;
 
-      const apiRes = await fetch("/api/marketplace", {
-        method: "POST",
+      const endpoint = editId
+        ? `/api/marketplace/${encodeURIComponent(editId)}`
+        : "/api/marketplace";
+      const method = editId ? "PATCH" : "POST";
+
+      const apiRes = await fetch(endpoint, {
+        method,
         headers: {
           "Content-Type": "application/json",
           ...(resolvedUser.email ? { "x-user-email": resolvedUser.email } : {}),
@@ -155,7 +205,7 @@ export default function ListMarketplaceItemPage() {
           rate: rateNum,
           deposit: depositNum,
           area: pickupArea,
-          maxRentalDays: Number.isFinite(maxDaysNum) ? maxDaysNum : 7,
+          maxRentalDays: maxDaysNum,
           description: cleanDesc,
           imageUrl: resolvedImageUrl,
           status: asDraft ? "draft" : "active",
@@ -189,8 +239,8 @@ export default function ListMarketplaceItemPage() {
 
       if (!asDraft) {
         upsertMarketplaceItem(apiData.marketItem);
-        triggerToast(`"${cleanTitle}" published to Marketplace!`);
-        setTimeout(() => router.push("/marketplace"), 550);
+        triggerToast(editId ? `"${cleanTitle}" updated!` : `"${cleanTitle}" published to Marketplace!`);
+        setTimeout(() => router.push(editId ? "/my-products" : "/marketplace"), 550);
       } else {
         triggerToast(`Saved "${cleanTitle}" as draft.`);
         setTimeout(() => router.push("/my-products"), 550);
@@ -240,16 +290,17 @@ export default function ListMarketplaceItemPage() {
           <span>›</span>
           <Link href="/marketplace">Marketplace</Link>
           <span>›</span>
-          <span className="current">List an item</span>
+          <span className="current">{editId ? "Edit listing" : "List an item"}</span>
         </nav>
 
         <div className="eyebrow">{resolvedUser.university} · Verified students only</div>
         <div className="hero-row">
           <div>
-            <h1>List an item</h1>
+            <h1>{editId ? "Edit your listing" : "List an item"}</h1>
             <p className="sub">
-              Add clear details, choose a campus meetup spot, and earn tokens from verified{" "}
-              {resolvedUser.university} students.
+              {isLoadingEdit
+                ? "Loading saved listing details..."
+                : `Add clear details, choose a campus meetup spot, and earn tokens from verified ${resolvedUser.university} students.`}
             </p>
           </div>
           <Link href="/my-products" className="btn outline">
@@ -376,7 +427,7 @@ export default function ListMarketplaceItemPage() {
                       <line x1="12" y1="3" x2="12" y2="15" />
                     </svg>
                     <span>Upload own photo</span>
-                    <input type="file" accept="image/*" onChange={handlePhotoUpload} />
+                    <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handlePhotoUpload} />
                   </label>
                   {customPhotoUsed && (
                     <button
@@ -410,6 +461,7 @@ export default function ListMarketplaceItemPage() {
                     type="number"
                     min={5}
                     max={500}
+                    step={1}
                     value={pricePerDay}
                     onChange={(e) => setPricePerDay(e.target.value)}
                     required
@@ -424,6 +476,7 @@ export default function ListMarketplaceItemPage() {
                     type="number"
                     min={0}
                     max={2000}
+                    step={1}
                     value={deposit}
                     onChange={(e) => setDeposit(e.target.value)}
                     required
@@ -479,8 +532,14 @@ export default function ListMarketplaceItemPage() {
               >
                 {isSaving ? "Saving..." : "Save as draft"}
               </button>
-              <button type="submit" className="btn" disabled={isSaving}>
-                {isSaving ? "Publishing..." : "Publish listing"}
+              <button type="submit" className="btn" disabled={isSaving || isLoadingEdit}>
+                {isSaving
+                  ? editId
+                    ? "Saving..."
+                    : "Publishing..."
+                  : editId
+                  ? "Save changes"
+                  : "Publish listing"}
               </button>
             </div>
           </form>
@@ -565,5 +624,13 @@ export default function ListMarketplaceItemPage() {
         {toastMsg}
       </div>
     </div>
+  );
+}
+
+export default function ListMarketplaceItemPage() {
+  return (
+    <Suspense fallback={<div className="unishare-list-page"><div className="wrap" style={{ padding: "80px 0", textAlign: "center" }}>Loading...</div></div>}>
+      <ListMarketplaceItemContent />
+    </Suspense>
   );
 }

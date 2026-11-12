@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -8,9 +8,8 @@ import { DEFAULT_ITEMS, MarketplaceItem } from "../marketplace/marketplace-data"
 import AppNavbar from "../components/AppNavbar";
 import {
   clearClientSession,
-  DEMO_USER,
   getUserScopedKey,
-  saveClientUser,
+  signInDemoStudent,
   useCurrentUser,
   useIsHydrated,
   useLocalStorageRaw,
@@ -37,29 +36,74 @@ export default function FavoritesPage() {
   const rawFavsJson = useLocalStorageRaw(favoritesKey);
   const rawWalletJson = useLocalStorageRaw(walletKey);
   const rawCustomItemsJson = useLocalStorageRaw("unishare_marketplace_items");
+  const [serverItems, setServerItems] = useState<MarketplaceItem[]>([]);
+  const [dbFavRecord, setDbFavRecord] = useState<{
+    email: string;
+    items: MarketplaceItem[];
+  } | null>(null);
+  const dbFavorites = useMemo(
+    () =>
+      user?.email && dbFavRecord?.email === user.email
+        ? dbFavRecord.items
+        : null,
+    [dbFavRecord, user?.email]
+  );
+  const [isDemoLoading, setIsDemoLoading] = useState(false);
+
+  useEffect(() => {
+    const email = user?.email;
+    if (!email) return;
+    let active = true;
+    Promise.all([
+      fetch("/api/marketplace/favorites", { headers: { "x-user-email": email } }).then((r) =>
+        r.ok ? r.json() : null
+      ),
+      fetch("/api/marketplace").then((r) => (r.ok ? r.json() : null)),
+    ])
+      .then(([favData, marketData]) => {
+        if (!active) return;
+        if (favData?.ok && Array.isArray(favData.items)) {
+          setDbFavRecord({ email, items: favData.items as MarketplaceItem[] });
+        }
+        if (marketData?.ok && Array.isArray(marketData.items)) {
+          setServerItems(marketData.items as MarketplaceItem[]);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [user?.email]);
 
   const favorites: Record<string, boolean> = useMemo(() => {
-    if (!rawFavsJson) {
-      return isDemoUser
-        ? { "Scientific calculator": true, "Match-day football": true }
-        : {};
+    const merged: Record<string, boolean> = {};
+    if (rawFavsJson) {
+      try {
+        Object.assign(merged, JSON.parse(rawFavsJson) as Record<string, boolean>);
+      } catch {}
     }
-    try {
-      return JSON.parse(rawFavsJson) as Record<string, boolean>;
-    } catch {
-      return {};
+    if (Array.isArray(dbFavorites)) {
+      for (const item of dbFavorites) {
+        merged[item.id] = true;
+      }
     }
-  }, [rawFavsJson, isDemoUser]);
+    return merged;
+  }, [rawFavsJson, dbFavorites]);
 
   const items: MarketplaceItem[] = useMemo(() => {
-    if (!rawCustomItemsJson) return DEFAULT_ITEMS;
-    try {
-      const parsed = JSON.parse(rawCustomItemsJson);
-      return Array.isArray(parsed) ? (parsed as MarketplaceItem[]) : DEFAULT_ITEMS;
-    } catch {
-      return DEFAULT_ITEMS;
+    let localItems: MarketplaceItem[] = DEFAULT_ITEMS;
+    if (rawCustomItemsJson) {
+      try {
+        const parsed = JSON.parse(rawCustomItemsJson);
+        if (Array.isArray(parsed)) localItems = parsed as MarketplaceItem[];
+      } catch {}
     }
-  }, [rawCustomItemsJson]);
+    const mergedMap = new Map<string, MarketplaceItem>();
+    for (const it of [...(dbFavorites || []), ...serverItems, ...localItems, ...DEFAULT_ITEMS]) {
+      if (!mergedMap.has(it.id)) mergedMap.set(it.id, it);
+    }
+    return Array.from(mergedMap.values());
+  }, [rawCustomItemsJson, serverItems, dbFavorites]);
 
   const walletBalance = useMemo(() => {
     if (rawWalletJson) {
@@ -83,9 +127,9 @@ export default function FavoritesPage() {
     }, 2400);
   };
 
-  // Filtered favorite items list
+  // Filtered favorite items list (supports both ID-keyed & legacy name-keyed favorites)
   const favoriteItems = useMemo(() => {
-    return items.filter((item) => !!favorites[item.name]);
+    return items.filter((item) => Boolean(favorites[item.id] || favorites[item.name]));
   }, [items, favorites]);
 
   // Total tokens required to borrow all active favorites
@@ -93,20 +137,46 @@ export default function FavoritesPage() {
     return favoriteItems.reduce((acc, curr) => acc + curr.price + curr.deposit, 0);
   }, [favoriteItems]);
 
-  // Remove item from favorites
-  const handleRemoveFavorite = (itemName: string, e?: React.MouseEvent) => {
+  // Remove item from favorites (sync DB + localStorage)
+  const handleRemoveFavorite = (item: MarketplaceItem, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    const updated = { ...favorites, [itemName]: false };
+    const updated = { ...favorites, [item.id]: false };
+    delete updated[item.name];
     writeUserScopedJson(favoritesKey, updated);
-    showToast(`Removed "${itemName}" from Favorites`);
+
+    if (user?.email && Array.isArray(dbFavorites)) {
+      setDbFavRecord({
+        email: user.email,
+        items: dbFavorites.filter((f) => f.id !== item.id),
+      });
+    }
+    if (user?.email) {
+      fetch("/api/marketplace/favorites", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-email": user.email,
+        },
+        body: JSON.stringify({ listingId: item.id }),
+      }).catch(() => {});
+    }
+    showToast(`Removed "${item.name}" from Favorites`);
   };
 
   // Demo Login Helper
-  const handleDemoLogin = () => {
-    saveClientUser(DEMO_USER);
-    document.cookie = "unishare_logged_in=true; path=/; max-age=86400";
-    document.cookie = `unishare_token=demo_token_${Date.now()}; path=/; max-age=604800; SameSite=Lax`;
-    showToast("Signed in as Farhana Rahman (DU Verified)");
+  const handleDemoLogin = async () => {
+    if (isDemoLoading) return;
+    setIsDemoLoading(true);
+    try {
+      const signedIn = await signInDemoStudent();
+      if (signedIn) {
+        showToast("Signed in as Farhana Rahman (DU Verified)");
+      } else {
+        showToast("Could not connect to login service right now.");
+      }
+    } finally {
+      setIsDemoLoading(false);
+    }
   };
 
   // Logout Handler
@@ -118,8 +188,19 @@ export default function FavoritesPage() {
     }, 400);
   };
 
+  if (!authChecked) {
+    return (
+      <div className="unishare-favorites-page">
+        <AppNavbar mode="guest" redirectPath="/favorites" />
+        <main className="wrap" style={{ padding: "72px 24px", textAlign: "center", color: "var(--muted)" }}>
+          Loading saved items...
+        </main>
+      </div>
+    );
+  }
+
   // Unauthenticated Guard
-  if (authChecked && !user) {
+  if (!user) {
     return (
       <div className="unishare-marketplace">
         <AppNavbar mode="guest" redirectPath="/favorites" />
@@ -149,9 +230,10 @@ export default function FavoritesPage() {
                 type="button"
                 className="btn outline"
                 onClick={handleDemoLogin}
+                disabled={isDemoLoading}
                 style={{ width: "100%", height: 46 }}
               >
-                Instant Access as Farhana Rahman (Demo)
+                {isDemoLoading ? "Signing in..." : "Instant Access as Farhana Rahman (Demo)"}
               </button>
             </div>
           </div>
@@ -210,7 +292,7 @@ export default function FavoritesPage() {
             <div>
               <div className="fav-wallet-title-row">
                 <h3>Campus Token Wallet Connection</h3>
-                {walletBalance >= (favoriteItems[0] ? favoriteItems[0].price + favoriteItems[0].deposit : 0) ? (
+                {walletBalance >= totalTokensNeeded ? (
                   <span className="fav-wallet-status-tag">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                       <path d="M20 6L9 17l-5-5" />
@@ -266,12 +348,18 @@ export default function FavoritesPage() {
                       fill
                       sizes="(max-width: 600px) 100vw, (max-width: 900px) 50vw, 360px"
                       style={{ objectFit: "cover" }}
+                      unoptimized
                     />
-                    <span className="avail-pill">Available today</span>
+                    <span
+                      className="avail-pill"
+                      style={!item.available ? { background: "#fef2f2", color: "#991b1b" } : undefined}
+                    >
+                      {item.available ? "Available today" : "Currently unavailable"}
+                    </span>
                     <button
                       type="button"
                       className="fav-remove-btn"
-                      onClick={(e) => handleRemoveFavorite(item.name, e)}
+                      onClick={(e) => handleRemoveFavorite(item, e)}
                       aria-label={`Remove ${item.name} from favorites`}
                       title="Remove from favorites"
                     >
@@ -301,10 +389,17 @@ export default function FavoritesPage() {
                     </div>
 
                     {/* Wallet Coverage Indicator */}
-                    <div className="fav-card-wallet-badge">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <path d="M20 6L9 17l-5-5" />
-                      </svg>
+                    <div className={`fav-card-wallet-badge ${hasEnough ? "" : "shortage"}`}>
+                      {hasEnough ? (
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <path d="M20 6L9 17l-5-5" />
+                        </svg>
+                      ) : (
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <circle cx="12" cy="12" r="9" />
+                          <path d="M12 8v4M12 16h.01" />
+                        </svg>
+                      )}
                       <span>
                         {hasEnough
                           ? `Wallet covered (${itemTotal} tokens)`
@@ -375,9 +470,9 @@ export default function FavoritesPage() {
         <div className="wrap">
           <span>UniShare. Made for university students in Bangladesh.</span>
           <span>
-            <Link href="#privacy" style={{ marginLeft: 0 }}>Privacy</Link>
-            <Link href="#terms">Terms</Link>
-            <Link href="#help">Get help</Link>
+            <Link href="/privacy" style={{ marginLeft: 0 }}>Privacy</Link>
+            <Link href="/terms">Terms</Link>
+            <Link href="/help">Get help</Link>
             <button
               type="button"
               onClick={handleLogout}

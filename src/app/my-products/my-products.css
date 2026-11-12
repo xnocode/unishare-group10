@@ -552,6 +552,7 @@
   }
   .unishare-myproducts .head {
     flex-direction: column;
+    align-items: flex-start;
     gap: 12px;
   }
   .unishare-myproducts .head .btn {
@@ -578,9 +579,13 @@
     flex-direction: row;
     justify-content: flex-start;
   }
-  .unishare-myproducts footer {
+  .unishare-myproducts footer .wrap {
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
     text-align: center;
+  }
+  .unishare-myproducts footer nav {
+    justify-content: center;
+    flex-wrap: wrap;
   }
 }

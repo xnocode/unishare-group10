@@ -1069,3 +1069,20 @@
   }
 }
 
+@media (max-width: 480px) {
+  .unishare-marketplace .search-bar-wrap {
+    flex-wrap: wrap;
+    padding: 8px;
+  }
+  .unishare-marketplace .search-bar-wrap .btn {
+    width: 100%;
+  }
+  .unishare-marketplace .date-popover {
+    width: calc(100vw - 32px);
+    max-width: calc(100vw - 32px);
+  }
+  .unishare-marketplace .date-inputs-grid {
+    grid-template-columns: 1fr;
+  }
+}
+

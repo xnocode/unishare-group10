@@ -1,10 +1,10 @@
 'use strict';
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import React, { Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 function toLocalIsoDate(date: Date): string {
   const y = date.getFullYear();
@@ -51,9 +51,8 @@ import {
 import AppNavbar from '../components/AppNavbar';
 import {
   clearClientSession,
-  DEMO_USER,
   getUserScopedKey,
-  saveClientUser,
+  signInDemoStudent,
   useCurrentUser,
   useIsHydrated,
   useLocalStorageRaw,
@@ -61,22 +60,25 @@ import {
 } from '../lib/user-client';
 import './marketplace.css';
 
-export default function MarketplacePage() {
+function MarketplaceContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, resolvedUser, isDemoUser } = useCurrentUser();
   const authChecked = useIsHydrated();
 
   // Marketplace State
   const [selectedTab, setSelectedTab] = useState<'all' | 'fav' | 'recent' | 'you' | 'mine'>('all');
   const [selectedCategory, setSelectedCategory] = useState('All items');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') || '');
   const [selectedArea, setSelectedArea] = useState('');
   const [selectedPriceMax, setSelectedPriceMax] = useState('');
   const [selectedAvailability, setSelectedAvailability] = useState('now');
   const [selectedSort, setSelectedSort] = useState('rec');
+  const [campusOnly, setCampusOnly] = useState(false);
   const [rentalStartDate, setRentalStartDate] = useState('');
   const [rentalEndDate, setRentalEndDate] = useState('');
   const [showDatePopover, setShowDatePopover] = useState(false);
+  const [isDemoLoading, setIsDemoLoading] = useState(false);
   const dateFilterRef = useRef<HTMLDivElement>(null);
 
   const todayIso = useSyncExternalStore(
@@ -128,21 +130,41 @@ export default function MarketplacePage() {
   const rawRecentJson = useLocalStorageRaw(recentKey);
   const rawWalletJson = useLocalStorageRaw(walletKey);
   const [serverItems, setServerItems] = useState<MarketplaceItem[]>([]);
+  const [serverFavRecord, setServerFavRecord] = useState<{
+    email: string;
+    ids: string[];
+  } | null>(null);
+  const serverFavoriteIds = useMemo(
+    () =>
+      user?.email && serverFavRecord?.email === user.email
+        ? serverFavRecord.ids
+        : null,
+    [serverFavRecord, user?.email]
+  );
+  const [isLoadingItems, setIsLoadingItems] = useState(true);
+  const [fetchError, setFetchError] = useState('');
 
   useEffect(() => {
     let active = true;
     const loadServerListings = async () => {
       try {
-        const res = await fetch('/api/marketplace');
+        const res = await fetch('/api/marketplace?includeOwn=true');
         const data = (await res.json().catch(() => null)) as {
           ok?: boolean;
           items?: MarketplaceItem[];
+          error?: string;
         } | null;
-        if (active && res.ok && data?.ok && Array.isArray(data.items)) {
+        if (!active) return;
+        if (res.ok && data?.ok && Array.isArray(data.items)) {
           setServerItems(data.items);
+          setFetchError('');
+        } else {
+          setFetchError(data?.error || 'Could not refresh live marketplace listings.');
         }
       } catch {
-        // fallback cleanly when offline
+        if (active) setFetchError('Offline mode: showing cached items.');
+      } finally {
+        if (active) setIsLoadingItems(false);
       }
     };
     loadServerListings();
@@ -154,7 +176,26 @@ export default function MarketplacePage() {
       window.removeEventListener('unishare-storage', handleRefresh);
       window.removeEventListener('focus', handleRefresh);
     };
-  }, []);
+  }, [user?.email]);
+
+  useEffect(() => {
+    const email = user?.email;
+    if (!email) return;
+    let active = true;
+    fetch('/api/marketplace/favorites', {
+      headers: { 'x-user-email': email },
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { ok?: boolean; listingIds?: string[] } | null) => {
+        if (active && data?.ok && Array.isArray(data.listingIds)) {
+          setServerFavRecord({ email, ids: data.listingIds });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [user?.email]);
 
   const items: MarketplaceItem[] = useMemo(() => {
     let localItems: MarketplaceItem[] = DEFAULT_ITEMS;
@@ -171,13 +212,25 @@ export default function MarketplacePage() {
   }, [rawItemsJson, serverItems]);
 
   const favorites: Record<string, boolean> = useMemo(() => {
-    if (!rawFavsJson) return {};
-    try {
-      return JSON.parse(rawFavsJson) as Record<string, boolean>;
-    } catch {
-      return {};
+    const merged: Record<string, boolean> = {};
+    if (rawFavsJson) {
+      try {
+        const parsed = JSON.parse(rawFavsJson) as Record<string, boolean>;
+        Object.assign(merged, parsed);
+      } catch {}
     }
-  }, [rawFavsJson]);
+    if (Array.isArray(serverFavoriteIds)) {
+      for (const id of serverFavoriteIds) {
+        merged[id] = true;
+      }
+    }
+    return merged;
+  }, [rawFavsJson, serverFavoriteIds]);
+
+  const isItemFavorited = (item: MarketplaceItem) =>
+    Boolean(favorites[item.id] || favorites[item.name]);
+
+  const favoriteCount = items.filter((item) => isItemFavorited(item)).length;
 
   const recentlyViewed: string[] = useMemo(() => {
     if (!rawRecentJson) return [];
@@ -212,12 +265,20 @@ export default function MarketplacePage() {
     }, 2400);
   };
 
-  // Demo Login Helper
-  const handleDemoLogin = () => {
-    saveClientUser(DEMO_USER);
-    document.cookie = 'unishare_logged_in=true; path=/; max-age=86400';
-    document.cookie = `unishare_token=demo_token_${Date.now()}; path=/; max-age=604800; SameSite=Lax`;
-    showToast('Signed in as Farhana Rahman (DU Verified)');
+  // Demo Login Helper (real server-backed session)
+  const handleDemoLogin = async () => {
+    if (isDemoLoading) return;
+    setIsDemoLoading(true);
+    try {
+      const signedIn = await signInDemoStudent();
+      if (signedIn) {
+        showToast('Signed in as Farhana Rahman (DU Verified)');
+      } else {
+        showToast('Could not connect to login service right now.');
+      }
+    } finally {
+      setIsDemoLoading(false);
+    }
   };
 
   // Logout Handler
@@ -229,17 +290,39 @@ export default function MarketplacePage() {
     }, 400);
   };
 
-  // Toggle Favorite
-  const toggleFavorite = (itemName: string, e?: React.MouseEvent) => {
+  // Toggle Favorite (keyed by item.id, synced to DB when logged in)
+  const toggleFavorite = (item: MarketplaceItem, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    const updated = { ...favorites, [itemName]: !favorites[itemName] };
+    const currentlySaved = Boolean(favorites[item.id] || favorites[item.name]);
+    const nextSaved = !currentlySaved;
+    const updated = { ...favorites, [item.id]: nextSaved };
+    delete updated[item.name];
     writeUserScopedJson(favoritesKey, updated);
-    showToast(updated[itemName] ? `Added "${itemName}" to Favorites` : `Removed from Favorites`);
+
+    if (user?.email && Array.isArray(serverFavoriteIds)) {
+      const nextIds = nextSaved
+        ? [item.id, ...serverFavoriteIds.filter((id) => id !== item.id)]
+        : serverFavoriteIds.filter((id) => id !== item.id);
+      setServerFavRecord({ email: user.email, ids: nextIds });
+    }
+
+    if (user?.email) {
+      fetch('/api/marketplace/favorites', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-email': user.email,
+        },
+        body: JSON.stringify({ listingId: item.id }),
+      }).catch(() => {});
+    }
+
+    showToast(nextSaved ? `Added "${item.name}" to Favorites` : 'Removed from Favorites');
   };
 
   // Open Item Detail - Direct move to product details page
   const handleOpenItem = (item: MarketplaceItem) => {
-    const updated = [item.name, ...recentlyViewed.filter((n) => n !== item.name)].slice(0, 10);
+    const updated = [item.id, ...recentlyViewed.filter((n) => n !== item.id && n !== item.name)].slice(0, 10);
     writeUserScopedJson(recentKey, updated);
     const params = new URLSearchParams();
     if (rentalDaysCount) params.set('days', String(rentalDaysCount));
@@ -249,18 +332,47 @@ export default function MarketplacePage() {
     router.push(`/product-details/${item.id}${qs ? `?${qs}` : ''}`);
   };
 
+  const resetAllFilters = () => {
+    setSelectedTab('all');
+    setSelectedCategory('All items');
+    setSearchQuery('');
+    setSelectedArea('');
+    setSelectedPriceMax('');
+    setSelectedAvailability('now');
+    setSelectedSort('rec');
+    setCampusOnly(false);
+    setRentalStartDate('');
+    setRentalEndDate('');
+  };
+
   // Filter and Sort Items
   const filteredItems = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
 
     const list = items.filter((x) => {
       // Tab filter
-      if (selectedTab === 'fav' && !favorites[x.name]) return false;
-      if (selectedTab === 'recent' && !recentlyViewed.includes(x.name)) return false;
+      if (selectedTab === 'fav' && !favorites[x.id] && !favorites[x.name]) return false;
+      if (
+        selectedTab === 'recent' &&
+        !recentlyViewed.includes(x.id) &&
+        !recentlyViewed.includes(x.name)
+      ) {
+        return false;
+      }
       if (
         selectedTab === 'mine' &&
         x.ownerEmail !== resolvedUser.email &&
         x.owner !== resolvedUser.name
+      ) {
+        return false;
+      }
+
+      // Campus-only toggle
+      if (
+        campusOnly &&
+        x.university &&
+        resolvedUser.university &&
+        x.university.toLowerCase() !== resolvedUser.university.toLowerCase()
       ) {
         return false;
       }
@@ -274,15 +386,15 @@ export default function MarketplacePage() {
       // Price filter
       if (selectedPriceMax && x.price > Number(selectedPriceMax)) return false;
 
-      // Availability filter
-      if (selectedAvailability === 'now' && !x.available) return false;
+      // Availability filter (My listings allows showing paused items under Any time or always in mine tab)
+      if (selectedTab !== 'mine' && selectedAvailability === 'now' && !x.available) return false;
 
       // Rental date duration filter
       if (rentalDaysCount && x.maxRentalDays && rentalDaysCount > x.maxRentalDays) return false;
 
-      // Search query
+      // Search query (covers title, category, condition, description, owner, area, university)
       if (q) {
-        const hay = `${x.name} ${x.category} ${x.owner} ${x.area}`.toLowerCase();
+        const hay = `${x.name} ${x.category} ${x.condition || ''} ${x.description} ${x.owner} ${x.area} ${x.university || ''}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
 
@@ -290,16 +402,26 @@ export default function MarketplacePage() {
     });
 
     // Sort order
-    if (selectedTab === 'recent') {
-      list.sort((a, b) => recentlyViewed.indexOf(a.name) - recentlyViewed.indexOf(b.name));
-    } else if (selectedSort === 'lo') {
+    if (selectedSort === 'lo') {
       list.sort((a, b) => a.price - b.price);
     } else if (selectedSort === 'hi') {
       list.sort((a, b) => b.price - a.price);
-    }
-
-    if (selectedTab === 'you') {
-      return list.slice(0, 4);
+    } else if (selectedTab === 'recent') {
+      list.sort((a, b) => {
+        const ia = recentlyViewed.findIndex((k) => k === a.id || k === a.name);
+        const ib = recentlyViewed.findIndex((k) => k === b.id || k === b.name);
+        return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+      });
+    } else if (selectedTab === 'you') {
+      list.sort((a, b) => {
+        const aSameUni =
+          a.university?.toLowerCase() === resolvedUser.university.toLowerCase() ? 1 : 0;
+        const bSameUni =
+          b.university?.toLowerCase() === resolvedUser.university.toLowerCase() ? 1 : 0;
+        if (aSameUni !== bSameUni) return bSameUni - aSameUni;
+        if (a.available !== b.available) return a.available ? -1 : 1;
+        return a.price - b.price;
+      });
     }
 
     return list;
@@ -310,6 +432,7 @@ export default function MarketplacePage() {
     selectedArea,
     selectedPriceMax,
     selectedAvailability,
+    campusOnly,
     rentalDaysCount,
     selectedSort,
     selectedTab,
@@ -317,10 +440,22 @@ export default function MarketplacePage() {
     recentlyViewed,
     resolvedUser.email,
     resolvedUser.name,
+    resolvedUser.university,
   ]);
 
+  if (!authChecked) {
+    return (
+      <div className="unishare-marketplace">
+        <AppNavbar mode="guest" redirectPath="/marketplace" />
+        <main className="wrap" style={{ padding: '64px 24px', textAlign: 'center', color: 'var(--muted)' }}>
+          Loading campus marketplace...
+        </main>
+      </div>
+    );
+  }
+
   // Auth Gate: Shown if user has not logged in
-  if (authChecked && !user) {
+  if (!user) {
     return (
       <div className="unishare-marketplace">
         <AppNavbar mode="guest" redirectPath="/marketplace" />
@@ -356,9 +491,10 @@ export default function MarketplacePage() {
                 type="button"
                 className="btn outline"
                 onClick={handleDemoLogin}
+                disabled={isDemoLoading}
                 style={{ width: '100%', height: 46 }}
               >
-                Instant Access as Farhana Rahman (Demo)
+                {isDemoLoading ? 'Signing in...' : 'Instant Access as Farhana Rahman (Demo)'}
               </button>
             </div>
           </div>
@@ -422,33 +558,43 @@ export default function MarketplacePage() {
           {/* Tabs */}
           <div className="shelf-tabs" role="tablist">
             <button
+              role="tab"
+              aria-selected={selectedTab === 'all'}
               className={`shelf-tab ${selectedTab === 'all' ? 'on' : ''}`}
               onClick={() => setSelectedTab('all')}
             >
               Browse all
             </button>
             <button
+              role="tab"
+              aria-selected={selectedTab === 'fav'}
               className={`shelf-tab ${selectedTab === 'fav' ? 'on' : ''}`}
               onClick={() => setSelectedTab('fav')}
             >
               Favorites
-              {Object.values(favorites).filter(Boolean).length > 0 && (
-                <span className="tab-badge">{Object.values(favorites).filter(Boolean).length}</span>
+              {favoriteCount > 0 && (
+                <span className="tab-badge">{favoriteCount}</span>
               )}
             </button>
             <button
+              role="tab"
+              aria-selected={selectedTab === 'recent'}
               className={`shelf-tab ${selectedTab === 'recent' ? 'on' : ''}`}
               onClick={() => setSelectedTab('recent')}
             >
               Recently viewed
             </button>
             <button
+              role="tab"
+              aria-selected={selectedTab === 'you'}
               className={`shelf-tab ${selectedTab === 'you' ? 'on' : ''}`}
               onClick={() => setSelectedTab('you')}
             >
               For you
             </button>
             <button
+              role="tab"
+              aria-selected={selectedTab === 'mine'}
               className={`shelf-tab ${selectedTab === 'mine' ? 'on' : ''}`}
               onClick={() => setSelectedTab('mine')}
             >
@@ -640,6 +786,12 @@ export default function MarketplacePage() {
                           const nextEnd = e.target.value;
                           if (!rentalStartDate && nextEnd) {
                             setRentalStartDate(nextEnd);
+                            setRentalEndDate(nextEnd);
+                            return;
+                          }
+                          if (nextEnd && rentalStartDate && nextEnd < rentalStartDate) {
+                            setRentalEndDate(rentalStartDate);
+                            return;
                           }
                           setRentalEndDate(nextEnd);
                         }}
@@ -688,6 +840,9 @@ export default function MarketplacePage() {
                 <option value="25">Up to 25 tokens</option>
                 <option value="50">Up to 50 tokens</option>
                 <option value="80">Up to 80 tokens</option>
+                <option value="150">Up to 150 tokens</option>
+                <option value="300">Up to 300 tokens</option>
+                <option value="500">Up to 500 tokens</option>
               </select>
               <i className="right-ico">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -712,6 +867,15 @@ export default function MarketplacePage() {
                 </svg>
               </i>
             </label>
+
+            <button
+              type="button"
+              className={`chip-pill ${campusOnly ? 'on' : ''}`}
+              onClick={() => setCampusOnly((v) => !v)}
+              title={`Show listings only from ${resolvedUser.university}`}
+            >
+              {campusOnly ? 'My campus only ✓' : 'My campus only'}
+            </button>
 
             <span className="spacer-flex" />
 
@@ -752,7 +916,10 @@ export default function MarketplacePage() {
         {/* Section Title & Counter */}
         <div className="section-bar">
           <h2>Available around campus</h2>
-          <span>{filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'} · {resolvedUser.university} students only</span>
+          <span>
+            {isLoadingItems ? 'Refreshing live shelf…' : `${filteredItems.length} ${filteredItems.length === 1 ? 'item' : 'items'}`}
+            {fetchError ? ` · ${fetchError}` : ` · ${campusOnly ? `${resolvedUser.university} only` : 'Verified campus network'}`}
+          </span>
         </div>
 
         {/* 3-Column Shelf Grid */}
@@ -776,10 +943,19 @@ export default function MarketplacePage() {
                     fill
                     sizes="(max-width: 600px) 100vw, (max-width: 900px) 50vw, 360px"
                     style={{ objectFit: 'cover' }}
-                    unoptimized={item.image.startsWith('data:')}
+                    unoptimized
                   />
-                  <span className="avail-pill">
-                    {rentalStartDate
+                  <span
+                    className="avail-pill"
+                    style={!item.available ? { background: '#fef2f2', color: '#991b1b' } : undefined}
+                  >
+                    {!item.available
+                      ? item.status === 'paused'
+                        ? 'Paused'
+                        : item.status === 'draft'
+                        ? 'Draft'
+                        : 'Currently rented'
+                      : rentalStartDate
                       ? rentalEndDate && rentalEndDate !== rentalStartDate
                         ? `Free ${formatShortDate(rentalStartDate)}–${formatShortDate(rentalEndDate)}`
                         : `Free ${formatShortDate(rentalStartDate)}`
@@ -787,10 +963,10 @@ export default function MarketplacePage() {
                   </span>
                   <button
                     type="button"
-                    className={`fav-btn ${favorites[item.name] ? 'on' : ''}`}
-                    onClick={(e) => toggleFavorite(item.name, e)}
+                    className={`fav-btn ${isItemFavorited(item) ? 'on' : ''}`}
+                    onClick={(e) => toggleFavorite(item, e)}
                     aria-label={`Save ${item.name} to favorites`}
-                    aria-pressed={!!favorites[item.name]}
+                    aria-pressed={isItemFavorited(item)}
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M12 20s-7-4.4-7-10a4.2 4.2 0 0 1 7-3 4.2 4.2 0 0 1 7 3c0 5.6-7 10-7 10z" />
@@ -827,7 +1003,7 @@ export default function MarketplacePage() {
                     <span className="owner-avatar">{item.initials}</span>
                     <div className="owner-info">
                       <strong>{item.owner}</strong>
-                      <small>Verified {resolvedUser.university} student</small>
+                      <small>Verified {item.university || resolvedUser.university} student</small>
                     </div>
                     <svg
                       className="verified-check"
@@ -858,7 +1034,12 @@ export default function MarketplacePage() {
                   </Link>
                 </span>
               ) : (
-                'No items match your active filters. Try another category, date range, or clear your search query.'
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
+                  <span>No items match your active filters. Try another category, date range, or clear your search query.</span>
+                  <button type="button" className="btn outline" onClick={resetAllFilters}>
+                    Reset all filters
+                  </button>
+                </div>
               )}
             </div>
           )}
@@ -886,9 +1067,9 @@ export default function MarketplacePage() {
         <div className="wrap">
           <span>UniShare. Made for university students in Bangladesh.</span>
           <span>
-            <a href="#">Privacy</a>
-            <a href="#">Terms</a>
-            <a href="#">Get help</a>
+            <Link href="/privacy">Privacy</Link>
+            <Link href="/terms">Terms</Link>
+            <Link href="/help">Get help</Link>
             <button
               type="button"
               className="logout-link"
@@ -905,6 +1086,23 @@ export default function MarketplacePage() {
         {toastMessage}
       </div>
     </div>
+  );
+}
+
+export default function MarketplacePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="unishare-marketplace">
+          <AppNavbar mode="guest" redirectPath="/marketplace" />
+          <main className="wrap" style={{ padding: '64px 24px', textAlign: 'center', color: 'var(--muted)' }}>
+            Loading campus marketplace...
+          </main>
+        </div>
+      }
+    >
+      <MarketplaceContent />
+    </Suspense>
   );
 }
 

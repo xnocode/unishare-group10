@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/app/lib/db";
 import { getAuthenticatedRideUser } from "@/app/lib/ride-auth";
-import { getDefaultImageForCategory } from "@/app/marketplace/marketplace-data";
+import {
+  CATEGORIES,
+  getDefaultImageForCategory,
+  ITEM_CONDITIONS,
+} from "@/app/marketplace/marketplace-data";
 
 const VALID_STATUSES = new Set(["active", "paused", "draft"]);
+const ALLOWED_CATEGORIES = new Set(CATEGORIES.filter((c) => c !== "All items"));
+const ALLOWED_CONDITIONS = new Set<string>(ITEM_CONDITIONS);
 
 function deriveInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -54,6 +60,11 @@ export function serializeListingRow(row: {
       area: row.area,
       owner: row.sellerName,
       ownerEmail: row.sellerEmail,
+      university: row.university || "University of Dhaka",
+      status: (VALID_STATUSES.has(row.status) ? row.status : "active") as
+        | "active"
+        | "paused"
+        | "draft",
       initials: row.sellerInitials,
       image: row.imageUrl,
       available: row.status === "active" && !row.isRentedOut && row.available,
@@ -101,10 +112,12 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const mine = searchParams.get("mine") === "true";
+    const includeOwn = searchParams.get("includeOwn") === "true";
+    const campusOnly = searchParams.get("campusOnly") === "true";
+    const viewer = mine || includeOwn || campusOnly ? await getAuthenticatedRideUser(req) : null;
 
     if (mine) {
-      const user = await getAuthenticatedRideUser(req);
-      if (!user) {
+      if (!viewer) {
         return NextResponse.json(
           { ok: false, error: "Unauthorized: Please log in to view your listings." },
           { status: 401 }
@@ -112,7 +125,7 @@ export async function GET(req: NextRequest) {
       }
 
       const rows = await db.marketplaceListing.findMany({
-        where: { sellerId: user.id },
+        where: { sellerId: viewer.id },
         orderBy: { createdAt: "desc" },
         take: 100,
       });
@@ -125,16 +138,32 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    const whereClause =
+      viewer && includeOwn
+        ? {
+            AND: [
+              ...(campusOnly && viewer.university ? [{ university: viewer.university }] : []),
+              {
+                OR: [{ status: "active" }, { sellerId: viewer.id }],
+              },
+            ],
+          }
+        : {
+            status: "active",
+            ...(campusOnly && viewer?.university ? { university: viewer.university } : {}),
+          };
+
     const rows = await db.marketplaceListing.findMany({
-      where: { status: "active" },
+      where: whereClause,
       orderBy: { createdAt: "desc" },
-      take: 100,
+      take: 150,
     });
 
     const mapped = rows.map(serializeListingRow);
     return NextResponse.json({
       ok: true,
       items: mapped.map((m) => m.marketItem),
+      totalCount: mapped.length,
     });
   } catch (err) {
     console.error("GET /api/marketplace error:", err);
@@ -190,6 +219,27 @@ export async function POST(req: NextRequest) {
     if (title.length < 3 || title.length > 90) {
       return NextResponse.json(
         { ok: false, error: "Item title must be between 3 and 90 characters." },
+        { status: 400 }
+      );
+    }
+
+    if (!ALLOWED_CATEGORIES.has(category)) {
+      return NextResponse.json(
+        { ok: false, error: "Please select a valid marketplace category." },
+        { status: 400 }
+      );
+    }
+
+    if (!ALLOWED_CONDITIONS.has(condition)) {
+      return NextResponse.json(
+        { ok: false, error: "Condition must be Like new, Good, or Fair." },
+        { status: 400 }
+      );
+    }
+
+    if (area.length < 2 || area.length > 60) {
+      return NextResponse.json(
+        { ok: false, error: "Campus pickup area must be between 2 and 60 characters." },
         { status: 400 }
       );
     }

@@ -2,6 +2,7 @@
 
 .product-detail-page {
   --bg: #ffffff;
+  --panel: #ffffff;
   --brand: #0d6b63;
   --brand-hover: #09524c;
   --ink: #161b1a;
@@ -11,6 +12,10 @@
   --hair: #d5dcda;
   --field: #f5f7f6;
   --faint: #6c7775;
+  --red: #b91c1c;
+  --red-soft: #fef2f2;
+  --radius: 12px;
+  --radius-sm: 8px;
 
   min-height: 100vh;
   background-color: var(--bg);
@@ -298,7 +303,7 @@
 /* Right Column - Rental & Token Station */
 .pd-station-card {
   position: sticky;
-  top: 24px;
+  top: 92px;
   background: var(--panel, #ffffff);
   border: 1.5px solid var(--line, #dfe9e8);
   border-radius: var(--radius, 12px);
@@ -608,7 +613,7 @@
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.25s, transform 0.25s;
-  z-index: 50;
+  z-index: 100;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 

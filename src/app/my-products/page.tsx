@@ -2,17 +2,21 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import AppNavbar from "../components/AppNavbar";
 import {
   clearClientSession,
   getUserScopedKey,
+  saveClientUser,
   useCurrentUser,
   useLocalStorageRaw,
   useRequireAuth,
   writeUserScopedJson,
+  type ClientUser,
 } from "../lib/user-client";
 import {
+  CATEGORIES,
   MarketplaceItem,
   removeMarketplaceItem,
   upsertMarketplaceItem,
@@ -28,70 +32,31 @@ interface ProductItem {
   isRentedOut?: boolean;
   rate: number;
   deposit: number;
+  area?: string;
+  maxRentalDays?: number;
+  description?: string;
   image: string;
   note: string;
   availText: string;
   owner: string;
 }
 
-const INITIAL_PRODUCTS: ProductItem[] = [
-  {
-    id: "p-0",
-    name: "Canon EOS 200D",
-    category: "Cameras",
-    condition: "Good",
-    state: "active",
-    isRentedOut: false,
-    rate: 60,
-    deposit: 300,
-    image: "/images/products/product-1.jpeg",
-    note: "Booked 16–18 Oct · 1 pending request",
-    availText: "Available today",
-    owner: "Farhana Rahman · You",
-  },
-  {
-    id: "p-1",
-    name: "Adjustable study lamp",
-    category: "Study essentials",
-    condition: "Good",
-    state: "active",
-    isRentedOut: true,
-    rate: 20,
-    deposit: 80,
-    image: "/images/products/product-2.jpeg",
-    note: "With Nabila Sultana · Return 16 Oct",
-    availText: "Available 17 Oct",
-    owner: "Farhana Rahman · You",
-  },
-  {
-    id: "p-2",
-    name: "Compact camera tripod",
-    category: "Camera accessories",
-    condition: "Good",
-    state: "paused",
-    isRentedOut: false,
-    rate: 25,
-    deposit: 100,
-    image: "/images/products/product-3.jpeg",
-    note: "Paused by you on 11 Oct",
-    availText: "Not accepting bookings",
-    owner: "Farhana Rahman · You",
-  },
-  {
-    id: "p-3",
-    name: "Weekend hiking backpack",
-    category: "Travel essentials",
-    condition: "Like new",
-    state: "draft",
-    isRentedOut: false,
-    rate: 30,
-    deposit: 100,
-    image: "/images/products/product-4.jpeg",
-    note: "Add availability to finish your listing",
-    availText: "Not published",
-    owner: "Farhana Rahman · You",
-  },
-];
+interface RentalRecord {
+  id: string;
+  listingId: string;
+  listingTitle: string;
+  borrowerName: string;
+  borrowerEmail: string;
+  lenderName: string;
+  startDate: string;
+  endDate: string;
+  days: number;
+  rentalFee: number;
+  depositAmount: number;
+  totalLocked: number;
+  note?: string | null;
+  status: string;
+}
 
 export default function MyProductsPage() {
   const router = useRouter();
@@ -108,38 +73,103 @@ export default function MyProductsPage() {
   );
   const rawProductsJson = useLocalStorageRaw(productsKey);
   const [serverProducts, setServerProducts] = useState<ProductItem[]>([]);
+  const [lentRentals, setLentRentals] = useState<RentalRecord[]>([]);
+  const [borrowedRentals, setBorrowedRentals] = useState<RentalRecord[]>([]);
+  const [totalEarned, setTotalEarned] = useState(0);
+  const [busyRentalId, setBusyRentalId] = useState<string | null>(null);
+
+  const loadMyData = React.useCallback(async () => {
+    if (!resolvedUser.email) return;
+    try {
+      const [prodRes, rentRes] = await Promise.all([
+        fetch("/api/marketplace?mine=true", {
+          headers: { "x-user-email": resolvedUser.email },
+        }),
+        fetch("/api/marketplace/rentals", {
+          headers: { "x-user-email": resolvedUser.email },
+        }),
+      ]);
+      const prodData = (await prodRes.json().catch(() => null)) as {
+        ok?: boolean;
+        myProducts?: ProductItem[];
+      } | null;
+      if (prodRes.ok && prodData?.ok && Array.isArray(prodData.myProducts)) {
+        setServerProducts(prodData.myProducts);
+      }
+
+      const rentData = (await rentRes.json().catch(() => null)) as {
+        ok?: boolean;
+        lent?: RentalRecord[];
+        borrowed?: RentalRecord[];
+        totalEarned?: number;
+      } | null;
+      if (rentRes.ok && rentData?.ok) {
+        setLentRentals(rentData.lent || []);
+        setBorrowedRentals(rentData.borrowed || []);
+        setTotalEarned(rentData.totalEarned || 0);
+      }
+    } catch {
+      // ignore offline
+    }
+  }, [resolvedUser.email]);
 
   useEffect(() => {
     if (!resolvedUser.email) return;
     let active = true;
-    fetch("/api/marketplace?mine=true", {
-      headers: { "x-user-email": resolvedUser.email },
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: { ok?: boolean; myProducts?: ProductItem[] } | null) => {
-        if (active && data?.ok && Array.isArray(data.myProducts)) {
-          setServerProducts(data.myProducts);
+    const run = async () => {
+      try {
+        const [prodRes, rentRes] = await Promise.all([
+          fetch("/api/marketplace?mine=true", {
+            headers: { "x-user-email": resolvedUser.email },
+          }),
+          fetch("/api/marketplace/rentals", {
+            headers: { "x-user-email": resolvedUser.email },
+          }),
+        ]);
+        const prodData = (await prodRes.json().catch(() => null)) as {
+          ok?: boolean;
+          myProducts?: ProductItem[];
+        } | null;
+        if (active && prodRes.ok && prodData?.ok && Array.isArray(prodData.myProducts)) {
+          setServerProducts(prodData.myProducts);
         }
-      })
-      .catch(() => {});
+
+        const rentData = (await rentRes.json().catch(() => null)) as {
+          ok?: boolean;
+          lent?: RentalRecord[];
+          borrowed?: RentalRecord[];
+          totalEarned?: number;
+        } | null;
+        if (active && rentRes.ok && rentData?.ok) {
+          setLentRentals(rentData.lent || []);
+          setBorrowedRentals(rentData.borrowed || []);
+          setTotalEarned(rentData.totalEarned || 0);
+        }
+      } catch {
+        // ignore offline
+      }
+    };
+    void run();
     return () => {
       active = false;
     };
   }, [resolvedUser.email]);
 
   const products: ProductItem[] = useMemo(() => {
-    let localList: ProductItem[] = isDemoUser ? INITIAL_PRODUCTS : [];
+    let localList: ProductItem[] = [];
     if (rawProductsJson) {
       try {
         const parsed = JSON.parse(rawProductsJson);
-        if (Array.isArray(parsed)) localList = parsed as ProductItem[];
+        if (Array.isArray(parsed)) {
+          localList = (parsed as ProductItem[]).filter((p) => !/^p-[0-3]$/.test(p.id));
+        }
       } catch {}
     }
 
     if (serverProducts.length === 0) return localList;
     const seen = new Set(serverProducts.map((p) => p.id));
     return [...serverProducts, ...localList.filter((p) => !seen.has(p.id))];
-  }, [rawProductsJson, isDemoUser, serverProducts]);
+  }, [rawProductsJson, serverProducts]);
 
   const setProducts = (updater: (prev: ProductItem[]) => ProductItem[]) => {
     const next = updater(products);
@@ -150,18 +180,13 @@ export default function MyProductsPage() {
   // Modals & toast states
   const [toastMsg, setToastMsg] = useState("");
   const [showToast, setShowToast] = useState(false);
-  const [showAddModal, setShowAddModal] = useState(false);
   const [showPriceModal, setShowPriceModal] = useState(false);
   const [showDatesModal, setShowDatesModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ProductItem | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<ProductItem | null>(null);
 
-  // Form inputs
-  const [newTitle, setNewTitle] = useState("");
-  const [newCat, setNewCat] = useState("Cameras");
-  const [newCondition, setNewCondition] = useState("Good");
-  const [newRate, setNewRate] = useState("40");
-  const [newDeposit, setNewDeposit] = useState("200");
+  // Pricing edit inputs
   const [editRate, setEditRate] = useState("60");
   const [editDeposit, setEditDeposit] = useState("300");
 
@@ -170,7 +195,7 @@ export default function MyProductsPage() {
   const triggerToast = (msg: string) => {
     setToastMsg(msg);
     setShowToast(true);
-    setTimeout(() => setShowToast(false), 2200);
+    setTimeout(() => setShowToast(false), 2400);
   };
 
   const syncListingToMarketplace = (
@@ -189,98 +214,122 @@ export default function MyProductsPage() {
       category: item.category,
       price: nextRate,
       deposit: nextDeposit,
-      area: "TSC",
+      area: item.area || "TSC",
       owner: resolvedUser.name,
       ownerEmail: resolvedUser.email,
+      university: resolvedUser.university,
       initials: resolvedUser.initials,
       image: item.image,
-      available: nextState === "active",
+      available: nextState === "active" && !item.isRentedOut,
       condition: item.condition,
-      maxRentalDays: 7,
-      description: `${item.condition} condition ${item.name}. ${item.note}`,
+      maxRentalDays: item.maxRentalDays || 7,
+      description: item.description || `${item.condition} condition ${item.name}. ${item.note}`,
     };
     upsertMarketplaceItem(marketItem);
   };
 
-  // State toggles
-  const handleToggleState = (item: ProductItem) => {
+  // State toggles (awaited with explicit API verification)
+  const handleToggleState = async (item: ProductItem) => {
     const nextState: "active" | "paused" = item.state === "paused" ? "active" : "paused";
-    if (item.state === "paused") {
-      setProducts((prev) =>
-        prev.map((p) =>
-          p.id === item.id
-            ? {
-                ...p,
-                state: "active",
-                availText: "Available today",
-                note: "Resumed by you today",
-              }
-            : p
-        )
+    try {
+      const res = await fetch(`/api/marketplace/${encodeURIComponent(item.id)}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(resolvedUser.email ? { "x-user-email": resolvedUser.email } : {}),
+        },
+        body: JSON.stringify({ status: nextState }),
+      });
+      const data = (await res.json().catch(() => null)) as {
+        ok?: boolean;
+        error?: string;
+        myProduct?: ProductItem;
+      } | null;
+
+      if (!res.ok || !data?.ok) {
+        triggerToast(data?.error || "Could not update listing status.");
+        return;
+      }
+
+      const updatedItem = data.myProduct || {
+        ...item,
+        state: nextState,
+        availText:
+          nextState === "paused"
+            ? "Not accepting bookings"
+            : item.isRentedOut
+            ? "Currently rented"
+            : "Available today",
+        note:
+          nextState === "paused"
+            ? "Paused by you"
+            : `Published to ${resolvedUser.university} shelf`,
+      };
+      setProducts((prev) => prev.map((p) => (p.id === item.id ? updatedItem : p)));
+      syncListingToMarketplace(updatedItem, nextState);
+      triggerToast(
+        nextState === "paused"
+          ? `Listing "${item.name}" paused.`
+          : `Listing "${item.name}" resumed and active.`
       );
-      syncListingToMarketplace(item, "active");
-      triggerToast(`Listing "${item.name}" resumed and active.`);
-    } else if (item.state === "active") {
-      setProducts((prev) =>
-        prev.map((p) =>
-          p.id === item.id
-            ? {
-                ...p,
-                state: "paused",
-                availText: "Not accepting bookings",
-                note: "Paused by you today",
-              }
-            : p
-        )
-      );
-      syncListingToMarketplace(item, "paused");
-      triggerToast(`Listing "${item.name}" paused.`);
+    } catch {
+      triggerToast("Network error updating listing.");
     }
-    fetch(`/api/marketplace/${encodeURIComponent(item.id)}`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        ...(resolvedUser.email ? { "x-user-email": resolvedUser.email } : {}),
-      },
-      body: JSON.stringify({ status: nextState }),
-    }).catch(() => {});
   };
 
-  const handleDeleteDraft = (id: string, name: string) => {
-    if (window.confirm(`Delete the draft "${name}"?`)) {
-      setProducts((prev) => prev.filter((p) => p.id !== id));
-      removeMarketplaceItem(id);
-      fetch(`/api/marketplace/${encodeURIComponent(id)}`, {
+  const confirmDeleteProduct = async () => {
+    if (!deleteTarget) return;
+    const { id, name } = deleteTarget;
+    try {
+      const res = await fetch(`/api/marketplace/${encodeURIComponent(id)}`, {
         method: "DELETE",
         headers: resolvedUser.email ? { "x-user-email": resolvedUser.email } : undefined,
-      }).catch(() => {});
-      triggerToast(`Draft "${name}" was deleted.`);
+      });
+      if (!res.ok && res.status !== 404) {
+        const d = (await res.json().catch(() => null)) as { error?: string } | null;
+        triggerToast(d?.error || "Unable to delete listing.");
+        return;
+      }
+      setProducts((prev) => prev.filter((p) => p.id !== id));
+      removeMarketplaceItem(id);
+      setDeleteTarget(null);
+      triggerToast(`"${name}" deleted.`);
+    } catch {
+      triggerToast("Network error deleting listing.");
     }
   };
 
-  const handleFinishDraft = (item: ProductItem) => {
-    setProducts((prev) =>
-      prev.map((p) =>
-        p.id === item.id
-          ? {
-              ...p,
-              state: "active",
-              availText: "Available today",
-              note: `Published to ${resolvedUser.university} shelf today`,
-            }
-          : p
-      )
-    );
-    syncListingToMarketplace(item, "active");
-    fetch(`/api/marketplace/${encodeURIComponent(item.id)}`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        ...(resolvedUser.email ? { "x-user-email": resolvedUser.email } : {}),
-      },
-      body: JSON.stringify({ status: "active" }),
-    }).catch(() => {});
-    triggerToast(`Draft "${item.name}" finished and published!`);
+  const handleFinishDraft = async (item: ProductItem) => {
+    try {
+      const res = await fetch(`/api/marketplace/${encodeURIComponent(item.id)}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(resolvedUser.email ? { "x-user-email": resolvedUser.email } : {}),
+        },
+        body: JSON.stringify({ status: "active" }),
+      });
+      const data = (await res.json().catch(() => null)) as {
+        ok?: boolean;
+        error?: string;
+        myProduct?: ProductItem;
+      } | null;
+      if (!res.ok || !data?.ok) {
+        triggerToast(data?.error || "Unable to publish draft.");
+        return;
+      }
+      const nextItem = data.myProduct || {
+        ...item,
+        state: "active" as const,
+        availText: "Available today",
+        note: `Published to ${resolvedUser.university} shelf`,
+      };
+      setProducts((prev) => prev.map((p) => (p.id === item.id ? nextItem : p)));
+      syncListingToMarketplace(nextItem, "active");
+      triggerToast(`Draft "${item.name}" finished and published!`);
+    } catch {
+      triggerToast("Network error publishing draft.");
+    }
   };
 
   const openPricingModal = (item: ProductItem) => {
@@ -290,30 +339,46 @@ export default function MyProductsPage() {
     setShowPriceModal(true);
   };
 
-  const savePricing = () => {
+  const savePricing = async () => {
     if (!selectedProduct) return;
-    const r = parseInt(editRate, 10);
-    const d = parseInt(editDeposit, 10);
-    if (isNaN(r) || r <= 0 || isNaN(d) || d < 0) {
-      triggerToast("Please enter valid positive token values.");
+    const r = Math.round(Number(editRate));
+    const d = Math.round(Number(editDeposit));
+    if (!Number.isFinite(r) || r < 5 || r > 500) {
+      triggerToast("Daily rental rate must be between 5 and 500 tokens.");
       return;
     }
-    setProducts((prev) =>
-      prev.map((p) =>
-        p.id === selectedProduct.id ? { ...p, rate: r, deposit: d } : p
-      )
-    );
-    syncListingToMarketplace(selectedProduct, selectedProduct.state, r, d);
-    fetch(`/api/marketplace/${encodeURIComponent(selectedProduct.id)}`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        ...(resolvedUser.email ? { "x-user-email": resolvedUser.email } : {}),
-      },
-      body: JSON.stringify({ rate: r, deposit: d }),
-    }).catch(() => {});
-    setShowPriceModal(false);
-    triggerToast(`Updated pricing for ${selectedProduct.name}.`);
+    if (!Number.isFinite(d) || d < 0 || d > 2000) {
+      triggerToast("Security deposit must be between 0 and 2000 tokens.");
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/marketplace/${encodeURIComponent(selectedProduct.id)}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(resolvedUser.email ? { "x-user-email": resolvedUser.email } : {}),
+        },
+        body: JSON.stringify({ rate: r, deposit: d }),
+      });
+      const data = (await res.json().catch(() => null)) as {
+        ok?: boolean;
+        error?: string;
+        myProduct?: ProductItem;
+      } | null;
+      if (!res.ok || !data?.ok) {
+        triggerToast(data?.error || "Could not update pricing.");
+        return;
+      }
+
+      const nextProd = data.myProduct || { ...selectedProduct, rate: r, deposit: d };
+      setProducts((prev) => prev.map((p) => (p.id === selectedProduct.id ? nextProd : p)));
+      syncListingToMarketplace(nextProd, nextProd.state, r, d);
+      setShowPriceModal(false);
+      triggerToast(`Updated pricing for ${selectedProduct.name}.`);
+    } catch {
+      triggerToast("Network error saving pricing.");
+    }
   };
 
   const openDatesModal = (item: ProductItem) => {
@@ -321,72 +386,46 @@ export default function MyProductsPage() {
     setShowDatesModal(true);
   };
 
-  const handleCreateProduct = async (asDraft = false) => {
-    if (!newTitle.trim()) {
-      triggerToast("Please provide a product title.");
-      return;
-    }
-    const r = parseInt(newRate, 10) || 30;
-    const d = parseInt(newDeposit, 10) || 100;
-    const imageUrl =
-      newCat === "Cameras"
-        ? "/images/products/product-1.jpeg"
-        : newCat === "Study essentials"
-        ? "/images/products/product-2.jpeg"
-        : newCat === "Camera accessories"
-        ? "/images/products/product-3.jpeg"
-        : "/images/products/product-4.jpeg";
-
-    let savedRecord: ProductItem | null = null;
+  const handleRentalAction = async (
+    rentalId: string,
+    action: "approve" | "decline" | "return" | "cancel"
+  ) => {
+    if (busyRentalId) return;
+    setBusyRentalId(rentalId);
     try {
-      const res = await fetch("/api/marketplace", {
-        method: "POST",
+      const res = await fetch(`/api/marketplace/rentals/${encodeURIComponent(rentalId)}`, {
+        method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           ...(resolvedUser.email ? { "x-user-email": resolvedUser.email } : {}),
         },
-        body: JSON.stringify({
-          title: newTitle.trim(),
-          category: newCat,
-          condition: newCondition,
-          rate: r,
-          deposit: d,
-          area: "TSC",
-          imageUrl,
-          status: asDraft ? "draft" : "active",
-        }),
+        body: JSON.stringify({ action }),
       });
-      const data = (await res.json().catch(() => null)) as {
-        ok?: boolean;
-        myProduct?: ProductItem;
-      } | null;
-      if (res.ok && data?.ok && data.myProduct) {
-        savedRecord = data.myProduct;
+      const data = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (!res.ok || !data?.ok) {
+        triggerToast(data?.error || "Could not update rental.");
+        return;
       }
-    } catch {}
 
-    const newItem: ProductItem = savedRecord || {
-      id: `p-${Date.now()}`,
-      name: newTitle.trim(),
-      category: newCat,
-      condition: newCondition,
-      state: asDraft ? "draft" : "active",
-      rate: r,
-      deposit: d,
-      image: imageUrl,
-      note: asDraft
-        ? "Add availability to finish your listing"
-        : "Listed by you today",
-      availText: asDraft ? "Not published" : "Available today",
-      owner: `${resolvedUser.name} · You`,
-    };
-    setProducts((prev) => [newItem, ...prev.filter((p) => p.id !== newItem.id)]);
-    if (!asDraft) {
-      syncListingToMarketplace(newItem, "active");
+      // Refresh wallet balance & listings/rentals
+      const meRes = await fetch("/api/auth/me").catch(() => null);
+      if (meRes?.ok) {
+        const meData = (await meRes.json().catch(() => null)) as { user?: ClientUser } | null;
+        if (meData?.user) saveClientUser(meData.user);
+      }
+      await loadMyData();
+      const labels = {
+        approve: "Rental approved & item marked rented out!",
+        decline: "Request declined & borrower escrow refunded.",
+        return: "Return confirmed! Deposit released & earnings credited.",
+        cancel: "Borrow request cancelled & tokens refunded.",
+      };
+      triggerToast(labels[action]);
+    } catch {
+      triggerToast("Network error updating rental status.");
+    } finally {
+      setBusyRentalId(null);
     }
-    setShowAddModal(false);
-    setNewTitle("");
-    triggerToast(asDraft ? "Saved new draft listing." : `Published "${newItem.name}"!`);
   };
 
   const handleLogout = (e: React.MouseEvent) => {
@@ -480,6 +519,11 @@ export default function MyProductsPage() {
 
       <AppNavbar
         activeNav="my-products"
+        user={resolvedUser}
+        onLogout={() => {
+          clearClientSession();
+          router.push("/login");
+        }}
         onOpenProfile={() => setShowProfileModal(true)}
         onSos={() =>
           triggerToast("Emergency Campus SOS: Campus security contacted.")
@@ -550,8 +594,8 @@ export default function MyProductsPage() {
           </div>
           <div className="stat">
             <small>Rental earnings</small>
-            <b>360 tokens</b>
-            <span>This month</span>
+            <b>{totalEarned} tokens</b>
+            <span>{lentRentals.filter((r) => r.status === "RETURNED").length} completed returns</span>
           </div>
         </section>
 
@@ -616,16 +660,6 @@ export default function MyProductsPage() {
             />
           </label>
           <label className="fb">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.6"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M6 9l6 6 6-6" />
-            </svg>
             <select
               id="cat"
               aria-label="Category"
@@ -633,13 +667,12 @@ export default function MyProductsPage() {
               onChange={(e) => setCategoryFilter(e.target.value)}
             >
               <option value="all">All categories</option>
-              <option value="Cameras">Cameras</option>
-              <option value="Study essentials">Study essentials</option>
-              <option value="Camera accessories">Camera accessories</option>
-              <option value="Travel essentials">Travel essentials</option>
+              {CATEGORIES.filter((c) => c !== "All items").map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
             </select>
-          </label>
-          <label className="fb">
             <svg
               viewBox="0 0 24 24"
               fill="none"
@@ -650,6 +683,8 @@ export default function MyProductsPage() {
             >
               <path d="M6 9l6 6 6-6" />
             </svg>
+          </label>
+          <label className="fb">
             <select
               id="sort"
               aria-label="Sort"
@@ -662,6 +697,16 @@ export default function MyProductsPage() {
               <option value="low">Sort: Price, low to high</option>
               <option value="high">Sort: Price, high to low</option>
             </select>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M6 9l6 6 6-6" />
+            </svg>
           </label>
         </div>
 
@@ -678,12 +723,23 @@ export default function MyProductsPage() {
             {filteredProducts.map((p) => (
               <li key={p.id} className="prow">
                 <div className="c prod">
-                  <img src={p.image} alt={p.name} />
+                  <Link href={`/product-details/${p.id}`} style={{ flexShrink: 0 }}>
+                    <Image
+                      src={p.image}
+                      alt={p.name}
+                      width={68}
+                      height={54}
+                      unoptimized
+                      style={{ objectFit: "cover", borderRadius: 8, display: "block" }}
+                    />
+                  </Link>
                   <div>
                     <small>
                       {p.category} · {p.condition}
                     </small>
-                    <h3>{p.name}</h3>
+                    <h3>
+                      <Link href={`/product-details/${p.id}`}>{p.name}</Link>
+                    </h3>
                     <p>{p.owner}</p>
                     <p className="note">{p.note}</p>
                   </div>
@@ -748,30 +804,34 @@ export default function MyProductsPage() {
                       <button
                         type="button"
                         className="btn"
-                        onClick={() => handleDeleteDraft(p.id, p.name)}
+                        style={{ borderColor: "#c0392b", color: "#c0392b" }}
+                        onClick={() => setDeleteTarget(p)}
                       >
                         Delete draft
                       </button>
                     </>
                   ) : (
                     <>
-                      <button
-                        type="button"
+                      <Link
+                        href={`/marketplace/list?edit=${encodeURIComponent(p.id)}`}
                         className="btn"
-                        onClick={() =>
-                          triggerToast(
-                            `Editing details for "${p.name}". Photo & title ready.`
-                          )
-                        }
                       >
                         Edit product
-                      </button>
+                      </Link>
                       <button
                         type="button"
                         className="btn"
                         onClick={() => handleToggleState(p)}
                       >
                         {p.state === "paused" ? "Resume" : "Pause listing"}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn"
+                        style={{ borderColor: "#c0392b", color: "#c0392b" }}
+                        onClick={() => setDeleteTarget(p)}
+                      >
+                        Delete
                       </button>
                     </>
                   )}
@@ -787,6 +847,134 @@ export default function MyProductsPage() {
             </div>
           )}
         </section>
+
+        {/* Live Rental Requests & Escrows */}
+        {(lentRentals.length > 0 || borrowedRentals.length > 0) && (
+          <section className="table" aria-label="Rental requests" style={{ padding: "18px 20px" }}>
+            <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>
+              Rental Requests &amp; Active Escrows
+            </h2>
+
+            {lentRentals.length > 0 && (
+              <div style={{ marginBottom: borrowedRentals.length > 0 ? 18 : 0 }}>
+                <p style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)", marginBottom: 8, textTransform: "uppercase" }}>
+                  Requests for your items
+                </p>
+                <div style={{ display: "grid", gap: 10 }}>
+                  {lentRentals.map((r) => (
+                    <div
+                      key={r.id}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                        gap: 12,
+                        border: "1px solid var(--hair)",
+                        borderRadius: 10,
+                        padding: "12px 14px",
+                      }}
+                    >
+                      <div>
+                        <strong style={{ fontSize: 14 }}>{r.listingTitle}</strong>
+                        <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 2 }}>
+                          Borrower: <b>{r.borrowerName}</b> ({r.borrowerEmail}) · {r.startDate} → {r.endDate} ({r.days}d) · {r.rentalFee} tokens fee + {r.depositAmount} deposit
+                        </div>
+                        {r.note && (
+                          <div style={{ fontSize: 12, color: "var(--teal)", marginTop: 3 }}>
+                            Note: &ldquo;{r.note}&rdquo;
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <span className={`badge ${r.status === "ACTIVE" ? "b-rentedout" : r.status === "RETURNED" ? "b-active" : "b-draft"}`}>
+                          {r.status}
+                        </span>
+                        {r.status === "PENDING" && (
+                          <>
+                            <button
+                              type="button"
+                              className="btn solid"
+                              disabled={busyRentalId === r.id}
+                              onClick={() => handleRentalAction(r.id, "approve")}
+                            >
+                              Approve handoff
+                            </button>
+                            <button
+                              type="button"
+                              className="btn"
+                              disabled={busyRentalId === r.id}
+                              onClick={() => handleRentalAction(r.id, "decline")}
+                            >
+                              Decline
+                            </button>
+                          </>
+                        )}
+                        {r.status === "ACTIVE" && (
+                          <button
+                            type="button"
+                            className="btn solid"
+                            disabled={busyRentalId === r.id}
+                            onClick={() => handleRentalAction(r.id, "return")}
+                          >
+                            Confirm return &amp; settle
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {borrowedRentals.length > 0 && (
+              <div>
+                <p style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)", marginBottom: 8, textTransform: "uppercase" }}>
+                  Items you requested / borrowed
+                </p>
+                <div style={{ display: "grid", gap: 10 }}>
+                  {borrowedRentals.map((r) => (
+                    <div
+                      key={r.id}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                        gap: 12,
+                        border: "1px solid var(--hair)",
+                        borderRadius: 10,
+                        padding: "12px 14px",
+                      }}
+                    >
+                      <div>
+                        <strong style={{ fontSize: 14 }}>{r.listingTitle}</strong>
+                        <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 2 }}>
+                          Lender: <b>{r.lenderName}</b> · {r.startDate} → {r.endDate} ({r.days}d) · Escrow: {r.totalLocked} tokens
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span className={`badge ${r.status === "ACTIVE" ? "b-rentedout" : r.status === "RETURNED" ? "b-active" : "b-draft"}`}>
+                          {r.status}
+                        </span>
+                        {r.status === "PENDING" && (
+                          <button
+                            type="button"
+                            className="btn"
+                            disabled={busyRentalId === r.id}
+                            onClick={() => handleRentalAction(r.id, "cancel")}
+                          >
+                            Cancel &amp; refund
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Notice Banner */}
         <div className="notice" role="note">
@@ -816,33 +1004,9 @@ export default function MyProductsPage() {
         <div className="wrap">
           <span>UniShare. Made for university students in Bangladesh.</span>
           <nav>
-            <a
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                triggerToast("Campus Privacy Policy: Student data is protected.");
-              }}
-            >
-              Privacy
-            </a>
-            <a
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                triggerToast(`${resolvedUser.university} Sharing Honor Code.`);
-              }}
-            >
-              Terms
-            </a>
-            <a
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                triggerToast("Campus Helpdesk: support@unishare.online");
-              }}
-            >
-              Get help
-            </a>
+            <Link href="/privacy">Privacy</Link>
+            <Link href="/terms">Terms</Link>
+            <Link href="/help">Get help</Link>
             <a href="#" onClick={handleLogout}>
               Log out
             </a>
@@ -850,8 +1014,8 @@ export default function MyProductsPage() {
         </div>
       </footer>
 
-      {/* Modal: Add Product */}
-      {showAddModal && (
+      {/* Modal: Confirm Delete */}
+      {deleteTarget && (
         <div
           style={{
             position: "fixed",
@@ -862,7 +1026,7 @@ export default function MyProductsPage() {
             placeItems: "center",
             padding: "20px",
           }}
-          onClick={() => setShowAddModal(false)}
+          onClick={() => setDeleteTarget(null)}
         >
           <div
             style={{
@@ -870,143 +1034,33 @@ export default function MyProductsPage() {
               borderRadius: "12px",
               padding: "24px",
               width: "100%",
-              maxWidth: "460px",
+              maxWidth: "400px",
               boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
               border: "1.5px solid var(--line)",
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 style={{ fontSize: "18px", fontWeight: 700, marginBottom: "14px" }}>
-              Add a new product
+            <h3 style={{ fontSize: "17px", fontWeight: 700, marginBottom: "8px" }}>
+              Delete listing?
             </h3>
-            <p style={{ fontSize: "12px", color: "var(--muted)", marginBottom: "16px" }}>
-              Share items you own with fellow verified {resolvedUser.university} students.
+            <p style={{ fontSize: "13px", color: "var(--muted)", marginBottom: "18px", lineHeight: 1.5 }}>
+              Are you sure you want to remove <strong>{deleteTarget.name}</strong> from your campus shelf? This action cannot be undone.
             </p>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <div>
-                <label style={{ fontSize: "11px", fontWeight: 700, display: "block", marginBottom: "4px" }}>
-                  Product title
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Scientific Calculator fx-991EX"
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  style={{
-                    width: "100%",
-                    border: "1px solid var(--hair)",
-                    borderRadius: "6px",
-                    padding: "8px 12px",
-                    fontSize: "13px",
-                  }}
-                />
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                <div>
-                  <label style={{ fontSize: "11px", fontWeight: 700, display: "block", marginBottom: "4px" }}>
-                    Category
-                  </label>
-                  <select
-                    value={newCat}
-                    onChange={(e) => setNewCat(e.target.value)}
-                    style={{
-                      width: "100%",
-                      border: "1px solid var(--hair)",
-                      borderRadius: "6px",
-                      padding: "8px",
-                      fontSize: "12px",
-                    }}
-                  >
-                    <option>Cameras</option>
-                    <option>Study essentials</option>
-                    <option>Camera accessories</option>
-                    <option>Travel essentials</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label style={{ fontSize: "11px", fontWeight: 700, display: "block", marginBottom: "4px" }}>
-                    Condition
-                  </label>
-                  <select
-                    value={newCondition}
-                    onChange={(e) => setNewCondition(e.target.value)}
-                    style={{
-                      width: "100%",
-                      border: "1px solid var(--hair)",
-                      borderRadius: "6px",
-                      padding: "8px",
-                      fontSize: "12px",
-                    }}
-                  >
-                    <option>Like new</option>
-                    <option>Good</option>
-                    <option>Fair</option>
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                <div>
-                  <label style={{ fontSize: "11px", fontWeight: 700, display: "block", marginBottom: "4px" }}>
-                    Tokens / day
-                  </label>
-                  <input
-                    type="number"
-                    value={newRate}
-                    onChange={(e) => setNewRate(e.target.value)}
-                    style={{
-                      width: "100%",
-                      border: "1px solid var(--hair)",
-                      borderRadius: "6px",
-                      padding: "8px 12px",
-                      fontSize: "13px",
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: "11px", fontWeight: 700, display: "block", marginBottom: "4px" }}>
-                    Deposit (tokens)
-                  </label>
-                  <input
-                    type="number"
-                    value={newDeposit}
-                    onChange={(e) => setNewDeposit(e.target.value)}
-                    style={{
-                      width: "100%",
-                      border: "1px solid var(--hair)",
-                      borderRadius: "6px",
-                      padding: "8px 12px",
-                      fontSize: "13px",
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "20px" }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
               <button
                 type="button"
                 className="btn"
-                onClick={() => setShowAddModal(false)}
+                onClick={() => setDeleteTarget(null)}
               >
                 Cancel
               </button>
               <button
                 type="button"
                 className="btn"
-                onClick={() => handleCreateProduct(true)}
+                style={{ background: "#c0392b", borderColor: "#c0392b", color: "#fff" }}
+                onClick={confirmDeleteProduct}
               >
-                Save as draft
-              </button>
-              <button
-                type="button"
-                className="btn solid"
-                onClick={() => handleCreateProduct(false)}
-              >
-                Publish now
+                Delete product
               </button>
             </div>
           </div>
@@ -1154,10 +1208,10 @@ export default function MyProductsPage() {
             </div>
 
             <p style={{ fontSize: "12px", color: "var(--muted)", marginBottom: "16px" }}>
-              Block out exam weeks or dates when you will need this item for personal use.
+              Pause bookings when you need this item for personal use, or resume to accept campus requests immediately.
             </p>
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", flexWrap: "wrap" }}>
               <button
                 type="button"
                 className="btn"
@@ -1168,12 +1222,15 @@ export default function MyProductsPage() {
               <button
                 type="button"
                 className="btn solid"
-                onClick={() => {
+                onClick={async () => {
+                  const target = selectedProduct;
                   setShowDatesModal(false);
-                  triggerToast("Calendar availability updated for campus borrowers.");
+                  if (target) {
+                    await handleToggleState(target);
+                  }
                 }}
               >
-                Confirm dates
+                {selectedProduct.state === "paused" ? "Resume bookings" : "Pause bookings"}
               </button>
             </div>
           </div>

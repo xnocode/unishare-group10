@@ -1,33 +1,21 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useSyncExternalStore } from 'react';
+import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
-
-const emptySubscribe = () => () => {};
-function useInitialDaysParam(): number {
-  return useSyncExternalStore(
-    emptySubscribe,
-    () => {
-      const raw = new URLSearchParams(window.location.search).get('days');
-      const parsed = raw ? Number(raw) : NaN;
-      return Number.isFinite(parsed) && parsed >= 1 ? Math.min(30, Math.round(parsed)) : 1;
-    },
-    () => 1
-  );
-}
+import { useRouter, useSearchParams } from 'next/navigation';
 import { DEFAULT_ITEMS, MarketplaceItem } from '../marketplace/marketplace-data';
 import AppNavbar from '../components/AppNavbar';
 import {
   clearClientSession,
-  DEMO_USER,
   getUserScopedKey,
   saveClientUser,
+  signInDemoStudent,
   useCurrentUser,
   useIsHydrated,
   useLocalStorageRaw,
   writeUserScopedJson,
+  type ClientUser,
 } from '../lib/user-client';
 import '../marketplace/marketplace.css';
 import './product-details.css';
@@ -36,37 +24,98 @@ interface ProductDetailViewProps {
   productId?: string;
 }
 
-export default function ProductDetailView({ productId }: ProductDetailViewProps) {
+function toIsoDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function addDays(baseIso: string, delta: number): string {
+  const dt = new Date(`${baseIso}T00:00:00`);
+  dt.setDate(dt.getDate() + delta);
+  return toIsoDate(dt);
+}
+
+function ProductDetailContent({ productId }: ProductDetailViewProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const queryId = (searchParams.get('id') || '').trim();
+  const effectiveId = (productId || queryId).trim();
+  const fromParam = (searchParams.get('from') || '').trim();
+  const toParam = (searchParams.get('to') || '').trim();
+  const daysParam = Number(searchParams.get('days') || '');
 
   // Authentication State
   const { user, resolvedUser, isDemoUser } = useCurrentUser();
   const authChecked = useIsHydrated();
 
-  // Product & Interaction State
-  const initialDaysFromQuery = useInitialDaysParam();
+  const initialDaysFromQuery =
+    Number.isFinite(daysParam) && daysParam >= 1 ? Math.min(30, Math.round(daysParam)) : 1;
+
   const [customRentalDays, setCustomRentalDays] = useState<number | null>(null);
-  const rentalDays = customRentalDays ?? initialDaysFromQuery;
+  const [pickupDate, setPickupDate] = useState(() => fromParam || toIsoDate(new Date()));
+  const [borrowNote, setBorrowNote] = useState('');
+  const [isBorrowing, setIsBorrowing] = useState(false);
+  const [borrowError, setBorrowError] = useState('');
   const [borrowRequested, setBorrowRequested] = useState(false);
+  const [isDemoLoading, setIsDemoLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastVisible, setToastVisible] = useState(false);
-  const [remoteItem, setRemoteItem] = useState<MarketplaceItem | null>(null);
+  const [remoteState, setRemoteState] = useState<{
+    id: string;
+    item: MarketplaceItem | null;
+  } | null>(null);
+  const remoteItem = effectiveId && remoteState?.id === effectiveId ? remoteState.item : null;
+  const isLoadingRemote = Boolean(effectiveId) && remoteState?.id !== effectiveId;
+  const [dbFavRecord, setDbFavRecord] = useState<{
+    email: string;
+    ids: string[];
+  } | null>(null);
+  const dbFavoriteIds = useMemo(
+    () =>
+      user?.email && dbFavRecord?.email === user.email
+        ? dbFavRecord.ids
+        : null,
+    [dbFavRecord, user?.email]
+  );
 
   useEffect(() => {
-    if (!productId) return;
+    if (!effectiveId) return;
     let active = true;
-    fetch(`/api/marketplace/${encodeURIComponent(productId)}`)
+    fetch(`/api/marketplace/${encodeURIComponent(effectiveId)}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data: { ok?: boolean; marketItem?: MarketplaceItem } | null) => {
-        if (active && data?.ok && data.marketItem) {
-          setRemoteItem(data.marketItem);
+        if (active) {
+          setRemoteState({
+            id: effectiveId,
+            item: data?.ok && data.marketItem ? data.marketItem : null,
+          });
+        }
+      })
+      .catch(() => {
+        if (active) setRemoteState({ id: effectiveId, item: null });
+      });
+    return () => {
+      active = false;
+    };
+  }, [effectiveId]);
+
+  useEffect(() => {
+    const email = user?.email;
+    if (!email) return;
+    let active = true;
+    fetch('/api/marketplace/favorites', {
+      headers: { 'x-user-email': email },
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { ok?: boolean; listingIds?: string[] } | null) => {
+        if (active && data?.ok && Array.isArray(data.listingIds)) {
+          setDbFavRecord({ email, ids: data.listingIds });
         }
       })
       .catch(() => {});
     return () => {
       active = false;
     };
-  }, [productId]);
+  }, [user?.email]);
 
   const favoritesKey = getUserScopedKey(
     'unishare_favorites',
@@ -95,13 +144,17 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
   const rawMyProductsJson = useLocalStorageRaw(myProductsKey);
 
   const favorites: Record<string, boolean> = useMemo(() => {
-    if (!rawFavsJson) return {};
-    try {
-      return JSON.parse(rawFavsJson) as Record<string, boolean>;
-    } catch {
-      return {};
+    const merged: Record<string, boolean> = {};
+    if (rawFavsJson) {
+      try {
+        Object.assign(merged, JSON.parse(rawFavsJson) as Record<string, boolean>);
+      } catch {}
     }
-  }, [rawFavsJson]);
+    if (Array.isArray(dbFavoriteIds)) {
+      for (const id of dbFavoriteIds) merged[id] = true;
+    }
+    return merged;
+  }, [rawFavsJson, dbFavoriteIds]);
 
   const walletBalance = useMemo(() => {
     if (rawWalletJson) {
@@ -113,90 +166,77 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
     return resolvedUser.tokenBalance;
   }, [rawWalletJson, resolvedUser.tokenBalance]);
 
-  // Determine the active item
-  const item: MarketplaceItem = useMemo(() => {
-    let targetId = productId;
-    if (!targetId && typeof window !== 'undefined') {
-      const q = new URLSearchParams(window.location.search).get('id');
-      if (q) targetId = q;
+  // Determine the active item cleanly without false fallback to Calculator on 404
+  const item: MarketplaceItem | null = useMemo(() => {
+    if (!effectiveId) return DEFAULT_ITEMS[0];
+    if (remoteItem && remoteItem.id === effectiveId) return remoteItem;
+
+    if (rawMyProductsJson) {
+      try {
+        const mine = JSON.parse(rawMyProductsJson) as Array<{
+          id: string;
+          name: string;
+          category: string;
+          condition?: string;
+          rate: number;
+          deposit: number;
+          area?: string;
+          maxRentalDays?: number;
+          description?: string;
+          image: string;
+          state?: string;
+          note?: string;
+        }>;
+        const ownMatch = mine.find((it) => it.id === effectiveId);
+        if (ownMatch) {
+          return {
+            id: ownMatch.id,
+            name: ownMatch.name,
+            category: ownMatch.category,
+            price: ownMatch.rate,
+            deposit: ownMatch.deposit,
+            area: ownMatch.area || 'TSC',
+            owner: resolvedUser.name,
+            ownerEmail: resolvedUser.email,
+            university: resolvedUser.university,
+            initials: resolvedUser.initials,
+            image: ownMatch.image,
+            available: ownMatch.state === 'active',
+            condition: ownMatch.condition,
+            maxRentalDays: ownMatch.maxRentalDays,
+            description: ownMatch.description || ownMatch.note || `Listed by ${resolvedUser.name}.`,
+          };
+        }
+      } catch {}
     }
 
     if (rawCustomItemsJson) {
       try {
         const parsed = JSON.parse(rawCustomItemsJson) as MarketplaceItem[];
-        const match = parsed.find(
-          (it) => it.id === targetId || it.name.toLowerCase().replace(/[^a-z0-9]/g, '-').includes((targetId || '').toLowerCase())
-        );
-        if (match) return match;
-      } catch (err) {
-        console.error(err);
-      }
+        const exactCustom = parsed.find((it) => it.id === effectiveId);
+        if (exactCustom) return exactCustom;
+      } catch {}
     }
 
-    if (targetId) {
-      if (rawMyProductsJson) {
-        try {
-          const mine = JSON.parse(rawMyProductsJson) as Array<{
-            id: string;
-            name: string;
-            category: string;
-            condition?: string;
-            rate: number;
-            deposit: number;
-            area?: string;
-            maxRentalDays?: number;
-            description?: string;
-            image: string;
-            state?: string;
-            note?: string;
-          }>;
-          const ownMatch = mine.find((it) => it.id === targetId);
-          if (ownMatch) {
-            return {
-              id: ownMatch.id,
-              name: ownMatch.name,
-              category: ownMatch.category,
-              price: ownMatch.rate,
-              deposit: ownMatch.deposit,
-              area: ownMatch.area || 'TSC',
-              owner: resolvedUser.name,
-              ownerEmail: resolvedUser.email,
-              initials: resolvedUser.initials,
-              image: ownMatch.image,
-              available: ownMatch.state !== 'paused',
-              condition: ownMatch.condition,
-              maxRentalDays: ownMatch.maxRentalDays,
-              description: ownMatch.description || ownMatch.note || `Listed by ${resolvedUser.name}.`,
-            };
-          }
-        } catch {}
-      }
+    const directDefault = DEFAULT_ITEMS.find((it) => it.id === effectiveId);
+    if (directDefault) return directDefault;
 
-      const direct = DEFAULT_ITEMS.find((it) => it.id === targetId);
-      if (direct) return direct;
+    return null;
+  }, [effectiveId, remoteItem, rawCustomItemsJson, rawMyProductsJson, resolvedUser.email, resolvedUser.initials, resolvedUser.name, resolvedUser.university]);
 
-      if (remoteItem && remoteItem.id === targetId) return remoteItem;
+  const maxAllowedDays = item?.maxRentalDays || 7;
+  const rentalDays = Math.min(maxAllowedDays, Math.max(1, customRentalDays ?? initialDaysFromQuery));
+  const computedEndDate = toParam && customRentalDays === null ? toParam : addDays(pickupDate, rentalDays - 1);
 
-      const slugMatch = DEFAULT_ITEMS.find((it) =>
-        it.name.toLowerCase().replace(/[^a-z0-9]/g, '-').includes((targetId || '').toLowerCase())
-      );
-      if (slugMatch) return slugMatch;
-    }
-
-    return remoteItem || DEFAULT_ITEMS[0];
-  }, [productId, remoteItem, rawCustomItemsJson, rawMyProductsJson, resolvedUser.email, resolvedUser.initials, resolvedUser.name]);
-
-  // Record item in recently viewed
+  // Record item in recently viewed keyed by id
   useEffect(() => {
     if (item && typeof window !== 'undefined') {
       try {
         const storedRecent = localStorage.getItem(recentKey);
         const list: string[] = storedRecent ? JSON.parse(storedRecent) : [];
-        const updated = [item.name, ...list.filter((n) => n !== item.name)].slice(0, 10);
+        const updated = [item.id, ...list.filter((n) => n !== item.id && n !== item.name)].slice(0, 10);
         localStorage.setItem(recentKey, JSON.stringify(updated));
-      } catch (e) {
-        console.error(e);
-      }
+      } catch {}
     }
   }, [item, recentKey]);
 
@@ -209,25 +249,111 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
     }, 2500);
   };
 
+  const isOwnListing = Boolean(
+    item &&
+      ((item.ownerEmail && item.ownerEmail.toLowerCase() === resolvedUser.email.toLowerCase()) ||
+        item.owner === resolvedUser.name)
+  );
+  const isFavorited = Boolean(item && (favorites[item.id] || favorites[item.name]));
+
   // Toggle Favorite
   const handleToggleFavorite = () => {
-    const updated = { ...favorites, [item.name]: !favorites[item.name] };
+    if (!item) return;
+    const nextSaved = !isFavorited;
+    const updated = { ...favorites, [item.id]: nextSaved };
+    delete updated[item.name];
     writeUserScopedJson(favoritesKey, updated);
-    showToast(updated[item.name] ? `Added "${item.name}" to Favorites` : `Removed from Favorites`);
+
+    if (user?.email && Array.isArray(dbFavoriteIds)) {
+      setDbFavRecord({
+        email: user.email,
+        ids: nextSaved
+          ? [item.id, ...dbFavoriteIds.filter((id) => id !== item.id)]
+          : dbFavoriteIds.filter((id) => id !== item.id),
+      });
+    }
+
+    if (user?.email) {
+      fetch('/api/marketplace/favorites', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-email': user.email,
+        },
+        body: JSON.stringify({ listingId: item.id }),
+      }).catch(() => {});
+    }
+
+    showToast(nextSaved ? `Added "${item.name}" to Favorites` : 'Removed from Favorites');
   };
 
-  // Borrow Request Handler
-  const handleBorrowRequest = () => {
-    setBorrowRequested(true);
-    showToast(`Request sent to ${item.owner}! Meet at ${item.area}.`);
+  // Real DB Escrow Borrow Request Handler
+  const handleBorrowRequest = async () => {
+    if (!item || isOwnListing || !item.available || isBorrowing) return;
+    setBorrowError('');
+
+    if (DEFAULT_ITEMS.some((d) => d.id === item.id) && !remoteItem) {
+      setBorrowRequested(true);
+      showToast(`Showcase preview request recorded for ${item.owner}. Try borrowing any live student listing for full wallet escrow!`);
+      return;
+    }
+
+    setIsBorrowing(true);
+    try {
+      const res = await fetch('/api/marketplace/rentals', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(user?.email ? { 'x-user-email': user.email } : {}),
+        },
+        body: JSON.stringify({
+          listingId: item.id,
+          startDate: pickupDate,
+          endDate: computedEndDate,
+          days: rentalDays,
+          note: borrowNote.trim(),
+        }),
+      });
+      const data = (await res.json().catch(() => null)) as {
+        ok?: boolean;
+        error?: string;
+        newBalance?: number;
+      } | null;
+
+      if (!res.ok || !data?.ok) {
+        setBorrowError(data?.error || 'Could not submit borrow request.');
+        return;
+      }
+
+      if (typeof data.newBalance === 'number') {
+        if (user) {
+          saveClientUser({ ...(user as ClientUser), tokenBalance: data.newBalance });
+        }
+        writeUserScopedJson(walletKey, { balance: data.newBalance });
+      }
+      setBorrowRequested(true);
+      showToast(`Borrow request sent to ${item.owner}! Meet at ${item.area}.`);
+    } catch {
+      setBorrowError('Network error submitting borrow request. Please try again.');
+    } finally {
+      setIsBorrowing(false);
+    }
   };
 
-  // Demo Login Helper
-  const handleDemoLogin = () => {
-    saveClientUser(DEMO_USER);
-    document.cookie = 'unishare_logged_in=true; path=/; max-age=86400';
-    document.cookie = `unishare_token=demo_token_${Date.now()}; path=/; max-age=604800; SameSite=Lax`;
-    showToast('Signed in as Farhana Rahman (DU Verified)');
+  // Demo Login Helper (real server session)
+  const handleDemoLogin = async () => {
+    if (isDemoLoading) return;
+    setIsDemoLoading(true);
+    try {
+      const signedIn = await signInDemoStudent();
+      if (signedIn) {
+        showToast('Signed in as Farhana Rahman (DU Verified)');
+      } else {
+        showToast('Could not connect to login service right now.');
+      }
+    } finally {
+      setIsDemoLoading(false);
+    }
   };
 
   // Logout Handler
@@ -239,15 +365,23 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
     }, 400);
   };
 
-  // Calculation
-  const rentalFee = rentalDays * item.price;
-  const totalTokens = rentalFee + item.deposit;
+  if (!authChecked) {
+    return (
+      <div className="product-detail-page">
+        <AppNavbar mode="guest" redirectPath="/marketplace" />
+        <main className="wrap" style={{ padding: '72px 24px', textAlign: 'center', color: 'var(--muted)' }}>
+          Loading item details...
+        </main>
+      </div>
+    );
+  }
 
   // Unauthenticated Guard
-  if (authChecked && !user) {
+  if (!user) {
+    const redirTarget = effectiveId ? `/product-details/${effectiveId}` : '/marketplace';
     return (
       <div className="unishare-marketplace">
-        <AppNavbar mode="guest" redirectPath="/marketplace" />
+        <AppNavbar mode="guest" redirectPath={redirTarget} />
 
         <main className="wrap" style={{ minHeight: '65vh', display: 'grid', placeItems: 'center', textAlign: 'center', padding: '60px 20px' }}>
           <div style={{ maxWidth: 460, background: '#ffffff', border: '1.5px solid var(--line)', borderRadius: 14, padding: 36, boxShadow: '0 4px 14px rgba(18, 32, 31, 0.08)' }}>
@@ -257,15 +391,15 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
               </svg>
             </div>
-            <h2 style={{ fontFamily: 'var(--font-bricolage, serif)', fontSize: 24, fontWeight: 800, marginBottom: 8 }}>
-              University Email Required
+            <h2 style={{ fontFamily: 'var(--head)', fontSize: 24, fontWeight: 800, marginBottom: 8 }}>
+              University Account Required
             </h2>
             <p style={{ color: 'var(--muted)', fontSize: 14, lineHeight: 1.6, marginBottom: 24 }}>
-              The UniShare shelf is exclusive to verified students of the University of Dhaka. Please log in with your university credentials to view product details.
+              The UniShare shelf is exclusive to verified campus students. Log in with your student account to view item details and submit rental requests.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <Link
-                href="/login?redirect=/marketplace"
+                href={`/login?redirect=${encodeURIComponent(redirTarget)}`}
                 className="btn"
                 style={{ width: '100%', height: 46 }}
               >
@@ -275,9 +409,10 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
                 type="button"
                 className="btn outline"
                 onClick={handleDemoLogin}
+                disabled={isDemoLoading}
                 style={{ width: '100%', height: 46 }}
               >
-                Instant Access as Farhana Rahman (Demo)
+                {isDemoLoading ? 'Signing in...' : 'Instant Access as Farhana Rahman (Demo)'}
               </button>
             </div>
           </div>
@@ -286,11 +421,45 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
     );
   }
 
+  if (isLoadingRemote && !item) {
+    return (
+      <div className="product-detail-page">
+        <AppNavbar activeNav="marketplace" user={{ ...resolvedUser, tokenBalance: walletBalance }} onLogout={handleLogout} />
+        <main className="wrap" style={{ padding: '72px 24px', textAlign: 'center', color: 'var(--muted)' }}>
+          Fetching listing details from UniShare...
+        </main>
+      </div>
+    );
+  }
+
+  if (!item) {
+    return (
+      <div className="product-detail-page">
+        <AppNavbar activeNav="marketplace" user={{ ...resolvedUser, tokenBalance: walletBalance }} onLogout={handleLogout} />
+        <main className="wrap" style={{ padding: '72px 24px', textAlign: 'center' }}>
+          <div style={{ maxWidth: 460, margin: '0 auto', background: '#fff', border: '1.5px solid var(--hair)', borderRadius: 12, padding: 32 }}>
+            <h1 style={{ fontSize: 24, marginBottom: 10 }}>Listing not found</h1>
+            <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 22 }}>
+              This item may have been removed or is no longer listed on the campus shelf.
+            </p>
+            <Link href="/marketplace" className="btn" style={{ display: 'inline-flex', padding: '10px 20px', background: 'var(--brand)', color: '#fff', borderRadius: 8, fontWeight: 700 }}>
+              Back to Marketplace
+            </Link>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // Calculation
+  const rentalFee = rentalDays * item.price;
+  const totalTokens = rentalFee + item.deposit;
+
   return (
     <div className="product-detail-page">
       <AppNavbar
         activeNav="marketplace"
-        user={{ tokenBalance: walletBalance }}
+        user={{ ...resolvedUser, tokenBalance: walletBalance }}
         onLogout={handleLogout}
         onSos={() => showToast(`Emergency Campus SOS: ${resolvedUser.university} Proctorial Team contacted.`)}
       />
@@ -317,17 +486,20 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
           <section className="pd-showcase-card">
             {/* Product Image */}
             <div className="pd-image-container">
-              <Image
+                <Image
                 src={item.image}
                 alt={item.name}
                 fill
                 sizes="(max-width: 900px) 100vw, 650px"
                 style={{ objectFit: 'cover' }}
-                unoptimized={item.image.startsWith('data:')}
+                unoptimized
                 priority
               />
-              <span className="pd-badge-avail">
-                {item.available === false ? 'Paused' : 'Available today'}
+              <span
+                className="pd-badge-avail"
+                style={item.available === false ? { background: '#fef2f2', color: '#991b1b' } : undefined}
+              >
+                {item.available === false ? (item.status === 'paused' ? 'Paused' : 'Currently rented') : 'Available today'}
               </span>
             </div>
 
@@ -370,7 +542,13 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
                 </div>
                 <div className="pd-spec-meta">
                   <span className="pd-spec-label">Availability</span>
-                  <span className="pd-spec-val">Available today · Active</span>
+                  <span className="pd-spec-val">
+                    {item.available === false
+                      ? item.status === 'paused'
+                        ? 'Paused by lender'
+                        : 'Currently rented out'
+                      : `Available today · Max ${maxAllowedDays}d`}
+                  </span>
                 </div>
               </div>
 
@@ -411,12 +589,12 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                       <path d="M20 6L9 17l-5-5" />
                     </svg>
-                    <span>Verified {resolvedUser.university} student</span>
+                    <span>Verified {item.university || resolvedUser.university} student</span>
                   </div>
                 </div>
               </div>
               <div style={{ textAlign: 'right', fontSize: 12, color: 'var(--muted)' }}>
-                <span>{resolvedUser.university}</span>
+                <span>{item.university || resolvedUser.university}</span>
                 <br />
                 <span style={{ color: 'var(--brand)', fontWeight: 600 }}>Meet at {item.area}</span>
               </div>
@@ -462,9 +640,25 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
 
             {/* Rental Duration Selector */}
             <div className="pd-duration-section">
-              <label className="pd-duration-label" htmlFor="rental-days-stepper">
-                Rental Duration
+              <label className="pd-duration-label" htmlFor="rental-pickup-date">
+                Pickup date &amp; duration (max {maxAllowedDays}d)
               </label>
+              <input
+                id="rental-pickup-date"
+                type="date"
+                min={toIsoDate(new Date())}
+                value={pickupDate}
+                onChange={(e) => setPickupDate(e.target.value || toIsoDate(new Date()))}
+                style={{
+                  width: '100%',
+                  height: 38,
+                  padding: '0 10px',
+                  border: '1.5px solid var(--hair)',
+                  borderRadius: 8,
+                  fontSize: 13.5,
+                  marginBottom: 10,
+                }}
+              />
               <div className="pd-stepper-row">
                 <button
                   type="button"
@@ -477,12 +671,13 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
                   −
                 </button>
                 <div className="pd-step-val">
-                  {rentalDays} {rentalDays === 1 ? 'day' : 'days'}
+                  {rentalDays} {rentalDays === 1 ? 'day' : 'days'} ({pickupDate} → {computedEndDate})
                 </div>
                 <button
                   type="button"
                   className="pd-step-btn"
-                  onClick={() => setCustomRentalDays(Math.min(30, rentalDays + 1))}
+                  onClick={() => setCustomRentalDays(Math.min(maxAllowedDays, rentalDays + 1))}
+                  disabled={rentalDays >= maxAllowedDays}
                   aria-label="Increase rental days"
                 >
                   +
@@ -491,18 +686,44 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
 
               {/* Preset Quick Chips */}
               <div className="pd-presets-row">
-                {[1, 2, 3, 7].map((d) => (
-                  <button
-                    key={d}
-                    type="button"
-                    className={`pd-preset-btn ${rentalDays === d ? 'active' : ''}`}
-                    onClick={() => setCustomRentalDays(d)}
-                  >
-                    {d} {d === 1 ? 'day' : 'days'}
-                  </button>
-                ))}
+                {[1, 2, 3, 7, 14]
+                  .filter((d) => d <= maxAllowedDays)
+                  .map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      className={`pd-preset-btn ${rentalDays === d ? 'active' : ''}`}
+                      onClick={() => setCustomRentalDays(d)}
+                    >
+                      {d} {d === 1 ? 'day' : 'days'}
+                    </button>
+                  ))}
               </div>
             </div>
+
+            {!isOwnListing && !borrowRequested && item.available !== false && (
+              <div style={{ marginBottom: 14 }}>
+                <label className="pd-duration-label" htmlFor="rental-note">
+                  Meetup note for {item.owner} (optional)
+                </label>
+                <input
+                  id="rental-note"
+                  type="text"
+                  maxLength={240}
+                  value={borrowNote}
+                  onChange={(e) => setBorrowNote(e.target.value)}
+                  placeholder={`e.g. Meet near ${item.area} at 11 AM`}
+                  style={{
+                    width: '100%',
+                    height: 38,
+                    padding: '0 10px',
+                    border: '1.5px solid var(--hair)',
+                    borderRadius: 8,
+                    fontSize: 13.5,
+                  }}
+                />
+              </div>
+            )}
 
             {/* Token Calculation Breakdown */}
             <div className="pd-breakdown-box">
@@ -527,28 +748,69 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
               </div>
             </div>
 
+            {borrowError && (
+              <div
+                role="alert"
+                style={{
+                  background: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  color: '#991b1b',
+                  borderRadius: 8,
+                  padding: '10px 12px',
+                  fontSize: 13,
+                  marginBottom: 12,
+                }}
+              >
+                {borrowError}{' '}
+                {borrowError.toLowerCase().includes('more tokens') && (
+                  <Link href="/buy-tokens" style={{ textDecoration: 'underline', fontWeight: 700 }}>
+                    Buy tokens →
+                  </Link>
+                )}
+              </div>
+            )}
+
             {/* Primary Action Button */}
-            <button
-              type="button"
-              className="pd-borrow-btn"
-              onClick={handleBorrowRequest}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-              <span>{borrowRequested ? 'Send Another Request' : 'Request to borrow'}</span>
-            </button>
+            {isOwnListing ? (
+              <Link
+                href={`/marketplace/list?edit=${encodeURIComponent(item.id)}`}
+                className="pd-borrow-btn"
+                style={{ textDecoration: 'none' }}
+              >
+                <span>Edit your listing</span>
+              </Link>
+            ) : (
+              <button
+                type="button"
+                className="pd-borrow-btn"
+                onClick={handleBorrowRequest}
+                disabled={isBorrowing || borrowRequested || item.available === false}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                <span>
+                  {item.available === false
+                    ? 'Currently unavailable'
+                    : borrowRequested
+                    ? 'Request Pending Lender Approval'
+                    : isBorrowing
+                    ? 'Holding escrow...'
+                    : 'Request to borrow'}
+                </span>
+              </button>
+            )}
 
             {/* Secondary Action Button - Save to Favorites */}
             <button
               type="button"
-              className={`pd-fav-toggle-btn ${favorites[item.name] ? 'active' : ''}`}
+              className={`pd-fav-toggle-btn ${isFavorited ? 'active' : ''}`}
               onClick={handleToggleFavorite}
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M12 20s-7-4.4-7-10a4.2 4.2 0 0 1 7-3 4.2 4.2 0 0 1 7 3c0 5.6-7 10-7 10z" />
               </svg>
-              <span>{favorites[item.name] ? 'Saved to Favorites' : 'Save to favorites'}</span>
+              <span>{isFavorited ? 'Saved to Favorites' : 'Save to favorites'}</span>
             </button>
 
             {/* Wallet Token Balance Pill */}
@@ -568,9 +830,9 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
         <div className="wrap">
           <span>UniShare. Made for university students in Bangladesh.</span>
           <span>
-            <Link href="#privacy" style={{ marginLeft: 0 }}>Privacy</Link>
-            <Link href="#terms">Terms</Link>
-            <Link href="#help">Get help</Link>
+            <Link href="/privacy" style={{ marginLeft: 0 }}>Privacy</Link>
+            <Link href="/terms">Terms</Link>
+            <Link href="/help">Get help</Link>
             <button
               type="button"
               onClick={handleLogout}
@@ -587,6 +849,23 @@ export default function ProductDetailView({ productId }: ProductDetailViewProps)
         {toastMessage}
       </div>
     </div>
+  );
+}
+
+export default function ProductDetailView({ productId }: ProductDetailViewProps) {
+  return (
+    <Suspense
+      fallback={
+        <div className="product-detail-page">
+          <AppNavbar mode="guest" redirectPath="/marketplace" />
+          <main className="wrap" style={{ padding: '72px 24px', textAlign: 'center', color: 'var(--muted)' }}>
+            Loading item details...
+          </main>
+        </div>
+      }
+    >
+      <ProductDetailContent productId={productId} />
+    </Suspense>
   );
 }
 

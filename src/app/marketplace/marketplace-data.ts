@@ -7,6 +7,8 @@ export interface MarketplaceItem {
   area: string;
   owner: string;
   ownerEmail?: string;
+  university?: string;
+  status?: 'active' | 'paused' | 'draft';
   initials: string;
   image: string;
   available: boolean;
@@ -171,7 +173,9 @@ export const CATEGORIES = [
   'Earphones',
   'AirPods',
   'Cameras',
+  'Camera accessories',
   'Study essentials',
+  'Travel essentials',
 ];
 
 export const ITEM_CONDITIONS = ['Like new', 'Good', 'Fair'] as const;
@@ -213,8 +217,12 @@ export function upsertMarketplaceItem(item: MarketplaceItem) {
   const next = exists
     ? current.map((x) => (x.id === item.id ? item : x))
     : [item, ...current];
-  window.localStorage.setItem('unishare_marketplace_items', JSON.stringify(next));
-  window.dispatchEvent(new Event('unishare-storage'));
+  try {
+    window.localStorage.setItem('unishare_marketplace_items', JSON.stringify(next));
+    window.dispatchEvent(new Event('unishare-storage'));
+  } catch {
+    // Ignore localStorage quota limits cleanly when large base64 fallback URIs are used
+  }
 }
 
 export function removeMarketplaceItem(id: string) {
