@@ -31,30 +31,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Latitude and longitude required" }, { status: 400 });
     }
 
-    const initials = user.fullName
-      .split(" ")
-      .filter(Boolean)
-      .map((n: string) => n[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase() || "US";
-
-    recordRidesPresence({
+    await recordRidesPresence({
       userId: user.id,
-      fullName: user.fullName,
-      avatarInitials: initials,
-      university: user.university || "University of Dhaka",
-      department: user.department || "Campus Student",
-      verified: user.verified,
       lat,
       lng,
       pickupLocation: pickupLocation || "Nearby Pickup",
       destinationLocation: destinationLocation || undefined,
       destinationLat,
       destinationLng,
-      gender: user.gender || null,
       genderPreference: body.genderPreference || "no_preference",
-      isSearching: true,
     });
 
     return NextResponse.json({ success: true, message: "Active searcher location recorded" });
@@ -74,7 +59,8 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const active = getActiveRidersPresence(user.id).map((entry) => ({
+    const active = await getActiveRidersPresence(user.id);
+    const sanitized = active.map((entry) => ({
       userId: entry.userId,
       fullName: entry.fullName,
       avatarInitials: entry.avatarInitials,
@@ -91,7 +77,7 @@ export async function GET(req: NextRequest) {
       isSearching: entry.isSearching,
       lastActive: entry.lastActive,
     }));
-    return NextResponse.json({ success: true, activeSearchers: active });
+    return NextResponse.json({ success: true, activeSearchers: sanitized });
   } catch (error) {
     console.error("GET /api/rides/presence error:", error);
     return NextResponse.json({ success: false, error: "Server error" }, { status: 500 });

@@ -76,36 +76,88 @@ export async function POST(req: NextRequest) {
     const journeyId = typeof body.journeyId === "string" ? body.journeyId.trim() : null;
     const message = typeof body.message === "string" ? body.message.trim().slice(0, 300) : "Let's travel together on this campus route!";
 
-    // Create invitations in DB
-    const createdInvitations = await db.$transaction(
-      partners.map((partner) =>
-        db.travelPartnerInvitation.create({
-          data: {
-            senderId: user.id,
-            receiverId: partner.id,
-            journeyId: journeyId,
-            message: message,
-            status: "PENDING",
-          },
+    // Reuse any open PENDING/ACCEPTED invitation to avoid duplicate spam on double-click or refresh
+    const existingOpen = await db.travelPartnerInvitation.findMany({
+      where: {
+        senderId: user.id,
+        receiverId: { in: partners.map((p) => p.id) },
+        status: { in: ["PENDING", "ACCEPTED"] },
+      },
+      include: { conversation: { select: { id: true } } },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const existingByReceiver = new Map<string, (typeof existingOpen)[number]>();
+    for (const inv of existingOpen) {
+      if (!existingByReceiver.has(inv.receiverId)) {
+        existingByReceiver.set(inv.receiverId, inv);
+      }
+    }
+
+    const partnersToInvite = partners.filter((p) => !existingByReceiver.has(p.id));
+    const newlyCreated = partnersToInvite.length > 0
+      ? await db.$transaction(async (tx) => {
+          const created = await Promise.all(
+            partnersToInvite.map((partner) =>
+              tx.travelPartnerInvitation.create({
+                data: {
+                  senderId: user.id,
+                  receiverId: partner.id,
+                  journeyId,
+                  message,
+                  status: "PENDING",
+                },
+              })
+            )
+          );
+          await tx.notification.createMany({
+            data: partnersToInvite.map((partner) => ({
+              userId: partner.id,
+              category: "rides",
+              title: `Ride match request from ${user.fullName}`,
+              body: message,
+              actionLabel: "Review on Rides",
+              actionHref: "/rides",
+            })),
+          });
+          return created;
         })
-      )
-    );
+      : [];
+
+    const allInvitations = partners.map((partner) => {
+      const created = newlyCreated.find((inv) => inv.receiverId === partner.id);
+      if (created) {
+        return {
+          id: created.id,
+          receiverId: created.receiverId,
+          status: created.status,
+          conversationId: null as string | null,
+          createdAt: created.createdAt,
+        };
+      }
+      const reused = existingByReceiver.get(partner.id)!;
+      return {
+        id: reused.id,
+        receiverId: reused.receiverId,
+        status: reused.status,
+        conversationId: reused.conversation?.id ?? null,
+        createdAt: reused.createdAt,
+      };
+    });
 
     return NextResponse.json({
       success: true,
-      count: createdInvitations.length,
-      message: `Travel request sent to ${partners.length} verified partner${partners.length > 1 ? "s" : ""}.`,
+      count: allInvitations.length,
+      message:
+        newlyCreated.length > 0
+          ? `Travel request sent to ${newlyCreated.length} verified partner${newlyCreated.length > 1 ? "s" : ""}.`
+          : "Active travel connection already exists with selected partner.",
       invitedPartners: partners.map((p) => ({
         id: p.id,
         fullName: p.fullName,
         university: p.university,
       })),
-      invitations: createdInvitations.map((inv) => ({
-        id: inv.id,
-        receiverId: inv.receiverId,
-        status: inv.status,
-        createdAt: inv.createdAt,
-      })),
+      invitations: allInvitations,
     });
   } catch (error) {
     console.error("POST /api/rides/match error:", error);

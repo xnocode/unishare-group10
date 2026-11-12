@@ -41,6 +41,7 @@ model User {
 
   // Destination-based Live Companion Matching
   travelJourneys     TravelJourney[]      @relation("UserTravelJourneys")
+  ridePresence       RidePresence?        @relation("UserRidePresence")
 
   // Campus Marketplace & Financial Records
   marketplaceListings MarketplaceListing[]  @relation("UserMarketplaceListings")
@@ -190,6 +191,23 @@ model TravelJourney {
   @@index([genderPreference])
   @@index([status])
   @@index([departureTime])
+}
+
+model RidePresence {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  user                User     @relation("UserRidePresence", fields: [userId], references: [id], onDelete: Cascade)
+  lat                 Float
+  lng                 Float
+  pickupLocation      String
+  destinationLocation String?
+  destinationLat      Float?
+  destinationLng      Float?
+  genderPreference    String   @default("no_preference")
+  updatedAt           DateTime @updatedAt
+  expiresAt           DateTime
+
+  @@index([expiresAt])
 }
 
 // Multi-Partner Travel Request / Invitation (Zero Driver / Zero Seats)

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/app/lib/db";
 import { getAuthenticatedRideUser } from "@/app/lib/ride-auth";
+import { removeRidesPresence } from "@/app/lib/rides-presence";
 import { VALID_GENDER_PREFERENCES } from "../route";
 
 interface RouteContext {
@@ -171,6 +172,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
       where: { id },
       data: { status: "CANCELLED" },
     });
+    await removeRidesPresence(user.id);
 
     return NextResponse.json({
       success: true,
