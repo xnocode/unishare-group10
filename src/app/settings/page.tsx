@@ -7,12 +7,9 @@ import AppNavbar from "../components/AppNavbar";
 import {
   clearClientSession,
   formatMemberSince,
-  getUserScopedKey,
   saveClientUser,
   useCurrentUser,
-  useLocalStorageRaw,
   useRequireAuth,
-  writeUserScopedJson,
   type ClientUser,
 } from "../lib/user-client";
 import {
@@ -50,12 +47,16 @@ const DEFAULT_PREFS: NotificationPrefs = {
 
 const PROGRAMMES = [
   "BSc (Honours)",
+  "BSc",
   "MSc",
   "BBA",
   "MBA",
+  "BA",
   "BA (Honours)",
+  "BSS",
   "BSS (Honours)",
   "LLB",
+  "PharmD",
   "BArch",
   "MBBS",
   "Other",
@@ -74,7 +75,7 @@ export default function SettingsPage() {
   const router = useRouter();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const isAuthenticated = useRequireAuth("/settings", !isSigningOut);
-  const { resolvedUser, isDemoUser } = useCurrentUser();
+  const { resolvedUser } = useCurrentUser();
 
   const [activeSection, setActiveSection] = useState<SettingsSection>("profile");
   const [drafts, setDrafts] = useState<ProfileDraft>({});
@@ -107,32 +108,17 @@ export default function SettingsPage() {
   const [toastMsg, setToastMsg] = useState("");
   const [showToast, setShowToast] = useState(false);
 
-  const settingsKey = getUserScopedKey(
-    "unishare_settings",
-    resolvedUser.email,
-    isDemoUser
-  );
-  const rawSettingsJson = useLocalStorageRaw(settingsKey);
-
   const prefs: NotificationPrefs = useMemo(() => {
-    if (!rawSettingsJson) return DEFAULT_PREFS;
-    try {
-      const parsed = JSON.parse(rawSettingsJson) as Partial<NotificationPrefs>;
-      return {
-        rentals: parsed.rentals ?? true,
-        rides: parsed.rides ?? true,
-        sos: parsed.sos ?? true,
-        wallet: parsed.wallet ?? true,
-        defaultRidePreference:
-          parsed.defaultRidePreference === "women_only" ||
-          parsed.defaultRidePreference === "men_only"
-            ? parsed.defaultRidePreference
-            : "no_preference",
-      };
-    } catch {
-      return DEFAULT_PREFS;
-    }
-  }, [rawSettingsJson]);
+    const p = resolvedUser.preferences;
+    if (!p) return DEFAULT_PREFS;
+    return {
+      rentals: p.emailRentalAlerts ?? true,
+      rides: p.emailRideAlerts ?? true,
+      sos: p.safetyAlerts ?? true,
+      wallet: p.emailRentalAlerts ?? true,
+      defaultRidePreference: p.defaultRidePreference ?? "no_preference",
+    };
+  }, [resolvedUser.preferences]);
 
   // Derived active form fields (reset automatically when drafts is cleared)
   const fullName =
@@ -147,7 +133,9 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!isAuthenticated || !resolvedUser.email) return;
     let active = true;
-    fetch("/api/emergency-contacts")
+    fetch("/api/emergency-contacts", {
+      headers: resolvedUser.email ? { "x-user-email": resolvedUser.email } : undefined,
+    })
       .then((res) => (res.ok ? res.json() : null))
       .then((data: { contacts?: unknown[] } | null) => {
         if (active && Array.isArray(data?.contacts)) {
@@ -327,13 +315,38 @@ export default function SettingsPage() {
     }
   };
 
-  const updatePref = <K extends keyof NotificationPrefs>(
+  const updatePref = async <K extends keyof NotificationPrefs>(
     key: K,
     value: NotificationPrefs[K]
   ) => {
     const updated: NotificationPrefs = { ...prefs, [key]: value };
-    writeUserScopedJson(settingsKey, updated);
-    triggerToast("Preference saved");
+    try {
+      const res = await fetch("/api/auth/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          preferences: {
+            emailRentalAlerts: updated.rentals,
+            emailRideAlerts: updated.rides,
+            safetyAlerts: updated.sos,
+            defaultRidePreference: updated.defaultRidePreference,
+          },
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        user?: ClientUser;
+        error?: string;
+      };
+      if (res.ok && data.ok && data.user) {
+        saveClientUser(data.user);
+        triggerToast("Preference saved to your account");
+        return;
+      }
+      triggerToast(data.error || "Could not update preference");
+    } catch {
+      triggerToast("Network error saving preference");
+    }
   };
 
   const handleSignOut = () => {
@@ -352,7 +365,7 @@ export default function SettingsPage() {
 
   return (
     <div className="unishare-settings">
-      <AppNavbar activeNav="settings" />
+      <AppNavbar activeNav="settings" user={resolvedUser} onLogout={handleSignOut} />
 
       <main className="wrap">
         <nav className="crumbs" aria-label="Breadcrumb">
@@ -780,7 +793,16 @@ export default function SettingsPage() {
                             aria-label={showCurrentPw ? "Hide password" : "Show password"}
                             onClick={() => setShowCurrentPw((v) => !v)}
                           >
-                            {showCurrentPw ? "Hide" : "Show"}
+                            {showCurrentPw ? (
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                                <path d="M3 12s4-6 9-6 9 6 9 6-4 6-9 6-9-6-9-6z" />
+                                <circle cx="12" cy="12" r="3" />
+                              </svg>
+                            ) : (
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                                <path d="M3 3l18 18M10.6 6.1A10 10 0 0 1 12 6c5 0 9 6 9 6a16 16 0 0 1-3.2 3.7M6.6 6.7A16 16 0 0 0 3 12s4 6 9 6c1.5 0 2.8-.4 4-1M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+                              </svg>
+                            )}
                           </button>
                         </div>
                       </div>
@@ -808,7 +830,16 @@ export default function SettingsPage() {
                             aria-label={showNewPw ? "Hide password" : "Show password"}
                             onClick={() => setShowNewPw((v) => !v)}
                           >
-                            {showNewPw ? "Hide" : "Show"}
+                            {showNewPw ? (
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                                <path d="M3 12s4-6 9-6 9 6 9 6-4 6-9 6-9-6-9-6z" />
+                                <circle cx="12" cy="12" r="3" />
+                              </svg>
+                            ) : (
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                                <path d="M3 3l18 18M10.6 6.1A10 10 0 0 1 12 6c5 0 9 6 9 6a16 16 0 0 1-3.2 3.7M6.6 6.7A16 16 0 0 0 3 12s4 6 9 6c1.5 0 2.8-.4 4-1M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+                              </svg>
+                            )}
                           </button>
                         </div>
                       </div>
@@ -829,6 +860,20 @@ export default function SettingsPage() {
                           autoComplete="new-password"
                           placeholder="Re-enter new password"
                         />
+                        {confirmNewPassword && (
+                          <p
+                            className="hint"
+                            style={{
+                              color:
+                                confirmNewPassword === newPassword ? "var(--teal)" : "var(--danger)",
+                              fontWeight: 600,
+                            }}
+                          >
+                            {confirmNewPassword === newPassword
+                              ? "✓ Passwords match"
+                              : "Passwords do not match yet."}
+                          </p>
+                        )}
                       </div>
                     </div>
 

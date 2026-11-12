@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { UniShareMark } from "../components/UniShareMark";
 import "../auth.css";
 
-export default function ForgotPasswordPage() {
+function ForgotPasswordContent() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const searchParams = useSearchParams();
+  const [email, setEmail] = useState(searchParams.get("email") || "");
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -23,6 +25,7 @@ export default function ForgotPasswordPage() {
       return;
     }
 
+    let navigating = false;
     setIsSubmitting(true);
     try {
       const res = await fetch("/api/auth/forgot-password", {
@@ -46,14 +49,16 @@ export default function ForgotPasswordPage() {
       setSuccessMsg(
         `A 6-digit password reset code has been sent to ${trimmed}.`
       );
-
+      navigating = true;
       setTimeout(() => {
         router.push(`/reset-password?email=${encodeURIComponent(trimmed)}`);
       }, 650);
     } catch {
       setErrorMsg("Network error while sending reset code. Please try again.");
     } finally {
-      setIsSubmitting(false);
+      if (!navigating) {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -63,18 +68,7 @@ export default function ForgotPasswordPage() {
       <header>
         <div className="wrap">
           <Link href="/" className="logo">
-            <svg
-              width="22"
-              height="14"
-              viewBox="0 0 22 14"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              aria-hidden="true"
-            >
-              <circle cx="6.5" cy="7" r="4.5" />
-              <circle cx="15.5" cy="7" r="4.5" />
-            </svg>
+            <UniShareMark size={26} />
             <span>UniShare</span>
           </Link>
           <nav>
@@ -113,10 +107,10 @@ export default function ForgotPasswordPage() {
 
             <div className="next-box" style={{ marginTop: "36px" }}>
               <p className="eyebrow">ACCOUNT RECOVERY</p>
-              <h3>Start with your university email.</h3>
+              <h3>Start with your account email.</h3>
               <p>
-                Use the same university email you signed up with. We’ll send a link
-                to that inbox so you can choose a new password.
+                Use the same email address you signed up with. We’ll send a 6-digit
+                reset code to that inbox so you can choose a new password.
               </p>
             </div>
           </section>
@@ -125,7 +119,7 @@ export default function ForgotPasswordPage() {
           <section className="card" aria-labelledby="forgot-title">
             <h2 id="forgot-title">Forgot password?</h2>
             <p className="sub">
-              Enter your university email and we’ll send you a password reset link.
+              Enter your account email and we’ll send you a 6-digit password reset code.
             </p>
 
             <form onSubmit={handleSubmit} noValidate style={{ marginTop: "20px" }}>
@@ -161,7 +155,7 @@ export default function ForgotPasswordPage() {
               </div>
               <p className={`hint ${errorMsg ? "error" : ""}`}>
                 {errorMsg ||
-                  "Use the university email linked to your UniShare account, not your personal email."}
+                  "Use the email address linked to your UniShare account."}
               </p>
 
               <button
@@ -216,10 +210,9 @@ export default function ForgotPasswordPage() {
                   <path d="M2 6l10 7 10-7" />
                 </svg>
                 <div>
-                  <b>Check your university inbox</b>
+                  <b>Check your inbox</b>
                   <p>
-                    If an account exists for this email, you’ll receive a reset link.
-                    Check your spam folder too.
+                    We’ll email a 6-digit code to reset your password. Check your spam folder too.
                   </p>
                 </div>
               </div>
@@ -233,13 +226,21 @@ export default function ForgotPasswordPage() {
         <div className="wrap">
           <span>UniShare. Made for university students in Bangladesh.</span>
           <nav>
-            <Link href="#">Privacy</Link>
-            <Link href="#">Terms</Link>
-            <Link href="#">Get help</Link>
+            <Link href="/privacy">Privacy</Link>
+            <Link href="/terms">Terms</Link>
+            <Link href="/help">Get help</Link>
           </nav>
         </div>
       </footer>
     </div>
+  );
+}
+
+export default function ForgotPasswordPage() {
+  return (
+    <Suspense fallback={<div className="unishare-auth"><div className="wrap" style={{ padding: "80px 0", textAlign: "center" }}>Loading...</div></div>}>
+      <ForgotPasswordContent />
+    </Suspense>
   );
 }
 

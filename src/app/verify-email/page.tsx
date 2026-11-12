@@ -1,6 +1,5 @@
-import { redirect } from "next/navigation";
+import { QueryRedirect } from "../components/QueryRedirect";
 
 export default function VerifyEmailPage() {
-  redirect("/confirm-email");
+  return <QueryRedirect to="/confirm-email" />;
 }
-

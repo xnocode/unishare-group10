@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useMemo, useSyncExternalStore, Suspense } 
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { saveClientUser, type ClientUser } from "../lib/user-client";
+import { UniShareMark } from "../components/UniShareMark";
 import "../auth.css";
 
 const subscribeStorage = () => () => {};
@@ -12,8 +13,8 @@ function ConfirmEmailContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const emailParam = searchParams.get("email");
-  const universityParam = searchParams.get("university");
+  const emailParam = (searchParams.get("email") || "").trim();
+  const universityParam = (searchParams.get("university") || "").trim();
 
   const rawPendingMeta = useSyncExternalStore(
     subscribeStorage,
@@ -37,21 +38,15 @@ function ConfirmEmailContent() {
     if (!pendingMeta?.email) return null;
     if (
       emailParam &&
-      pendingMeta.email.toLowerCase() !== decodeURIComponent(emailParam).toLowerCase()
+      pendingMeta.email.toLowerCase() !== emailParam.toLowerCase()
     ) {
       return null;
     }
     return pendingMeta;
   }, [pendingMeta, emailParam]);
 
-  const email = (
-    emailParam ? decodeURIComponent(emailParam) : matchingMeta?.email || ""
-  ).trim();
-  const university = (
-    universityParam
-      ? decodeURIComponent(universityParam)
-      : matchingMeta?.university || ""
-  ).trim();
+  const email = (emailParam || matchingMeta?.email || "").trim();
+  const university = (universityParam || matchingMeta?.university || "").trim();
 
   const [digits, setDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [errorMsg, setErrorMsg] = useState("");
@@ -139,6 +134,7 @@ function ConfirmEmailContent() {
       return;
     }
 
+    let navigating = false;
     setIsVerifying(true);
     try {
       const res = await fetch("/api/auth/verify-email", {
@@ -174,13 +170,16 @@ function ConfirmEmailContent() {
         university: data.user.university || university || "University of Dhaka",
       });
 
+      navigating = true;
       setTimeout(() => {
         router.push(`/student-verification?${nextParams.toString()}`);
       }, 450);
     } catch {
       setErrorMsg("Network error while verifying your code. Please try again.");
     } finally {
-      setIsVerifying(false);
+      if (!navigating) {
+        setIsVerifying(false);
+      }
     }
   };
 
@@ -228,18 +227,7 @@ function ConfirmEmailContent() {
       <header>
         <div className="wrap">
           <Link href="/" className="logo">
-            <svg
-              width="22"
-              height="14"
-              viewBox="0 0 22 14"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              aria-hidden="true"
-            >
-              <circle cx="6.5" cy="7" r="4.5" />
-              <circle cx="15.5" cy="7" r="4.5" />
-            </svg>
+            <UniShareMark size={26} />
             <span>UniShare</span>
           </Link>
           <nav>
@@ -426,9 +414,9 @@ function ConfirmEmailContent() {
         <div className="wrap">
           <span>UniShare. Made for university students in Bangladesh.</span>
           <nav>
-            <Link href="#">Privacy</Link>
-            <Link href="#">Terms</Link>
-            <Link href="#">Get help</Link>
+            <Link href="/privacy">Privacy</Link>
+            <Link href="/terms">Terms</Link>
+            <Link href="/help">Get help</Link>
           </nav>
         </div>
       </footer>

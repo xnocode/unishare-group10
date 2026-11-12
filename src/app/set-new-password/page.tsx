@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { QueryRedirect } from "../components/QueryRedirect";
 
 export default function SetNewPasswordRedirect() {
-  redirect("/reset-password");
+  return <QueryRedirect to="/reset-password" />;
 }

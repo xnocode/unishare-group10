@@ -2,7 +2,9 @@
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { UniShareMark } from "../components/UniShareMark";
 import "../auth.css";
 import {
   BD_UNIVERSITIES,
@@ -122,6 +124,7 @@ export default function RegisterPage() {
   // Account form state
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [gender, setGender] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [agreed, setAgreed] = useState(false);
@@ -362,6 +365,7 @@ export default function RegisterPage() {
       return;
     }
 
+    let navigating = false;
     setIsSubmitting(true);
     try {
       const res = await fetch("/api/auth/register", {
@@ -371,6 +375,7 @@ export default function RegisterPage() {
           fullName: nameCheck.normalized,
           email: trimmedEmail,
           password,
+          ...(gender ? { gender } : {}),
           universityName: resolvedUniversityName,
           universityId: selectedUniversity ? selectedUniversity.id : "custom",
           isCustomUniversity: !selectedUniversity,
@@ -414,6 +419,7 @@ export default function RegisterPage() {
         email: data.email || trimmedEmail,
         university: data.university || effectiveUniName,
       });
+      navigating = true;
       setTimeout(() => {
         router.push(`/confirm-email?${nextParams.toString()}`);
       }, 350);
@@ -422,7 +428,9 @@ export default function RegisterPage() {
         "Network error while creating your account. Please try again."
       );
     } finally {
-      setIsSubmitting(false);
+      if (!navigating) {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -431,10 +439,13 @@ export default function RegisterPage() {
     return (
       <span className="univ-logo-box">
         {uni.logo && !logoFailed ? (
-          <img
+          <Image
             src={uni.logo}
             alt={`${uni.name} logo`}
-            loading="lazy"
+            width={28}
+            height={28}
+            unoptimized
+            style={{ objectFit: "contain" }}
             onError={() =>
               setFailedLogos((prev) => ({ ...prev, [uni.id]: true }))
             }
@@ -452,18 +463,7 @@ export default function RegisterPage() {
       <header>
         <div className="wrap">
           <Link href="/" className="logo">
-            <svg
-              width="22"
-              height="14"
-              viewBox="0 0 22 14"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              aria-hidden="true"
-            >
-              <circle cx="6.5" cy="7" r="4.5" />
-              <circle cx="15.5" cy="7" r="4.5" />
-            </svg>
+            <UniShareMark size={26} />
             <span>UniShare</span>
           </Link>
           <nav>
@@ -504,13 +504,12 @@ export default function RegisterPage() {
           {/* Left Column: Community Info & Value Prop */}
           <section>
             <p className="kicker">JOIN YOUR CAMPUS COMMUNITY</p>
-            <h1>
-              Create your account{" "}
-              <em>
-                and start sharing <br className="hidden md:inline" />
-                with your campus.
-              </em>
-            </h1>
+              <h1>
+                Create your account{" "}
+                <em>
+                  and start sharing with your campus.
+                </em>
+              </h1>
             <p className="lead">
               Use your university email to create an account, then borrow, lend,
               and connect with students from your own campus.
@@ -964,6 +963,26 @@ export default function RegisterPage() {
                     : "Use the email address issued by your university (or any valid email for unlisted universities).")}
               </p>
 
+              {/* Ride Safety Gender */}
+              <label className="l" htmlFor="reg-gender">
+                Gender (optional, for ride-partner safety filters)
+              </label>
+              <div className="field-input select" style={{ marginBottom: "6px" }}>
+                <select
+                  id="reg-gender"
+                  value={gender}
+                  onChange={(e) => setGender(e.target.value)}
+                >
+                  <option value="">Prefer not to say</option>
+                  <option value="female">Female (unlocks Women Only rides)</option>
+                  <option value="male">Male (unlocks Men Only rides)</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <p className="hint" style={{ marginBottom: "14px" }}>
+                Kept private and used solely for optional Women Only / Men Only ride safety filters.
+              </p>
+
               {/* Password */}
               <label className="l" htmlFor="pw">
                 Create a password
@@ -1092,8 +1111,8 @@ export default function RegisterPage() {
                   }}
                 />
                 <span>
-                  I agree to the <Link href="#">Terms of use</Link> and{" "}
-                  <Link href="#">Privacy policy</Link> and confirm I am a
+                  I agree to the <Link href="/terms">Terms of use</Link> and{" "}
+                  <Link href="/privacy">Privacy policy</Link> and confirm I am a
                   university student.
                 </span>
               </label>
@@ -1154,9 +1173,9 @@ export default function RegisterPage() {
         <div className="wrap">
           <span>UniShare. Made for university students in Bangladesh.</span>
           <nav>
-            <Link href="#">Privacy</Link>
-            <Link href="#">Terms</Link>
-            <Link href="#">Get help</Link>
+            <Link href="/privacy">Privacy</Link>
+            <Link href="/terms">Terms</Link>
+            <Link href="/help">Get help</Link>
           </nav>
         </div>
       </footer>

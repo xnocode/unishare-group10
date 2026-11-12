@@ -32,14 +32,6 @@ export default function RootLayout({
       lang="en"
       className={`${dmSans.variable} ${bricolageGrotesque.variable} h-full antialiased`}
     >
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600..800&family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap"
-          rel="stylesheet"
-        />
-      </head>
       <body className={`${dmSans.className} min-h-full flex flex-col bg-white text-[#12201f]`}>
         {children}
       </body>

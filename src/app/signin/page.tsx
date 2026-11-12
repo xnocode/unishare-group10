@@ -1,6 +1,5 @@
-import { redirect } from "next/navigation";
+import { QueryRedirect } from "../components/QueryRedirect";
 
 export default function SigninRedirect() {
-  redirect("/login");
+  return <QueryRedirect to="/login" />;
 }
-

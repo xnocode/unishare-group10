@@ -7,10 +7,13 @@ import {
   clearClientSession,
   getFirstName,
   useCurrentUser,
+  useRequireAuth,
 } from "../lib/user-client";
+import { UniShareMark } from "../components/UniShareMark";
 import "../auth.css";
 
 function VerificationApprovedContent() {
+  const isAuthenticated = useRequireAuth("/verification-approved");
   const searchParams = useSearchParams();
   const { user, resolvedUser } = useCurrentUser();
   const activeUser = user || resolvedUser;
@@ -23,32 +26,25 @@ function VerificationApprovedContent() {
 
   const firstName = getFirstName(nameParam);
 
+  if (!isAuthenticated) {
+    return null;
+  }
+
   return (
     <div className="unishare-auth">
       {/* Top Header */}
       <header>
         <div className="wrap">
           <Link href="/" className="logo">
-            <svg
-              width="22"
-              height="14"
-              viewBox="0 0 22 14"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              aria-hidden="true"
-            >
-              <circle cx="6.5" cy="7" r="4.5" />
-              <circle cx="15.5" cy="7" r="4.5" />
-            </svg>
+            <UniShareMark size={26} />
             <span>UniShare</span>
           </Link>
           <nav>
-            <Link href="/login" className="nav-link">
-              Log in
+            <Link href="/home" className="nav-link">
+              Campus Home
             </Link>
-            <Link href="/register" className="btn">
-              Create account
+            <Link href="/marketplace" className="btn">
+              Marketplace
             </Link>
           </nav>
         </div>
@@ -243,7 +239,7 @@ function VerificationApprovedContent() {
         {/* Foot Actions */}
         <div className="pending-foot-actions">
           <div className="left-acts">
-            <Link className="btn" href="/">
+            <Link className="btn" href="/home">
               <span>Explore my campus</span>
               <svg
                 width="16"
@@ -266,7 +262,7 @@ function VerificationApprovedContent() {
             </Link>
           </div>
           <p className="help-text">
-            Have a question? <Link href="#">Contact support</Link>
+            Have a question? <Link href="/help">Contact support</Link>
           </p>
         </div>
       </main>
@@ -276,9 +272,9 @@ function VerificationApprovedContent() {
         <div className="wrap">
           <span>UniShare. Made for university students in Bangladesh.</span>
           <nav>
-            <Link href="#">Privacy</Link>
-            <Link href="#">Terms</Link>
-            <Link href="#">Get help</Link>
+            <Link href="/privacy">Privacy</Link>
+            <Link href="/terms">Terms</Link>
+            <Link href="/help">Get help</Link>
           </nav>
         </div>
       </footer>

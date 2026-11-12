@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { QueryRedirect } from "../components/QueryRedirect";
 
 export default function SignupPage() {
-  redirect("/register");
+  return <QueryRedirect to="/register" />;
 }

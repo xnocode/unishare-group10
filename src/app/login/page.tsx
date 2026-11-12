@@ -4,6 +4,7 @@ import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { saveClientUser, type ClientUser } from "../lib/user-client";
+import { UniShareMark } from "../components/UniShareMark";
 import "../auth.css";
 
 function LoginContent() {
@@ -16,12 +17,14 @@ function LoginContent() {
   const [rememberMe, setRememberMe] = useState(true);
 
   const [errorMsg, setErrorMsg] = useState("");
+  const [showResetHint, setShowResetHint] = useState(false);
   const [unverifiedEmail, setUnverifiedEmail] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
+    setShowResetHint(false);
     setUnverifiedEmail("");
 
     const trimmedEmail = email.trim();
@@ -30,6 +33,7 @@ function LoginContent() {
       return;
     }
 
+    let navigating = false;
     setIsLoggingIn(true);
     try {
       const res = await fetch("/api/auth/login", {
@@ -53,6 +57,8 @@ function LoginContent() {
       if (!res.ok || !data.ok || !data.user) {
         if (data.needsEmailVerification && data.email) {
           setUnverifiedEmail(data.email);
+        } else if (res.status === 401) {
+          setShowResetHint(true);
         }
         setErrorMsg(
           data.error || "Invalid email or password. Please check and try again."
@@ -71,11 +77,14 @@ function LoginContent() {
         }
       }
 
+      navigating = true;
       router.push(destination);
     } catch {
       setErrorMsg("Network error while logging in. Please try again.");
     } finally {
-      setIsLoggingIn(false);
+      if (!navigating) {
+        setIsLoggingIn(false);
+      }
     }
   };
 
@@ -85,18 +94,7 @@ function LoginContent() {
       <header>
         <div className="wrap">
           <Link href="/" className="logo">
-            <svg
-              width="22"
-              height="14"
-              viewBox="0 0 22 14"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              aria-hidden="true"
-            >
-              <circle cx="6.5" cy="7" r="4.5" />
-              <circle cx="15.5" cy="7" r="4.5" />
-            </svg>
+            <UniShareMark size={26} />
             <span>UniShare</span>
           </Link>
           <nav>
@@ -327,7 +325,7 @@ function LoginContent() {
                         Confirm email now →
                       </Link>
                     </>
-                  ) : errorMsg.toLowerCase().includes("password") ? (
+                  ) : showResetHint ? (
                     <>
                       {" "}
                       <Link
@@ -394,9 +392,9 @@ function LoginContent() {
         <div className="wrap">
           <span>UniShare. Made for university students in Bangladesh.</span>
           <nav>
-            <Link href="#">Privacy</Link>
-            <Link href="#">Terms</Link>
-            <Link href="#">Get help</Link>
+            <Link href="/privacy">Privacy</Link>
+            <Link href="/terms">Terms</Link>
+            <Link href="/help">Get help</Link>
           </nav>
         </div>
       </footer>

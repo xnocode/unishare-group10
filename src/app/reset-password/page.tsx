@@ -3,6 +3,8 @@
 import { useState, useRef, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
+import { UniShareMark } from "../components/UniShareMark";
+import { validatePasswordChoice } from "../lib/validation";
 import "../auth.css";
 
 function ResetPasswordContent() {
@@ -16,12 +18,13 @@ function ResetPasswordContent() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
+  const [infoMsg, setInfoMsg] = useState("");
+  const [resetDone, setResetDone] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const inputsRef = useRef<(HTMLInputElement | null)[]>([]);
 
-  // Validation criteria
+  const pwCheck = validatePasswordChoice(password);
   const hasMinLength = password.length >= 8;
   const hasLetterAndNumber = /[A-Za-z]/.test(password) && /[0-9]/.test(password);
 
@@ -77,6 +80,7 @@ function ResetPasswordContent() {
   const handleResendResetCode = async () => {
     if (!emailParam || isResending) return;
     setErrorMsg("");
+    setInfoMsg("");
     setIsResending(true);
     try {
       const res = await fetch("/api/auth/resend-code", {
@@ -92,7 +96,7 @@ function ResetPasswordContent() {
         setErrorMsg(data.error || "Unable to resend reset code.");
         return;
       }
-      setSuccessMsg(`A fresh 6-digit reset code was sent to ${emailParam}.`);
+      setInfoMsg(`A fresh 6-digit reset code was sent to ${emailParam}.`);
     } catch {
       setErrorMsg("Network error while resending reset code.");
     } finally {
@@ -103,7 +107,7 @@ function ResetPasswordContent() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
-    setSuccessMsg("");
+    setInfoMsg("");
 
     if (!emailParam) {
       setErrorMsg("Missing account email. Start from Forgot password first.");
@@ -116,8 +120,8 @@ function ResetPasswordContent() {
       return;
     }
 
-    if (!hasMinLength || !hasLetterAndNumber) {
-      setErrorMsg("Password needs 8+ characters, a letter and a number.");
+    if (!pwCheck.valid) {
+      setErrorMsg(pwCheck.error || "Password needs 8+ characters, a letter and a number.");
       return;
     }
 
@@ -126,6 +130,7 @@ function ResetPasswordContent() {
       return;
     }
 
+    let navigating = false;
     setIsSubmitting(true);
     try {
       const res = await fetch("/api/auth/reset-password", {
@@ -146,16 +151,20 @@ function ResetPasswordContent() {
         return;
       }
 
-      setSuccessMsg(
+      setResetDone(true);
+      setInfoMsg(
         "Password updated successfully! Redirecting you to Log in..."
       );
+      navigating = true;
       setTimeout(() => {
         router.push(`/login?email=${encodeURIComponent(emailParam)}`);
       }, 850);
     } catch {
       setErrorMsg("Network error while resetting password. Please try again.");
     } finally {
-      setIsSubmitting(false);
+      if (!navigating) {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -165,18 +174,7 @@ function ResetPasswordContent() {
       <header>
         <div className="wrap">
           <Link href="/" className="logo">
-            <svg
-              width="22"
-              height="14"
-              viewBox="0 0 22 14"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              aria-hidden="true"
-            >
-              <circle cx="6.5" cy="7" r="4.5" />
-              <circle cx="15.5" cy="7" r="4.5" />
-            </svg>
+            <UniShareMark size={26} />
             <span>UniShare</span>
           </Link>
           <nav>
@@ -426,25 +424,27 @@ function ResetPasswordContent() {
               </div>
 
               {errorMsg && (
-                <div className="err" role="status" style={{ marginTop: "12px", color: "var(--err)", fontSize: "14px" }}>
+                <div className="err-banner" role="alert" style={{ marginTop: "14px" }}>
                   {errorMsg}
                 </div>
               )}
 
-              {successMsg && (
+              {infoMsg && (
                 <div className="ok" role="status" style={{ marginTop: "14px" }}>
-                  <p>{successMsg}</p>
-                  <Link
-                    href="/login"
-                    style={{
-                      display: "inline-block",
-                      marginTop: "8px",
-                      textDecoration: "underline",
-                      fontWeight: 600,
-                    }}
-                  >
-                    Proceed to log in →
-                  </Link>
+                  <p>{infoMsg}</p>
+                  {resetDone && (
+                    <Link
+                      href={`/login?email=${encodeURIComponent(emailParam)}`}
+                      style={{
+                        display: "inline-block",
+                        marginTop: "8px",
+                        textDecoration: "underline",
+                        fontWeight: 600,
+                      }}
+                    >
+                      Proceed to log in →
+                    </Link>
+                  )}
                 </div>
               )}
 
@@ -507,9 +507,9 @@ function ResetPasswordContent() {
         <div className="wrap">
           <span>UniShare. Made for university students in Bangladesh.</span>
           <nav>
-            <Link href="#">Privacy</Link>
-            <Link href="#">Terms</Link>
-            <Link href="#">Get help</Link>
+            <Link href="/privacy">Privacy</Link>
+            <Link href="/terms">Terms</Link>
+            <Link href="/help">Get help</Link>
           </nav>
         </div>
       </footer>

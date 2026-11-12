@@ -5,6 +5,7 @@
   --muted: #4a5b59;
   --brand: #0b5d5e;
   --brand-ink: #ffffff;
+  --tint: #e6f0ef;
   --field: #f5f8f7;
   --line: #12201f;
   --soft: #bfc5c4;
@@ -81,8 +82,8 @@
 }
 
 .unishare-auth header .logo svg {
-  width: 28px;
-  height: 18px;
+  width: 26px;
+  height: 26px;
   color: var(--brand);
   flex-shrink: 0;
 }
@@ -510,6 +511,9 @@
 }
 
 .unishare-auth footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 28px;
 }
 
@@ -539,16 +543,29 @@
   .unishare-auth header .wrap {
     padding: 0 16px;
   }
+  .unishare-auth header .logo {
+    font-size: 20px;
+    gap: 8px;
+  }
+  .unishare-auth header nav a.nav-link {
+    display: none;
+  }
   .unishare-auth .card {
     padding: 20px;
     box-shadow: 5px 5px 0 var(--brand);
   }
   .unishare-auth header nav,
   .unishare-auth nav {
-    gap: 14px;
+    gap: 12px;
   }
-  .unishare-auth .steps li:not(.on) em {
+  .unishare-auth header nav .btn {
+    white-space: nowrap;
+  }
+  .unishare-auth .steps li:not(.on):not([aria-current="step"]) em {
     display: none;
+  }
+  .unishare-auth .sub-row b {
+    overflow-wrap: anywhere;
   }
 }
 
@@ -818,6 +835,18 @@
   fill: none;
   stroke-width: 1.8;
   pointer-events: none;
+}
+
+.unishare-auth .field-input.select select {
+  padding-right: 36px;
+}
+
+.unishare-auth .field input.error,
+.unishare-auth .field select.error,
+.unishare-auth .field-input input.error,
+.unishare-auth .field-input select.error {
+  border-color: var(--err);
+  box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.14);
 }
 
 .unishare-auth .field-input.select::after {

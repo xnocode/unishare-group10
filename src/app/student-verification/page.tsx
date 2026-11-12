@@ -1,10 +1,16 @@
 "use client";
 
-import { useState, useRef, useMemo, useSyncExternalStore, Suspense } from "react";
+import { useState, useRef, useMemo, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import "../auth.css";
-import { saveClientUser, type ClientUser } from "../lib/user-client";
+import { UniShareMark } from "../components/UniShareMark";
+import {
+  saveClientUser,
+  useCurrentUser,
+  useRequireAuth,
+  type ClientUser,
+} from "../lib/user-client";
 import {
   validateDepartment,
   validateFullName,
@@ -12,59 +18,50 @@ import {
   validateStudentId,
 } from "../lib/validation";
 
-const subscribeUserStorage = () => () => {};
-
 function StudentVerificationContent() {
+  const isAuthenticated = useRequireAuth("/student-verification");
+  const { user, isHydrated } = useCurrentUser();
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const emailParam = searchParams.get("email");
-  const universityParam = searchParams.get("university");
-  const email = emailParam ? decodeURIComponent(emailParam) : "farhana@std.du.ac.bd";
-  const isDemo = email.toLowerCase() === "farhana@std.du.ac.bd";
+  const emailParam = (searchParams.get("email") || "").trim();
+  const universityParam = (searchParams.get("university") || "").trim();
+  const email = (emailParam || user?.email || "").trim().toLowerCase();
+  const isDemo = Boolean(email) && email === "farhana@std.du.ac.bd";
 
-  const rawStoredUser = useSyncExternalStore(
-    subscribeUserStorage,
-    () => localStorage.getItem("unishare_user") || "",
-    () => ""
-  );
-
-  const storedUser = useMemo(() => {
-    if (!rawStoredUser) return null;
+  const storedDraft = useMemo(() => {
+    if (typeof window === "undefined" || !email) return null;
     try {
-      const u = JSON.parse(rawStoredUser) as {
-        email?: string;
-        name?: string;
-        university?: string;
-        studentId?: string;
-      };
-      if (u.email && u.email.toLowerCase() === email.toLowerCase()) {
-        return u;
-      }
+      const raw = sessionStorage.getItem(`unishare_verify_draft_${email}`);
+      return raw ? (JSON.parse(raw) as Record<string, string>) : null;
     } catch {
       return null;
     }
-    return null;
-  }, [rawStoredUser, email]);
+  }, [email]);
 
   // Form State (user-edited values take precedence over stored defaults cleanly)
   const [editedFullName, setEditedFullName] = useState<string | null>(null);
   const [editedStudentId, setEditedStudentId] = useState<string | null>(null);
   const [department, setDepartment] = useState(
-    isDemo ? "Computer Science & Engineering" : ""
+    storedDraft?.department ?? (isDemo ? "Computer Science & Engineering" : user?.department || "")
   );
-  const [programme, setProgramme] = useState("BSc (Honours)");
-  const [session, setSession] = useState("2023–2024");
+  const [programme, setProgramme] = useState(
+    storedDraft?.programme ?? user?.programme ?? "BSc (Honours)"
+  );
+  const [session, setSession] = useState(
+    storedDraft?.session ?? user?.academicSession ?? "2023–2024"
+  );
+  const [gender, setGender] = useState(storedDraft?.gender ?? user?.gender ?? "");
 
   const fullName =
-    editedFullName ?? (storedUser?.name || (isDemo ? "Farhana Rahman" : ""));
+    editedFullName ?? (storedDraft?.fullName || user?.name || (isDemo ? "Farhana Rahman" : ""));
   const setFullName = (val: string) => setEditedFullName(val);
   const university =
-    (universityParam ? decodeURIComponent(universityParam) : "") ||
-    storedUser?.university ||
+    universityParam ||
+    user?.university ||
     (isDemo ? "University of Dhaka" : "");
   const studentId =
-    editedStudentId ?? (storedUser?.studentId || (isDemo ? "2023-114-028" : ""));
+    editedStudentId ?? (storedDraft?.studentId || user?.studentId || (isDemo ? "2023-114-028" : ""));
   const setStudentId = (val: string) => setEditedStudentId(val);
 
   // Photos State (do not fake pre-uploaded photos for real users)
@@ -90,8 +87,9 @@ function StudentVerificationContent() {
 
   const handleIdCardUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
-    const check = validateImageUpload(file);
+    const check = validateImageUpload(file, 4 * 1024 * 1024);
     if (!check.valid) {
       setErrorMsg(check.error || "Invalid student ID image.");
       return;
@@ -107,8 +105,9 @@ function StudentVerificationContent() {
 
   const handleFaceUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
-    const check = validateImageUpload(file);
+    const check = validateImageUpload(file, 4 * 1024 * 1024);
     if (!check.valid) {
       setErrorMsg(check.error || "Invalid face photo.");
       return;
@@ -121,6 +120,32 @@ function StudentVerificationContent() {
       file,
     });
   };
+
+  const handleSaveAndLater = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (typeof window !== "undefined" && email) {
+      try {
+        sessionStorage.setItem(
+          `unishare_verify_draft_${email}`,
+          JSON.stringify({
+            fullName,
+            studentId,
+            department,
+            programme,
+            session,
+            gender,
+          })
+        );
+      } catch {
+        // ignore storage errors
+      }
+    }
+    router.push("/home");
+  };
+
+  if (isHydrated && !isAuthenticated) {
+    return null;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -157,6 +182,7 @@ function StudentVerificationContent() {
       return;
     }
 
+    let navigating = false;
     setIsSubmitting(true);
     try {
       let idCardPhotoPath = "";
@@ -169,7 +195,6 @@ function StudentVerificationContent() {
         fd.append("file", file);
         const upRes = await fetch("/api/uploads", {
           method: "POST",
-          headers: email ? { "x-user-email": email } : undefined,
           body: fd,
         });
         const upData = (await upRes.json().catch(() => ({}))) as {
@@ -201,6 +226,7 @@ function StudentVerificationContent() {
           department: deptCheck.normalized,
           programme,
           academicSession: session,
+          ...(gender ? { gender } : {}),
           idCardFileName: idCardFile.name,
           faceFileName: faceFile.name,
           ...(idCardPhotoPath ? { idCardPhotoPath } : {}),
@@ -222,10 +248,16 @@ function StudentVerificationContent() {
       if (data.user) {
         saveClientUser(data.user);
       }
+      try {
+        sessionStorage.removeItem(`unishare_verify_draft_${email}`);
+      } catch {
+        // ignore storage cleanup errors
+      }
 
       setSubmitMsg(
         "Student ID verified! Activating your campus access..."
       );
+      navigating = true;
       setTimeout(() => {
         router.push(
           `/verification-approved?name=${encodeURIComponent(
@@ -242,7 +274,9 @@ function StudentVerificationContent() {
           : "Network error while saving your student details."
       );
     } finally {
-      setIsSubmitting(false);
+      if (!navigating) {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -252,26 +286,15 @@ function StudentVerificationContent() {
       <header>
         <div className="wrap">
           <Link href="/" className="logo">
-            <svg
-              width="22"
-              height="14"
-              viewBox="0 0 22 14"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              aria-hidden="true"
-            >
-              <circle cx="6.5" cy="7" r="4.5" />
-              <circle cx="15.5" cy="7" r="4.5" />
-            </svg>
+            <UniShareMark size={26} />
             <span>UniShare</span>
           </Link>
           <nav>
-            <Link href="/login" className="nav-link">
-              Log in
+            <Link href="/home" className="nav-link">
+              Campus Home
             </Link>
-            <Link href="/register" className="btn">
-              Create account
+            <Link href="/settings" className="btn">
+              Settings
             </Link>
           </nav>
         </div>
@@ -319,7 +342,7 @@ function StudentVerificationContent() {
           </li>
           <li>
             <span>4</span>
-            <em>Review pending</em>
+            <em>Verified &amp; ready</em>
           </li>
         </ol>
 
@@ -328,7 +351,7 @@ function StudentVerificationContent() {
           Let’s make it campus official.
         </h1>
         <p className="lead" style={{ maxWidth: "680px", marginBottom: "32px" }}>
-          Add your student details and photos. We review every member before they can rent, lend or share a ride.
+          Add your student details and photos to unlock verified Marketplace rentals, Ride Sharing, and Campus Wallet.
         </p>
 
         {/* 2-Column Layout */}
@@ -413,6 +436,12 @@ function StudentVerificationContent() {
                       <option value="BBA">BBA</option>
                       <option value="MBA">MBA</option>
                       <option value="BA">BA</option>
+                      <option value="BSS">BSS</option>
+                      <option value="LLB">LLB</option>
+                      <option value="PharmD">PharmD</option>
+                      <option value="BArch">BArch</option>
+                      <option value="MBBS">MBBS</option>
+                      <option value="Other">Other</option>
                     </select>
                   </div>
                 </div>
@@ -426,12 +455,32 @@ function StudentVerificationContent() {
                       value={session}
                       onChange={(e) => setSession(e.target.value)}
                     >
-                      <option value="2023–2024">2023–2024</option>
+                      <option value="2025–2026">2025–2026</option>
                       <option value="2024–2025">2024–2025</option>
+                      <option value="2023–2024">2023–2024</option>
                       <option value="2022–2023">2022–2023</option>
                       <option value="2021–2022">2021–2022</option>
+                      <option value="2020–2021">2020–2021</option>
                     </select>
                   </div>
+                </div>
+
+                {/* Gender for ride safety */}
+                <div className="field-block" style={{ gridColumn: "1 / -1" }}>
+                  <label htmlFor="sv-gender">Gender (for ride-partner safety filters)</label>
+                  <div className="field-input select">
+                    <select
+                      id="sv-gender"
+                      value={gender}
+                      onChange={(e) => setGender(e.target.value)}
+                    >
+                      <option value="">Prefer not to say</option>
+                      <option value="female">Female (enables Women Only ride option)</option>
+                      <option value="male">Male (enables Men Only ride option)</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <p className="hint">Private — never displayed on public Marketplace listings.</p>
                 </div>
               </div>
 
@@ -441,7 +490,7 @@ function StudentVerificationContent() {
               <div className="photos-section">
                 <h2>Your verification photos</h2>
                 <p className="sub">
-                  JPG or PNG, up to 10 MB each. Your photos are only used for review.
+                  JPG, PNG, or WebP, up to 4 MB each. Stored in a private, encrypted campus bucket.
                 </p>
 
                 <div className="uploads-grid">
@@ -475,7 +524,7 @@ function StudentVerificationContent() {
                         {idCardFile ? idCardFile.name : "No ID card selected"}
                       </div>
                       <div className="fsize">
-                        {idCardFile ? idCardFile.size : "JPG, PNG or WebP · up to 10 MB"}
+                        {idCardFile ? idCardFile.size : "JPG, PNG or WebP · up to 4 MB"}
                       </div>
                       <button
                         type="button"
@@ -526,7 +575,7 @@ function StudentVerificationContent() {
                         {faceFile ? faceFile.name : "No face photo selected"}
                       </div>
                       <div className="fsize">
-                        {faceFile ? faceFile.size : "JPG, PNG or WebP · up to 10 MB"}
+                        {faceFile ? faceFile.size : "JPG, PNG or WebP · up to 4 MB"}
                       </div>
                       <button
                         type="button"
@@ -565,7 +614,7 @@ function StudentVerificationContent() {
               {/* Actions */}
               <div className="actions-row">
                 <button className="btn" type="submit" disabled={isSubmitting}>
-                  <span>{isSubmitting ? "Submitting..." : "Submit for review"}</span>
+                  <span>{isSubmitting ? "Verifying..." : "Complete student verification"}</span>
                   <svg
                     width="16"
                     height="16"
@@ -579,9 +628,9 @@ function StudentVerificationContent() {
                     <path d="M5 12h14m-6-6 6 6-6 6" />
                   </svg>
                 </button>
-                <Link href="/home" className="later-link">
+                <a href="/home" className="later-link" onClick={handleSaveAndLater}>
                   Save and finish later
-                </Link>
+                </a>
               </div>
 
               {errorMsg && (
@@ -638,7 +687,7 @@ function StudentVerificationContent() {
 
             {/* Help Contact */}
             <p className="help-text">
-              Need a hand with verification? <Link href="#">Contact support</Link>
+              Need a hand with verification? <Link href="/help">Contact support</Link>
             </p>
           </aside>
         </div>
@@ -649,9 +698,9 @@ function StudentVerificationContent() {
         <div className="wrap">
           <span>UniShare. Made for university students in Bangladesh.</span>
           <nav>
-            <Link href="#">Privacy</Link>
-            <Link href="#">Terms</Link>
-            <Link href="#">Get help</Link>
+            <Link href="/privacy">Privacy</Link>
+            <Link href="/terms">Terms</Link>
+            <Link href="/help">Get help</Link>
           </nav>
         </div>
       </footer>

@@ -1,6 +1,5 @@
-import { redirect } from "next/navigation";
+import { QueryRedirect } from "../components/QueryRedirect";
 
 export default function ReviewPendingRedirect() {
-  redirect("/verification-pending");
+  return <QueryRedirect to="/verification-pending" />;
 }
-
