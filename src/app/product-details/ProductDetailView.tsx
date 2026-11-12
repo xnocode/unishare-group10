@@ -25,11 +25,19 @@ interface ProductDetailViewProps {
 }
 
 function toIsoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function addDays(baseIso: string, delta: number): string {
-  const dt = new Date(`${baseIso}T00:00:00`);
+  const parts = baseIso.split('-').map(Number);
+  if (parts.length === 3 && parts.every((n) => Number.isFinite(n) && n > 0)) {
+    const dt = new Date(parts[0], parts[1] - 1, parts[2] + delta);
+    return toIsoDate(dt);
+  }
+  const dt = new Date();
   dt.setDate(dt.getDate() + delta);
   return toIsoDate(dt);
 }
