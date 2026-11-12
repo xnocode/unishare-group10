@@ -249,7 +249,7 @@ async function runTests() {
   // Only the receiver can accept/reject; sender cannot accept own invitation
   // -----------------------------------------------------------
   {
-    const { status, json } = await api(`/api/rides/match/${invitationToSadiaId}`, {
+    const { status } = await api(`/api/rides/match/${invitationToSadiaId}`, {
       userEmail: "farhana@std.du.ac.bd", // Farhana is sender, not receiver
       method: "PATCH",
       body: { action: "ACCEPT" },
@@ -263,7 +263,7 @@ async function runTests() {
   // -----------------------------------------------------------
   let activeConversationId = null;
   {
-    const { status, json } = await api(`/api/rides/match/${invitationToSadiaId}`, {
+    const { status } = await api(`/api/rides/match/${invitationToSadiaId}`, {
       userEmail: "sadia@std.du.ac.bd", // Receiver accepts
       method: "PATCH",
       body: { action: "ACCEPT" },
